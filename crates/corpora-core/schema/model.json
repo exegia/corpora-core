@@ -3,23 +3,49 @@
   "title": "Corpora Schema Definition",
   "description": "Single source of truth for generating Rust, TypeScript and SQL types. Field type syntax: `T` required, `T?` optional, `T[]` list, `T[]?` optional list, `Map<K,V>` map. Types with a `table` string become Postgres tables; `table: false` types are value objects (embedded or JSONB).",
   "version": "1.0.0",
-
   "config": {
-    "rust": { "crate": "corpora-types", "derives": ["Debug", "Clone", "PartialEq", "Serialize", "Deserialize"] },
-    "typescript": { "package": "@corpora/types" },
-    "sql": { "schema": "public" }
+    "rust": {
+      "crate": "corpora-types",
+      "derives": [
+        "Debug",
+        "Clone",
+        "PartialEq",
+        "Serialize",
+        "Deserialize"
+      ]
+    },
+    "typescript": {
+      "package": "@corpora/types"
+    },
+    "sql": {
+      "schema": "public"
+    }
   },
-
   "scalars": {
-    "CorpusId": { "rust": "String", "typescript": "string", "sql": "TEXT", "description": "Corpus identifier." },
-    "DocumentId": { "rust": "String", "typescript": "string", "sql": "TEXT", "description": "Document identifier." },
+    "CorpusId": {
+      "rust": "String",
+      "typescript": "string",
+      "sql": "TEXT",
+      "description": "Corpus identifier."
+    },
+    "DocumentId": {
+      "rust": "String",
+      "typescript": "string",
+      "sql": "TEXT",
+      "description": "Document identifier."
+    },
     "NodeId": {
       "rust": "u64",
       "typescript": "number",
       "sql": "BIGINT",
       "description": "Node identifier within a document."
     },
-    "Uuid": { "rust": "uuid::Uuid", "typescript": "string", "sql": "UUID", "description": "UUID identity." },
+    "Uuid": {
+      "rust": "uuid::Uuid",
+      "typescript": "string",
+      "sql": "UUID",
+      "description": "UUID identity."
+    },
     "Timestamp": {
       "rust": "chrono::DateTime<chrono::Utc>",
       "typescript": "string",
@@ -39,11 +65,16 @@
       "description": "Arbitrary JSON payload."
     }
   },
-
   "enums": {
     "ProjectStatus": {
       "description": "Workflow status for a project.",
-      "values": ["draft", "started", "ready-for-review", "published", "failed"]
+      "values": [
+        "draft",
+        "started",
+        "ready-for-review",
+        "published",
+        "failed"
+      ]
     },
     "BookType": {
       "description": "Classification of textual works.",
@@ -81,47 +112,129 @@
     },
     "CategoryType": {
       "description": "Content category for categorized book types.",
-      "values": ["biblical", "religious", "literary", "historical", "paratext"]
+      "values": [
+        "biblical",
+        "religious",
+        "literary",
+        "historical",
+        "paratext"
+      ]
     },
     "CorpusType": {
       "description": "Manifest type in the corpora-py contract.",
-      "values": ["text", "web", "parallel", "speech", "docs"]
+      "values": [
+        "text",
+        "web",
+        "parallel",
+        "speech",
+        "docs"
+      ]
     },
-    "CorpusSource": { "description": "Origin of a corpus document.", "values": ["upload", "huggingface"] },
-    "DocumentStatus": { "description": "Processing status of a corpus document.", "values": ["uploaded", "converted"] },
-    "LicenseStatus": { "description": "Lifecycle status of a licence.", "values": ["active", "retired", "superseded"] },
+    "CorpusSource": {
+      "description": "Origin of a corpus document.",
+      "values": [
+        "upload",
+        "huggingface"
+      ]
+    },
+    "DocumentStatus": {
+      "description": "Processing status of a corpus document.",
+      "values": [
+        "uploaded",
+        "converted"
+      ]
+    },
+    "LicenseStatus": {
+      "description": "Lifecycle status of a licence.",
+      "values": [
+        "active",
+        "retired",
+        "superseded"
+      ]
+    },
     "LicenseConformance": {
       "description": "Open Definition / OSD review verdict.",
-      "values": ["not reviewed", "approved", "rejected"]
+      "values": [
+        "not reviewed",
+        "approved",
+        "rejected"
+      ]
     },
     "JobStatus": {
       "description": "Server-side conversion job lifecycle.",
-      "values": ["queued", "running", "succeeded", "failed"]
+      "values": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed"
+      ]
     },
     "ConversionStatus": {
       "description": "Client-side conversion tracking (corpora-py UploadStatus).",
-      "values": ["uploading", "queued", "converting", "validating", "ready", "success", "error"]
+      "values": [
+        "uploading",
+        "queued",
+        "converting",
+        "validating",
+        "ready",
+        "success",
+        "error"
+      ]
     },
     "ConversionStepId": {
       "description": "Conversion pipeline step.",
-      "values": ["receive", "validate", "convert", "index"]
+      "values": [
+        "receive",
+        "validate",
+        "convert",
+        "index"
+      ]
     },
     "ConversionStepState": {
       "description": "State of a conversion pipeline step.",
-      "values": ["pending", "active", "completed", "failed"]
+      "values": [
+        "pending",
+        "active",
+        "completed",
+        "failed"
+      ]
     },
-    "LogTone": { "description": "Severity of a conversion log line.", "values": ["info", "success", "error"] },
+    "LogTone": {
+      "description": "Severity of a conversion log line.",
+      "values": [
+        "info",
+        "success",
+        "error"
+      ]
+    },
     "ValidationStatus": {
       "description": "Post-conversion validation verdict.",
-      "values": ["running", "valid", "invalid", "skipped"]
+      "values": [
+        "running",
+        "valid",
+        "invalid",
+        "skipped"
+      ]
     },
     "SourceFormat": {
       "description": "Formats the conversion service accepts; .xml routes to tei (corpora-py#105).",
-      "values": ["epub", "html", "tei", "pdf", "plain", "tf_zip", "tei_zip"]
+      "values": [
+        "epub",
+        "html",
+        "tei",
+        "pdf",
+        "plain",
+        "tf_zip",
+        "tei_zip"
+      ]
     },
     "VersionFileKind": {
       "description": "Kind of change recorded in a corpus version.",
-      "values": ["added", "modified", "deleted"]
+      "values": [
+        "added",
+        "modified",
+        "deleted"
+      ]
     },
     "InlineKind": {
       "description": "Neutral semantic classification of source inline markup.",
@@ -140,572 +253,13 @@
       ]
     }
   },
-
   "unions": {
     "Node": {
       "description": "A document content node: a structural section or a leaf block.",
-      "variants": ["Section", "Block"]
-    }
-  },
-
-  "domains": {
-    "document": {
-      "description": "Canonical document model (serialization format, not database tables).",
-      "types": {
-        "Property": {
-          "description": "Ordered, repeatable descriptive property.",
-          "table": false,
-          "fields": {
-            "key": { "type": "String", "description": "Namespaced property key." },
-            "value": {
-              "type": "String",
-              "description": "Textual descriptive value; structured analysis belongs in typed annotations."
-            }
-          }
-        },
-        "Metadata": {
-          "description": "Bibliographic and descriptive metadata.",
-          "table": false,
-          "fields": {
-            "title": { "type": "String?", "description": "Bibliographic title." },
-            "creators": { "type": "String[]", "description": "Ordered creator names as supplied by the source." },
-            "language": {
-              "type": "String?",
-              "description": "Language identifier as supplied; no normalization is imposed."
-            },
-            "publisher": { "type": "String?", "description": "Publisher name." },
-            "date": { "type": "String?", "description": "Publication date, preserving uncertain or partial dates." },
-            "description": { "type": "String?", "description": "Descriptive summary." },
-            "identifier": {
-              "type": "String?",
-              "description": "External bibliographic identifier; distinct from domain identity."
-            },
-            "rights": { "type": "String?", "description": "Rights or licence statement." },
-            "subjects": { "type": "String[]", "description": "Subject terms." },
-            "properties": { "type": "Property[]", "description": "Ordered, repeatable descriptive properties." }
-          }
-        },
-        "Source": {
-          "description": "Reference to external evidence; never fetched by this crate.",
-          "table": false,
-          "fields": {
-            "locator": { "type": "String", "description": "Opaque source locator." },
-            "description": { "type": "String?", "description": "Human-readable source description." },
-            "format": {
-              "type": "String?",
-              "description": "Source format label, such as tei or epub; extensible, not a parser registry."
-            }
-          }
-        },
-        "TextRange": {
-          "description": "Unicode scalar range within a block's text.",
-          "table": false,
-          "fields": {
-            "start": { "type": "u32", "description": "Start offset, inclusive." },
-            "end": { "type": "u32", "description": "End offset, exclusive." }
-          }
-        },
-        "Reference": {
-          "description": "Cross-reference to another corpus location.",
-          "table": false,
-          "fields": {
-            "corpus": { "type": "CorpusId", "description": "Target corpus." },
-            "document": { "type": "DocumentId", "description": "Target document." },
-            "node": { "type": "NodeId?", "description": "Target node, or the whole document." },
-            "range": { "type": "TextRange?", "description": "Optional Unicode scalar range; requires a block node." }
-          }
-        },
-        "Provenance": {
-          "description": "Origin and transformation history of a value.",
-          "table": false,
-          "fields": {
-            "method": {
-              "type": "String",
-              "description": "Namespaced derivation method, for example source:transcription or ai:inference."
-            },
-            "agent": { "type": "String?", "description": "Responsible person, software, or model and version." },
-            "sources": { "type": "Source[]", "description": "Evidence consulted." },
-            "derived_from": { "type": "Reference[]", "description": "Inputs from which this value was derived." }
-          }
-        },
-        "Token": {
-          "description": "A single token with its exact trailing separator.",
-          "table": false,
-          "fields": {
-            "text": { "type": "String", "description": "Token text without normalization." },
-            "after": { "type": "String", "description": "Exact following whitespace or punctuation." }
-          }
-        },
-        "InlineMarkup": {
-          "description": "Neutral representation of source inline markup.",
-          "table": false,
-          "fields": {
-            "kind": { "type": "InlineKind", "description": "Neutral semantic classification of source inline markup." },
-            "attributes": {
-              "type": "Property[]",
-              "description": "Source attributes with namespace-qualified keys; values are not resolved."
-            }
-          }
-        },
-        "Block": {
-          "description": "Leaf content node carrying canonical text.",
-          "table": false,
-          "fields": {
-            "id": { "type": "NodeId", "description": "Identity within the document." },
-            "kind": {
-              "type": "String",
-              "description": "Namespaced semantic role, such as text:paragraph or manuscript:line."
-            },
-            "text": { "type": "String", "description": "Canonical text to which byte offsets apply." },
-            "metadata": { "type": "Metadata", "description": "Descriptive properties." }
-          }
-        },
-        "Section": {
-          "description": "Structural node containing ordered children.",
-          "table": false,
-          "fields": {
-            "id": { "type": "NodeId", "description": "Identity within the document." },
-            "kind": {
-              "type": "String",
-              "description": "Namespaced semantic role, such as bible:chapter or paper:section."
-            },
-            "title": { "type": "String?", "description": "Optional display title." },
-            "children": { "type": "Node[]", "description": "Ordered nested sections and blocks." },
-            "metadata": { "type": "Metadata", "description": "Descriptive properties." }
-          }
-        },
-        "Document": {
-          "description": "A single document within a corpus.",
-          "table": false,
-          "fields": {
-            "id": { "type": "DocumentId", "description": "Identity within its corpus." },
-            "title": { "type": "String?", "description": "Optional display title." },
-            "children": { "type": "Node[]", "description": "Ordered document content." },
-            "metadata": { "type": "Metadata", "description": "Descriptive properties." },
-            "provenance": { "type": "Provenance[]", "description": "Origin and transformations of this document." }
-          }
-        },
-        "CorpusDescriptor": {
-          "description": "Discovery metadata from corpus manifests.",
-          "table": false,
-          "fields": {
-            "name": { "type": "String?", "description": "Manifest display name." },
-            "description": { "type": "String?", "description": "Manifest description." },
-            "language": { "type": "String?", "description": "Manifest language identifier." },
-            "kind": { "type": "CorpusType?", "description": "Extensible manifest type." },
-            "version": { "type": "String?", "description": "Source corpus version; distinct from crate version." },
-            "licence": { "type": "String?", "description": "Manifest licence statement." }
-          }
-        },
-        "Corpus": {
-          "description": "A collection of related documents.",
-          "table": false,
-          "fields": {
-            "id": { "type": "CorpusId", "description": "Corpus identity." },
-            "documents": { "type": "Document[]", "description": "Ordered documents." },
-            "metadata": { "type": "Metadata", "description": "Descriptive properties." },
-            "descriptor": { "type": "CorpusDescriptor", "description": "Discovery metadata from corpus manifests." }
-          }
-        },
-        "CorpusTocSection": {
-          "description": "One toc.yml section row (mirrors corpus-archive's CorpusSection).",
-          "table": false,
-          "fields": {
-            "title": { "type": "String", "description": "Section title." },
-            "nodes": { "type": "i64?", "description": "Node count." },
-            "words": { "type": "i64?", "description": "Word count." }
-          }
-        },
-        "InlineAnnotation": {
-          "description": "An inline markup annotation anchored to a corpus location, with provenance.",
-          "table": false,
-          "fields": {
-            "target": {
-              "type": "Reference",
-              "description": "Anchored corpus location; requires a block node and range."
-            },
-            "value": { "type": "InlineMarkup", "description": "The inline markup payload." },
-            "provenance": { "type": "Provenance", "description": "Origin of this annotation." }
-          }
-        },
-        "AnnotatedCorpus": {
-          "description": "Corpus with an inline annotation layer.",
-          "table": false,
-          "fields": {
-            "format_version": {
-              "type": "String",
-              "description": "Envelope version; supported version is ANNOTATED_CORPUS_VERSION."
-            },
-            "corpus": { "type": "Corpus", "description": "Complete corpus tree." },
-            "annotations": {
-              "type": "InlineAnnotation[]",
-              "description": "Inline layer including its original provenance."
-            }
-          }
-        }
-      }
-    },
-
-    "platform": {
-      "description": "Platform entities backing the corpora apps (Postgres tables).",
-      "types": {
-        "User": {
-          "description": "Directory user with profile fields.",
-          "table": "user_directory",
-          "fields": {
-            "id": { "type": "Uuid", "primary_key": true, "description": "User identity." },
-            "username": {
-              "type": "String",
-              "unique": true,
-              "description": "Handle used in mentions and links, without the @."
-            },
-            "email": { "type": "String", "unique": true, "description": "Email address." },
-            "name": { "type": "String?", "description": "Full name, shown across Corpora." },
-            "avatar_url": { "type": "String?", "description": "Portrait image URL; the UI falls back to initials." },
-            "vocation": {
-              "type": "String?",
-              "description": "One of VOCATIONS, or a value written before the list existed."
-            },
-            "tradition": {
-              "type": "String?",
-              "description": "One of TRADITIONS, or a value written before the list existed."
-            },
-            "languages": { "type": "String?", "description": "Working languages, freeform." },
-            "affiliation": { "type": "String?", "description": "Institution or society." },
-            "website": { "type": "String?", "description": "Personal or academic site, without the scheme." },
-            "bio": { "type": "String?", "description": "Short profile summary." },
-            "created_at": { "type": "Timestamp", "description": "Account creation time." },
-            "updated_at": { "type": "Timestamp?", "description": "Last profile update." }
-          }
-        },
-        "Organization": {
-          "description": "Organization or institution owning projects.",
-          "table": "organizations",
-          "fields": {
-            "id": { "type": "Uuid", "primary_key": true, "description": "Organization identity." },
-            "name": { "type": "String", "description": "Organization name." },
-            "website": { "type": "String?", "description": "Organization website." },
-            "created_at": { "type": "Timestamp", "description": "Creation time." }
-          }
-        },
-        "Project": {
-          "description": "A scholarly project; scriptural types require languages (FR-006), categorized types require a category (FR-007).",
-          "table": "projects",
-          "fields": {
-            "id": { "type": "Uuid", "primary_key": true, "description": "Project identity." },
-            "name": { "type": "String", "description": "Project name." },
-            "description": { "type": "String?", "description": "Project description." },
-            "status": { "type": "ProjectStatus", "default": "draft", "description": "Workflow status." },
-            "type": { "type": "BookType?", "description": "Work classification." },
-            "language": {
-              "type": "LanguageType[]?",
-              "description": "Source languages for scriptural types; empty when not applicable."
-            },
-            "category": { "type": "CategoryType?", "description": "Content category for categorized types." },
-            "creator_id": {
-              "type": "Uuid",
-              "references": "User.id",
-              "description": "Creating user; never null (FR-015)."
-            },
-            "organization_id": {
-              "type": "Uuid?",
-              "references": "Organization.id",
-              "description": "Owning organization."
-            },
-            "created_at": { "type": "Timestamp", "description": "Creation time." },
-            "updated_at": { "type": "Timestamp", "description": "Last update time." }
-          }
-        },
-        "CorpusDocument": {
-          "description": "Corpus archive imported into a project, with conversion metadata from the corpora-py contract.",
-          "table": "corpus_documents",
-          "fields": {
-            "id": { "type": "Uuid", "primary_key": true, "description": "Record identity." },
-            "project_id": { "type": "Uuid", "references": "Project.id", "description": "Owning project." },
-            "name": { "type": "String", "description": "Corpus name." },
-            "source": { "type": "CorpusSource", "description": "Origin: upload or huggingface." },
-            "path": { "type": "String", "description": "Storage path for uploads, the full URL for Hugging Face." },
-            "filename": { "type": "String?", "description": "Original filename." },
-            "job_id": { "type": "String?", "description": "Conversion job id for explore routes; null on uploads." },
-            "uploaded_at": { "type": "Timestamp", "description": "Upload time." },
-            "corpus_type": { "type": "CorpusType?", "description": "Manifest type; null on legacy rows." },
-            "source_format": {
-              "type": "String?",
-              "description": "source_format as sent to POST /convert (text-fabric, tei, ...)."
-            },
-            "licence": { "type": "String?", "description": "Licence from the manifest." },
-            "language": { "type": "String?", "description": "Language from the manifest." },
-            "size_bytes": { "type": "i64?", "description": "Archive size in bytes." },
-            "docs_count": { "type": "i64?", "description": "Document count." },
-            "nodes": { "type": "i64?", "description": "Total node count." },
-            "words": { "type": "i64?", "description": "Total word count." },
-            "status": { "type": "DocumentStatus?", "description": "Processing status." },
-            "converted_at": { "type": "Timestamp?", "description": "Conversion completion time." },
-            "description": { "type": "String?", "description": "Manifest description, captured at conversion time." },
-            "toc": {
-              "type": "CorpusTocSection[]?",
-              "sql_type": "JSONB",
-              "description": "toc.yml section rows captured at conversion time."
-            }
-          }
-        },
-        "CorpusCommit": {
-          "description": "One commit from the corpus' nested .git, newest first.",
-          "table": "corpus_commits",
-          "fields": {
-            "id": { "type": "Uuid", "primary_key": true, "description": "Commit record identity." },
-            "document_id": {
-              "type": "Uuid",
-              "references": "CorpusDocument.id",
-              "description": "Parent corpus document."
-            },
-            "sha": { "type": "String", "description": "Commit SHA." },
-            "message": { "type": "String", "description": "Commit message." },
-            "author_name": { "type": "String?", "description": "Author name." },
-            "author_email": { "type": "String?", "description": "Author email." },
-            "branch": { "type": "String?", "description": "Branch name." },
-            "committed_at": { "type": "Timestamp?", "description": "Commit timestamp." }
-          }
-        },
-        "LibraryCorpus": {
-          "description": "Published corpus in the library catalog.",
-          "table": "corpora",
-          "fields": {
-            "uid": { "type": "String", "primary_key": true, "description": "Unique corpus identifier." },
-            "name": { "type": "String", "description": "Display name." },
-            "language": { "type": "String?", "description": "Primary language." },
-            "type": { "type": "String?", "description": "Corpus type." },
-            "category": { "type": "String?", "description": "Content category." },
-            "version": { "type": "String", "description": "Corpus version." },
-            "available": { "type": "bool", "default": true, "description": "Availability flag." }
-          }
-        },
-        "ProjectCorpusLink": {
-          "description": "Library corpora loaded alongside a project's dataset.",
-          "table": "project_corpora",
-          "fields": {
-            "project_id": {
-              "type": "Uuid",
-              "references": "Project.id",
-              "primary_key": true,
-              "description": "Project."
-            },
-            "corpus_id": {
-              "type": "String",
-              "references": "LibraryCorpus.uid",
-              "primary_key": true,
-              "description": "Library corpus."
-            },
-            "linked_at": { "type": "Timestamp", "description": "Link creation time." }
-          }
-        }
-      }
-    },
-
-    "license": {
-      "description": "Licence catalog and project attachments (Postgres tables).",
-      "types": {
-        "License": {
-          "description": "Licence catalog entry.",
-          "table": "licences",
-          "fields": {
-            "id": { "type": "String", "primary_key": true, "description": "SPDX or custom identifier." },
-            "title": { "type": "String", "description": "Licence title." },
-            "url": { "type": "String?", "description": "Reference URL." },
-            "domain_content": { "type": "bool", "default": false, "description": "Applies to content." },
-            "domain_data": { "type": "bool", "default": false, "description": "Applies to data." },
-            "domain_software": { "type": "bool", "default": false, "description": "Applies to software." },
-            "family": { "type": "String?", "description": "Licence family (CC, GPL, ...)." },
-            "maintainer": { "type": "String?", "description": "Maintaining organization." },
-            "status": { "type": "LicenseStatus", "default": "active", "description": "Lifecycle status." },
-            "is_generic": { "type": "bool", "default": false, "description": "Generic licence flag." },
-            "legacy_ids": { "type": "String[]?", "description": "Previous identifiers." },
-            "od_conformance": { "type": "LicenseConformance?", "description": "Open Definition conformance." },
-            "osd_conformance": { "type": "LicenseConformance?", "description": "Open Source Definition conformance." },
-            "full_text": {
-              "type": "String?",
-              "description": "Downloaded or edited licence text, null until first fetched."
-            },
-            "created_at": { "type": "Timestamp", "description": "Creation time." },
-            "updated_at": { "type": "Timestamp?", "description": "Last update time." }
-          }
-        },
-        "ProjectLicense": {
-          "description": "Licence attached to a project. agreed_at pairs with agreed_by_user_id under a check constraint; pending exactly when agreed_at is null.",
-          "table": "project_licences",
-          "fields": {
-            "project_id": {
-              "type": "Uuid",
-              "references": "Project.id",
-              "primary_key": true,
-              "description": "Project."
-            },
-            "licence_id": {
-              "type": "String",
-              "references": "License.id",
-              "primary_key": true,
-              "description": "Licence."
-            },
-            "agreed_at": { "type": "Timestamp?", "description": "Agreement timestamp; null while pending." },
-            "agreed_by_user_id": {
-              "type": "Uuid?",
-              "references": "User.id",
-              "description": "Agreeing user; null together with agreed_at."
-            }
-          }
-        }
-      }
-    },
-
-    "conversion": {
-      "description": "Conversion pipeline contract shared with corpora-py (wire types, not tables).",
-      "types": {
-        "ConversionLog": {
-          "description": "Log entry emitted by a conversion step.",
-          "table": false,
-          "fields": {
-            "step": { "type": "ConversionStepId", "description": "Pipeline step." },
-            "text": { "type": "String", "description": "Log message." },
-            "tone": { "type": "LogTone", "description": "Severity level." }
-          }
-        },
-        "ValidationOutcome": {
-          "description": "Verdict of the post-conversion validation (corpora-py POST /validate).",
-          "table": false,
-          "fields": {
-            "status": { "type": "ValidationStatus", "description": "Validation verdict." },
-            "reasons": { "type": "String[]?", "description": "Failure reasons." },
-            "stats": {
-              "type": "Map<String, i64>?",
-              "description": "Raw CorpusStats (max_slot, node_types, node_features, edge_features)."
-            }
-          }
-        },
-        "ConversionStep": {
-          "description": "State of a conversion pipeline step.",
-          "table": false,
-          "fields": {
-            "id": { "type": "ConversionStepId", "description": "Step identifier." },
-            "title": { "type": "String", "description": "Display title." },
-            "state": { "type": "ConversionStepState", "description": "Current state." },
-            "logs": { "type": "ConversionLog[]", "description": "Step logs." }
-          }
-        },
-        "JobStatusMessage": {
-          "description": "ConversionJob.to_dict() - identical shape for polling and WS frames.",
-          "table": false,
-          "fields": {
-            "id": { "type": "String", "description": "Job id." },
-            "source_format": { "type": "String", "description": "Input format." },
-            "name": { "type": "String", "description": "Original file name." },
-            "display_name": { "type": "String?", "description": "Source-derived title; null while queued." },
-            "status": { "type": "JobStatus", "description": "Job status." },
-            "created_at": { "type": "EpochMillis", "description": "Job creation time." },
-            "started_at": { "type": "EpochMillis?", "description": "Processing start time." },
-            "finished_at": { "type": "EpochMillis?", "description": "Completion time." },
-            "error": { "type": "String?", "description": "Error message." },
-            "logs": { "type": "String[]", "description": "Log lines." },
-            "last_log": { "type": "String?", "description": "Most recent log line." },
-            "result_filename": { "type": "String", "description": "Slug of display_name, always *.corpus." },
-            "download_ready": { "type": "bool", "description": "Archive available for download." }
-          }
-        }
-      }
-    },
-
-    "explore": {
-      "description": "Corpus exploration API contract (wire types, not tables).",
-      "types": {
-        "SectionEntry": {
-          "description": "Navigation section entry.",
-          "table": false,
-          "fields": {
-            "title": { "type": "String", "description": "Section title." },
-            "ref": { "type": "String", "description": "Section reference." },
-            "otype": { "type": "String?", "description": "Node type." },
-            "child_count": { "type": "i64?", "description": "Number of children." },
-            "nodes": { "type": "i64?", "description": "Node count." },
-            "words": { "type": "i64?", "description": "Word count." },
-            "truncated": { "type": "bool?", "description": "Children truncated." }
-          }
-        },
-        "IndexItem": {
-          "description": "Index entry with resolved children.",
-          "table": false,
-          "extends": "SectionEntry",
-          "fields": {
-            "children": { "type": "SectionEntry[]", "description": "Child sections." }
-          }
-        },
-        "IndexSections": {
-          "description": "Hierarchical section index.",
-          "table": false,
-          "fields": {
-            "levels": { "type": "String[]", "description": "Section level names." },
-            "items": { "type": "IndexItem[]", "description": "Top-level items." }
-          }
-        },
-        "NodeTypeCount": {
-          "description": "Statistics for one node type.",
-          "table": false,
-          "fields": {
-            "type": { "type": "String", "description": "Node type name." },
-            "count": { "type": "i64", "description": "Number of nodes." },
-            "avg_slots": { "type": "f64?", "description": "Average slot count." },
-            "is_slot": { "type": "bool?", "description": "True for the slot type." }
-          }
-        },
-        "CorpusIndex": {
-          "description": "GET .../index response.",
-          "table": false,
-          "fields": {
-            "toc": { "type": "Json", "description": "Raw table of contents." },
-            "sections": { "type": "IndexSections?", "description": "Section hierarchy." },
-            "node_types": { "type": "NodeTypeCount[]", "description": "Node type statistics." }
-          }
-        },
-        "PassageToken": {
-          "description": "Token within a passage.",
-          "table": false,
-          "fields": {
-            "text": { "type": "String", "description": "Token text." },
-            "after": { "type": "String", "description": "Following whitespace or punctuation." },
-            "node": { "type": "i64?", "description": "Node number." }
-          }
-        },
-        "CorpusPassage": {
-          "description": "Text passage from a corpus.",
-          "table": false,
-          "fields": {
-            "ref": { "type": "String", "description": "Passage reference." },
-            "text": { "type": "String", "description": "Plain text." },
-            "node": { "type": "i64?", "description": "Node number." },
-            "tokens": { "type": "PassageToken[]?", "description": "Tokenized form." }
-          }
-        },
-        "CorpusVersion": {
-          "description": "GET .../versions row - history.yml.",
-          "table": false,
-          "fields": {
-            "id": { "type": "String", "description": "Version id." },
-            "label": { "type": "String", "description": "Version label." },
-            "title": { "type": "String", "description": "Version title." },
-            "at": { "type": "String", "description": "Version timestamp." },
-            "current": { "type": "bool", "description": "True for the current version." },
-            "snapshot_key": { "type": "String?", "description": "Snapshot storage key." },
-            "files": { "type": "CorpusVersionFile[]?", "description": "Changed files." },
-            "notes": { "type": "String[]?", "description": "Version notes." }
-          }
-        },
-        "CorpusVersionFile": {
-          "description": "One changed file in a corpus version.",
-          "table": false,
-          "fields": {
-            "path": { "type": "String", "description": "File path." },
-            "kind": { "type": "VersionFileKind", "description": "Change kind." }
-          }
-        }
-      }
+      "variants": [
+        "Section",
+        "Block"
+      ]
     }
   }
 }

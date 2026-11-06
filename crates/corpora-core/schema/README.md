@@ -1,13 +1,21 @@
 # Corpora schema
 
-`model.json` is the **single source of truth** for the shared data model. The
-`corpora-typegen` crate reads it and emits:
+This directory is the **single source of truth** for the shared data model:
 
-| Target     | Output                 | Consumed by                              |
-| ---------- | ---------------------- | ---------------------------------------- |
-| Rust       | `generated/types.rs`   | corpora-core crates                      |
-| TypeScript | `generated/types.ts`   | corpora-web and other TS apps            |
-| SQL        | `generated/schema.sql` | Postgres (Supabase) migrations           |
+- `model.json` — version, config, scalars, enums and unions
+- `domains/<name>.json` — one file per domain, holding its struct types
+
+The `corpora-typegen` crate reads the directory and emits one file per
+domain, plus barrels:
+
+| Target     | Output                                           | Consumed by                    |
+| ---------- | ------------------------------------------------ | ------------------------------ |
+| Rust       | `generated/rust/{mod,enums,<domain>}.rs`         | corpora-core crates            |
+| TypeScript | `generated/typescript/{index,enums,<domain>}.ts` | corpora-web and other TS apps  |
+| SQL        | `generated/sql/schema.sql`                       | Postgres (Supabase) migrations |
+
+SQL stays a single file because `CREATE TABLE` ordering follows foreign-key
+dependencies across domains.
 
 Regenerate after editing the schema:
 
@@ -29,34 +37,43 @@ cargo run -p corpora-typegen
 - **Enums as CHECK constraints.** Enums emit `TEXT ... CHECK (col IN (...))`
   rather than `CREATE TYPE`, so adding a value is an additive migration.
 
-Hand-written SQL still has a place: *migrations* evolving an existing
+Hand-written SQL still has a place: _migrations_ evolving an existing
 database belong in a migrations directory, with `generated/schema.sql` as the
 authoritative description of the current shape.
 
 ## Format
 
+`model.json`:
+
 ```jsonc
 {
   "scalars": { "Uuid": { "rust": "uuid::Uuid", "typescript": "string", "sql": "UUID" } },
-  "enums":   { "ProjectStatus": { "values": ["draft", "..."] } },
-  "unions":  { "Node": { "variants": ["Section", "Block"] } },
-  "domains": {
-    "platform": {
-      "types": {
-        "Project": {
-          "table": "projects",            // Postgres table (false = value object)
-          "fields": {
-            "id":         { "type": "Uuid", "primary_key": true, "description": "..." },
-            "creator_id": { "type": "Uuid", "references": "User.id" },
-            "status":     { "type": "ProjectStatus", "default": "draft" },
-            "toc":        { "type": "CorpusTocSection[]?", "sql_type": "JSONB" }
-          }
-        }
-      }
-    }
-  }
+  "enums": { "ProjectStatus": { "values": ["draft", "..."] } },
+  "unions": { "Node": { "variants": ["Section", "Block"] } },
 }
 ```
+
+`domains/platform.json` (one file per domain; the file stem is the domain name):
+
+```jsonc
+{
+  "description": "Platform entities (Postgres tables).",
+  "types": {
+    "Project": {
+      "table": "projects", // Postgres table (false = value object)
+      "fields": {
+        "id": { "type": "Uuid", "primary_key": true, "description": "..." },
+        "creator_id": { "type": "Uuid", "references": "User.id" },
+        "status": { "type": "ProjectStatus", "default": "draft" },
+        "toc": { "type": "CorpusTocSection[]?", "sql_type": "JSONB" },
+      },
+    },
+  },
+}
+```
+
+Cross-domain references are allowed; emitters compute the `use` / `import`
+lines per generated file.
 
 Field type syntax: `T` required, `T?` optional, `T[]` list, `T[]?` optional
 list, `Map<K, V>` map. Field names are `snake_case` in the schema; the

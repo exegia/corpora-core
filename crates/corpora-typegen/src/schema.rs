@@ -7,6 +7,9 @@ use serde::Deserialize;
 /// Errors raised while loading or validating a schema.
 #[derive(Debug, thiserror::Error)]
 pub enum SchemaError {
+    /// A schema file could not be read.
+    #[error("reading schema: {0}")]
+    Io(#[from] std::io::Error),
     /// The schema file could not be parsed as JSON.
     #[error("invalid schema JSON: {0}")]
     Parse(#[from] serde_json::Error),
@@ -225,12 +228,80 @@ impl FieldType {
     }
 }
 
+/// Where a named type is declared, used by emitters to compute imports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeHome<'schema> {
+    /// A Rust primitive permitted in field expressions.
+    Primitive,
+    /// Declared under `scalars`.
+    Scalar,
+    /// Declared under `enums`.
+    Enum,
+    /// A union, homed in the domain of its first variant.
+    Union(&'schema str),
+    /// A struct type declared in the named domain.
+    Struct(&'schema str),
+}
+
 impl Schema {
     /// Load and validate a schema from JSON text.
     pub fn from_json(json: &str) -> Result<Self, SchemaError> {
         let schema: Self = serde_json::from_str(json)?;
         schema.validate()?;
         Ok(schema)
+    }
+
+    /// Load and validate a schema from a directory containing `model.json`
+    /// (version, config, scalars, enums, unions) and `domains/<name>.json`.
+    pub fn from_dir(dir: &std::path::Path) -> Result<Self, SchemaError> {
+        let root = std::fs::read_to_string(dir.join("model.json"))?;
+        let mut schema: Self = serde_json::from_str(&root)?;
+        let mut entries: Vec<std::path::PathBuf> = std::fs::read_dir(dir.join("domains"))?
+            .filter_map(Result::ok)
+            .map(|entry| entry.path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == "json"))
+            .collect();
+        entries.sort();
+        for path in entries {
+            let name = path
+                .file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let json = std::fs::read_to_string(&path)?;
+            let domain: Domain = serde_json::from_str(&json)?;
+            schema.domains.insert(name, domain);
+        }
+        schema.validate()?;
+        Ok(schema)
+    }
+
+    /// Where the named type is declared.
+    pub fn type_home(&self, name: &str) -> Option<TypeHome<'_>> {
+        const PRIMITIVES: &[&str] = &["String", "bool", "i32", "i64", "u32", "u64", "f32", "f64"];
+        if PRIMITIVES.contains(&name) {
+            return Some(TypeHome::Primitive);
+        }
+        if self.scalars.contains_key(name) {
+            return Some(TypeHome::Scalar);
+        }
+        if self.enums.contains_key(name) {
+            return Some(TypeHome::Enum);
+        }
+        if let Some(union) = self.unions.get(name) {
+            let first = union.variants.first()?;
+            return self.domain_of(first).map(TypeHome::Union);
+        }
+        self.domain_of(name).map(TypeHome::Struct)
+    }
+
+    /// The domain in which a struct type is declared.
+    fn domain_of(&self, type_name: &str) -> Option<&str> {
+        self.domains.iter().find_map(|(domain_name, domain)| {
+            domain
+                .types
+                .contains_key(type_name)
+                .then_some(domain_name.as_str())
+        })
     }
 
     /// Every type name declared in the schema (scalars, enums, unions, structs)

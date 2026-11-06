@@ -1,11 +1,12 @@
-//! CLI: reads `schema/model.json` and writes generated types.
+//! CLI: reads the schema directory and writes generated types.
 //!
 //! ```text
-//! corpora-typegen [--schema <path>] [--out <dir>]
+//! corpora-typegen [--schema <dir-or-file>] [--out <dir>]
 //! ```
 //!
-//! Writes `types.rs`, `types.ts` and `schema.sql` under the output directory
-//! (default `generated/`).
+//! Writes `rust/`, `typescript/` and `sql/schema.sql` under the output
+//! directory (default `generated/`). The schema path may be a directory
+//! containing `model.json` plus `domains/*.json`, or a single JSON file.
 
 use std::path::PathBuf;
 
@@ -13,7 +14,7 @@ use anyhow::Context as _;
 use corpora_typegen::{Schema, rust, sql, typescript};
 
 fn main() -> anyhow::Result<()> {
-    let mut schema_path = PathBuf::from("crates/corpora-core/schema/model.json");
+    let mut schema_path = PathBuf::from("crates/corpora-core/schema");
     let mut out_dir = PathBuf::from("generated");
 
     let mut args = std::env::args().skip(1);
@@ -29,18 +30,29 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
-    let json = std::fs::read_to_string(&schema_path)
-        .with_context(|| format!("reading {}", schema_path.display()))?;
-    let schema = Schema::from_json(&json).context("validating schema")?;
+    let schema = if schema_path.is_dir() {
+        Schema::from_dir(&schema_path)
+    } else {
+        let json = std::fs::read_to_string(&schema_path)
+            .with_context(|| format!("reading {}", schema_path.display()))?;
+        Schema::from_json(&json)
+    }
+    .context("loading schema")?;
 
-    std::fs::create_dir_all(&out_dir).with_context(|| format!("creating {}", out_dir.display()))?;
+    let mut outputs: Vec<(PathBuf, String)> = Vec::new();
+    for (name, content) in rust::emit(&schema) {
+        outputs.push((out_dir.join("rust").join(name), content));
+    }
+    for (name, content) in typescript::emit(&schema) {
+        outputs.push((out_dir.join("typescript").join(name), content));
+    }
+    outputs.push((out_dir.join("sql").join("schema.sql"), sql::emit(&schema)));
 
-    for (name, content) in [
-        ("types.rs", rust::emit(&schema)),
-        ("types.ts", typescript::emit(&schema)),
-        ("schema.sql", sql::emit(&schema)),
-    ] {
-        let path = out_dir.join(name);
+    for (path, content) in outputs {
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .with_context(|| format!("creating {}", parent.display()))?;
+        }
         std::fs::write(&path, content).with_context(|| format!("writing {}", path.display()))?;
         println!("wrote {}", path.display());
     }

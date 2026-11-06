@@ -1,11 +1,11 @@
 # corpora-typegen
 
 Generates Rust, TypeScript and SQL types from the Corpora schema definition
-(`crates/corpora-core/schema/model.json`).
+(`crates/corpora-core/schema/`: `model.json` plus `domains/*.json`).
 
 ```sh
-cargo run -p corpora-typegen            # writes generated/{types.rs,types.ts,schema.sql}
-cargo run -p corpora-typegen -- --schema path/to/model.json --out dir
+cargo run -p corpora-typegen            # writes generated/{rust,typescript,sql}/
+cargo run -p corpora-typegen -- --schema path/to/schema-dir --out dir
 ```
 
 See `crates/corpora-core/schema/README.md` for the schema format.
