@@ -21,6 +21,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "CorporaTypes", path: "generated/swift"),
-        .testTarget(name: "CorporaTypesTests", dependencies: ["CorporaTypes"])
+        .testTarget(
+            name: "CorporaTypesTests",
+            dependencies: ["CorporaTypes"],
+            path: "tests/CorporaTypesTests"
+        )
     ]
 )
