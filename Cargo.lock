@@ -26,6 +26,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "corpora-agent"
+version = "0.0.0"
+
+[[package]]
+name = "corpora-convert"
+version = "0.0.0"
+
+[[package]]
 name = "corpora-core"
 version = "0.0.0"
 dependencies = [
@@ -33,6 +41,18 @@ dependencies = [
  "serde",
  "thiserror",
 ]
+
+[[package]]
+name = "corpora-fabric"
+version = "0.0.0"
+
+[[package]]
+name = "corpora-source"
+version = "0.0.0"
+
+[[package]]
+name = "corpora-typegen"
+version = "0.0.0"
 
 [[package]]
 name = "encode_unicode"
