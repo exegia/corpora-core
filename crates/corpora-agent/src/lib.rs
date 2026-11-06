@@ -1,14 +1,5 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+//! # corpora-agent
+//!
+//! AI skills and agentic workflow runtime for the Corpora apps suite.
+//!
+//! This crate is a placeholder; the agent runtime lands in a follow-up.

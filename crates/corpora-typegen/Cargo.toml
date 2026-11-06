@@ -1,6 +1,11 @@
 [package]
 name = "corpora-typegen"
 description = "Generates Rust, TypeScript and SQL types from the Corpora schema definition"
+documentation = "https://docs.rs/corpora-typegen"
+readme = "README.md"
+keywords = ["corpora", "codegen", "typescript", "sql"]
+categories = ["development-tools"]
+include = ["src/**/*", "Cargo.toml", "README.md"]
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

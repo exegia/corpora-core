@@ -7,6 +7,12 @@ authors.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
+description = "Data source connectors for the Corpora apps suite"
+documentation = "https://docs.rs/corpora-source"
+readme = "README.md"
+keywords = ["corpora", "data-sources", "corpus"]
+categories = ["development-tools"]
+include = ["src/**/*", "Cargo.toml", "README.md"]
 
 [dependencies]
 
