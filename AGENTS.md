@@ -44,7 +44,8 @@ with `STACKS="python node"`. Monorepos: only root manifests are detected, so set
 | Python (uv)      | `pyproject.toml`                   | ruff, mypy / pyright / ty         | pytest; e2e in `tests/e2e/`, evals in `tests/evals/`            |
 | TypeScript/React | `package.json` (+ `tsconfig.json`) | scripts `lint`, `typecheck`       | `test`; e2e: `test:e2e` or Playwright                           |
 | Expo             | `expo` dependency                  | as above, `expo-doctor`           | e2e: Maestro flows in `.maestro/`                               |
-| Rust + GPUI      | `Cargo.toml` (`gpui` dependency)   | `cargo fmt`, `clippy -D warnings` | `cargo test` / nextest; e2e: `tests/e2e.rs`                     |
+| Rust             | `Cargo.toml`                       | `cargo fmt`, `clippy -D warnings` | `cargo test` / nextest; e2e: `tests/e2e.rs`                     |
+| Rust + GPUI      | `Cargo.toml` (`gpui` dependency)   | as above                          | `#[gpui::test]` with `TestAppContext`                           |
 | SwiftUI          | `Package.swift` / `.xcodeproj`     | SwiftLint, swift-format           | `swift test` / `xcodebuild`; UI tests via `XCODE_UITEST_TARGET` |
 
 The package manager is read from the lockfile (bun, pnpm, yarn, npm). Swift and GPUI jobs run on macOS
@@ -107,7 +108,8 @@ If this file and the automation disagree, `.github/BRANCH-AND-RELEASE-POLICY.md`
 | `stack-python`                                   | Python / uv work                                            |
 | `stack-typescript-react`                         | TypeScript and React work                                   |
 | `stack-expo`                                     | Expo / React Native work                                    |
-| `stack-rust-gpui`                                | Rust and GPUI work                                          |
+| `stack-rust`                                     | Rust crate publishing to crates.io                          |
+| `stack-rust-gpui`                                | Rust and GPUI desktop app work                              |
 | `stack-swiftui`                                  | SwiftUI / Xcode work                                        |
 | `agents-building`                                | Building agents: prompts, tools, skills, MCP, evals         |
 | `agentic-workflows`, `agentic-workflow-designer` | Only if you adopt GitHub Agentic Workflows (`gh aw`)        |
