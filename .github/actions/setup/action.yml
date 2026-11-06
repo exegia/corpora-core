@@ -1,0 +1,116 @@
+name: Set up toolchains
+description: >-
+  Detect the stacks in this repository (scripts/stack.sh) and install only the
+  toolchains they need, then install dependencies with `make install`.
+  Run actions/checkout first.
+
+inputs:
+  install:
+    description: Run `make install` once the toolchains are ready.
+    default: "true"
+
+outputs:
+  stacks:
+    description: Space-separated build stacks that were detected (python node rust swift).
+    value: ${{ steps.detect.outputs.stacks }}
+  tags:
+    description: Stacks plus flavors (typescript react expo gpui).
+    value: ${{ steps.detect.outputs.tags }}
+
+runs:
+  using: composite
+  steps:
+    - name: Detect stacks
+      id: detect
+      shell: bash
+      run: |
+        set -euo pipefail
+        stacks="$(scripts/stack.sh list | tr '\n' ' ')"
+        tags="$(scripts/stack.sh tags | tr '\n' ' ')"
+        flag() { case " $stacks $tags " in *" $1 "*) echo true ;; *) echo false ;; esac; }
+
+        node_file=''
+        for f in .nvmrc .node-version; do
+          if [ -f "$f" ]; then node_file="$f"; break; fi
+        done
+
+        pm=''; cache=''
+        if [ "$(flag node)" = true ]; then
+          pm="$(. scripts/lib.sh && node_pm)"
+          case "$pm" in
+            npm)  [ -f package-lock.json ] && cache=npm ;;
+            pnpm) [ -f pnpm-lock.yaml ]    && cache=pnpm ;;
+            yarn) [ -f yarn.lock ]         && cache=yarn ;;
+          esac
+        fi
+
+        {
+          echo "stacks=$stacks"
+          echo "tags=$tags"
+          echo "python=$(flag python)"
+          echo "node=$(flag node)"
+          echo "rust=$(flag rust)"
+          echo "gpui=$(flag gpui)"
+          echo "node_file=$node_file"
+          echo "pm=$pm"
+          echo "cache=$cache"
+        } >> "$GITHUB_OUTPUT"
+        echo "Detected: ${stacks:-nothing} (${tags:-no flavors})"
+
+    # ── Python ──
+    - name: Set up uv
+      if: steps.detect.outputs.python == 'true'
+      uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+      with:
+        enable-cache: true
+
+    # ── Node (TypeScript, React, Expo) ──
+    - name: Set up pnpm
+      if: steps.detect.outputs.pm == 'pnpm'
+      uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+
+    - name: Set up Node
+      if: steps.detect.outputs.node == 'true'
+      uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+      with:
+        node-version: ${{ steps.detect.outputs.node_file == '' && 'lts/*' || '' }}
+        node-version-file: ${{ steps.detect.outputs.node_file }}
+        cache: ${{ steps.detect.outputs.cache }}
+
+    - name: Set up Bun
+      if: steps.detect.outputs.pm == 'bun'
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+    # ── Rust (GPUI) ──
+    - name: Set up Rust toolchain
+      if: steps.detect.outputs.rust == 'true' && hashFiles('rust-toolchain', 'rust-toolchain.toml') == ''
+      uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      with:
+        toolchain: stable
+        components: clippy, rustfmt
+
+    - name: Install pinned Rust toolchain
+      if: steps.detect.outputs.rust == 'true' && hashFiles('rust-toolchain', 'rust-toolchain.toml') != ''
+      shell: bash
+      run: rustup show && rustup component add clippy rustfmt
+
+    - name: Cache Cargo
+      if: steps.detect.outputs.rust == 'true'
+      uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+
+    - name: Install GPUI system libraries (Linux)
+      if: steps.detect.outputs.gpui == 'true' && runner.os == 'Linux'
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          clang cmake pkg-config libssl-dev libzstd-dev libasound2-dev libfontconfig-dev \
+          libwayland-dev libx11-xcb-dev libxcb1-dev libxkbcommon-dev libxkbcommon-x11-dev \
+          libvulkan1 mesa-vulkan-drivers
+
+    # ── Swift: Xcode and the Swift toolchain ship on macOS runners; nothing to install. ──
+
+    - name: Install dependencies
+      if: inputs.install == 'true'
+      shell: bash
+      run: make install

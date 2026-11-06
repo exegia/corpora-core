@@ -1,0 +1,29 @@
+name: "Copilot Setup Steps"
+
+# Bootstraps the environment GitHub Copilot's coding agent works in: the same toolchains and
+# dependencies `make ci` uses, so the agent can run `make fmt`, `make test` and `make ci`.
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+      - .github/actions/setup/action.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+      - .github/actions/setup/action.yml
+
+jobs:
+  # The job MUST be called 'copilot-setup-steps' to be recognized by GitHub Copilot Agent
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+
+    # Minimal permissions; Copilot Agent receives its own token with appropriate permissions.
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install toolchains and dependencies
+        uses: ./.github/actions/setup

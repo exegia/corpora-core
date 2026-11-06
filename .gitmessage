@@ -1,0 +1,28 @@
+<type>(<scope>)!: <summary>
+
+# Why is this change needed? What problem does it solve? (wrap at 72 cols)
+
+# Footer (optional):
+# Closes #123
+# BREAKING CHANGE: describe what breaks and how to migrate
+#
+# Types:
+#   feat      new functionality (minor)
+#   fix       bug fix (patch)
+#   chore     maintenance, tooling
+#   docs      documentation only
+#   ci        CI/CD and automation
+#   refactor  behavior-preserving code change
+#   test      add or update tests
+#   perf      performance improvement
+#   build     build system or dependencies
+#   style     formatting only, no logic change
+#   revert    revert an earlier commit
+#   ai        agent prompts, skills, AI config
+#
+# Rules:
+#   - Subject: imperative mood ("add", not "added"), <= 72 chars, no trailing period
+#   - Scope is optional: feat(parser): ...
+#   - Add "!" after type/scope for a breaking change (major bump)
+#   - Body explains WHY, not what; the diff shows what
+#   - Never commit secrets; never use --no-verify

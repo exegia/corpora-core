@@ -1,0 +1,27 @@
+{
+  // Reproducible dev environment for Codespaces, VS Code Dev Containers and Zed remote.
+  // Covers Python (uv), Node (TypeScript/React/Expo) and Rust. GPUI and SwiftUI target desktop
+  // and Apple platforms: develop those natively on macOS and use this container for the rest.
+  "name": "corpora-template",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/node:1": { "version": "lts" },
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.13" },
+    "ghcr.io/devcontainers/features/rust:1": {}
+  },
+  // Tools the Makefile expects: uv for Python, pre-commit for the git hooks.
+  "postCreateCommand": "pip install --user uv pre-commit && make setup",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "EditorConfig.EditorConfig",
+        "ms-python.python",
+        "charliermarsh.ruff",
+        "rust-lang.rust-analyzer",
+        "dbaeumer.vscode-eslint",
+        "timonwong.shellcheck"
+      ]
+    }
+  }
+}

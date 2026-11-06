@@ -1,0 +1,189 @@
+name: Publish
+
+# Runs when release.yml pushes a vX.Y.Z tag (tags pushed with the automation App's token do start
+# workflows; tags pushed with GITHUB_TOKEN would not). Every publishing job is opt-in through a
+# repository variable, so a fresh template builds artifacts and publishes nothing.
+#
+#   variable              job              secret / auth
+#   (always)              build            -
+#   (always)              release-assets   attaches dist/* to the GitHub Release
+#   PUBLISH_PYPI=true     publish-pypi     PyPI trusted publishing (OIDC), environment `pypi`
+#   PUBLISH_NPM=true      publish-npm      NPM_TOKEN, environment `npm` (with provenance)
+#   PUBLISH_CRATES=true   publish-crates   CARGO_REGISTRY_TOKEN, environment `crates`
+#   EAS_BUILD_PROFILE     eas-build        EXPO_TOKEN, environment `eas`
+#   DEPLOY_COMMAND        deploy           environment `production`
+#
+# Store secrets in the matching GitHub *environment* (make secrets-push ENVIRONMENT=npm ...).
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: "Run the publishing jobs too (otherwise this only builds artifacts)"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+env:
+  XCODE_SCHEME: ${{ vars.XCODE_SCHEME }}
+  XCODE_DESTINATION: ${{ vars.XCODE_DESTINATION }}
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      runner: ${{ steps.runners.outputs.runner }}
+      publish: ${{ steps.gate.outputs.publish }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: runners
+        env:
+          CI_RUNNERS: ${{ vars.CI_RUNNERS }}
+        run: echo "runner=$(scripts/stack.sh runners | jq -r '.[0]')" >> "$GITHUB_OUTPUT"
+      - id: gate
+        env:
+          IS_TAG: ${{ startsWith(github.ref, 'refs/tags/v') }}
+          DISPATCH_PUBLISH: ${{ inputs.publish }}
+        run: |
+          if [ "$IS_TAG" = true ] || [ "$DISPATCH_PUBLISH" = true ]; then echo "publish=true" >> "$GITHUB_OUTPUT"
+          else echo "publish=false" >> "$GITHUB_OUTPUT"; fi
+
+  build:
+    name: build
+    needs: detect
+    runs-on: ${{ needs.detect.outputs.runner }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - run: make pack
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: ignore
+
+  release-assets:
+    name: release-assets
+    needs: build
+    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: dist
+          path: dist
+        continue-on-error: true # no artifacts were produced
+      - name: Attach artifacts to the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          if compgen -G "dist/*" >/dev/null; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            echo "No artifacts to attach."
+          fi
+
+  publish-pypi:
+    name: publish-pypi
+    needs: [detect, build]
+    if: ${{ needs.detect.outputs.publish == 'true' && vars.PUBLISH_PYPI == 'true' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: dist
+          path: dist
+      - name: Keep only Python distributions
+        run: |
+          mkdir pypi-dist
+          cp dist/*.whl dist/*.tar.gz pypi-dist/
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          packages-dir: pypi-dist/
+
+  publish-npm:
+    name: publish-npm
+    needs: [detect, build]
+    if: ${{ needs.detect.outputs.publish == 'true' && vars.PUBLISH_NPM == 'true' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: npm
+    permissions:
+      id-token: write # npm provenance
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: lts/*
+          registry-url: https://registry.npmjs.org
+      - run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-crates:
+    name: publish-crates
+    needs: [detect, build]
+    if: ${{ needs.detect.outputs.publish == 'true' && vars.PUBLISH_CRATES == 'true' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: crates
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          install: "false"
+      - run: cargo publish --locked
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+
+  eas-build:
+    name: eas-build
+    needs: [detect, build]
+    if: ${{ needs.detect.outputs.publish == 'true' && vars.EAS_BUILD_PROFILE != '' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: eas
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Queue an EAS build
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EAS_BUILD_PROFILE: ${{ vars.EAS_BUILD_PROFILE }}
+        run: npx --yes eas-cli build --non-interactive --no-wait --platform all --profile "$EAS_BUILD_PROFILE"
+
+  deploy:
+    name: deploy
+    needs: [detect, build]
+    if: ${{ needs.detect.outputs.publish == 'true' && vars.DEPLOY_COMMAND != '' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+    env:
+      DEPLOY_COMMAND: ${{ vars.DEPLOY_COMMAND }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Deploy production
+        # Secrets for the command live in the `production` environment; expose them by name here,
+        # e.g. add `VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}` to this step's env for your provider.
+        run: bash -o pipefail -c "$DEPLOY_COMMAND"

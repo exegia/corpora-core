@@ -1,0 +1,65 @@
+.DS_Store
+**/.DS_Store
+__pycache__/
+node_modules/
+cache/
+.vscode/
+.worktrees/
+.idea/
+.expo/
+.cargo/
+# Add any additional files or directories here
+
+
+# ── Secrets: never commit. Backed by .pre-commit-config.yaml (gitleaks) and
+#    .github/workflows/secret-scan.yml.
+.env
+.env.*
+!.env.example
+*.local.json
+*.local.toml
+*.pem
+*.key
+*.p8
+*.p12
+*.jks
+*.keystore
+*.mobileprovision
+
+# ── Local-only agent state (committed guidance lives in .github/skills and AGENTS.md)
+.claude/
+.agents/
+.codex/
+.github/aw/logs/
+
+# ── Build and test output
+dist/
+build/
+coverage/
+test-results/
+playwright-report/
+*.log
+
+# ── Python
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+*.pyc
+
+# ── Node / TypeScript / React / Expo
+.next/
+.turbo/
+*.tsbuildinfo
+web-build/
+
+# ── Rust
+target/
+
+# ── Swift / Xcode
+.build/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+*.xcarchive

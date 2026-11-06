@@ -1,0 +1,47 @@
+name: Task
+description: Chore, maintenance, refactor, docs, or other planned work
+title: "chore: "
+labels: ["type:chore"]
+body:
+  - type: dropdown
+    id: type
+    attributes:
+      label: Type
+      description: Pick the Conventional Commit type that best fits. Adjust the title prefix to match.
+      options:
+        - chore
+        - docs
+        - ci
+        - refactor
+        - test
+        - perf
+        - build
+        - ai
+    validations:
+      required: true
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should be true when this is finished, and why?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope and checklist
+      description: Break the work into steps. Note anything explicitly out of scope.
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: dod
+    attributes:
+      label: Definition of done
+      placeholder: |
+        - [ ] `make ci` passes
+        - [ ] Docs updated
+    validations:
+      required: true

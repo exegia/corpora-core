@@ -1,0 +1,68 @@
+name: Security
+
+# Dependency review on pull requests and CodeQL code scanning. The CodeQL language matrix is
+# derived from the stacks in the repository (scripts/stack.sh codeql), so it needs no editing.
+#
+# Both need GitHub features that private repositories only get with GitHub Advanced Security.
+# Set the repository variable DEPENDENCY_REVIEW=false and/or CODEQL=false to switch one off, or
+# use GitHub's "default setup" for code scanning and set CODEQL=false (the two must not both run).
+
+on:
+  pull_request:
+    branches: [dev, next, main]
+  push:
+    branches: [dev]
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    name: Dependency review
+    if: ${{ github.event_name == 'pull_request' && vars.DEPENDENCY_REVIEW != 'false' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5
+        with:
+          fail-on-severity: high
+
+  detect:
+    name: Detect languages
+    if: ${{ vars.CODEQL != 'false' }}
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.codeql.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: codeql
+        run: echo "matrix=$(scripts/stack.sh codeql)" >> "$GITHUB_OUTPUT"
+
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    needs: detect
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.detect.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+      - uses: github/codeql-action/analyze@9b3254085494b55a0f7c4c2b3d2d52cc712ce370 # v4
+        with:
+          category: /language:${{ matrix.language }}

@@ -1,0 +1,10 @@
+blank_issues_enabled: false
+contact_links:
+  # Template: downstream repos replace "exegia/corpora-template" with their own owner/repo slug.
+  - name: Report a security vulnerability (private)
+    url: https://github.com/exegia/corpora-template/security/advisories/new
+    about: Do not open a public issue for vulnerabilities. Use private vulnerability reporting.
+  # Template: point this at your Discussions page or docs if you have them.
+  - name: Questions and documentation
+    url: https://github.com/exegia/corpora-template#readme
+    about: Read the README and docs first, or ask in Discussions if enabled.

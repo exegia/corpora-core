@@ -1,0 +1,76 @@
+# Local git hooks. Install once per clone with `make setup` (or `make hooks`), which
+# registers the pre-commit, commit-msg and pre-push stages below.
+#
+# These hooks are advisory: `git commit --no-verify` skips them, which is why CI
+# re-runs the same checks (pr.yml `hygiene`, secret-scan.yml, `make pr-guard`). Never
+# bypass a hook that fired; fix the cause. If gitleaks fires, remove the secret and
+# rotate it.
+
+minimum_pre_commit_version: "3.2.0"
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-added-large-files
+        args: ["--maxkb=1024"]
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-toml
+      - id: check-yaml
+        args: ["--allow-multiple-documents"]
+      - id: check-json
+        # JSON with comments is legitimate in these files.
+        exclude: '(^|/)(tsconfig[^/]*|devcontainer|settings|launch|tasks)\.json$|(^|/)\.vscode/'
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: ["--fix=lf"]
+      - id: trailing-whitespace
+        args: ["--markdown-linebreak-ext=md"]
+      # Work on feature branches (<type>/<slug>), never directly on the long-lived ones.
+      - id: no-commit-to-branch
+        args: ["--branch", "main", "--branch", "next", "--branch", "dev"]
+
+  # Keep `rev` in step with GITLEAKS_VERSION in .github/workflows/secret-scan.yml.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        args: ["-S", "warning", "-x"]
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.7
+    hooks:
+      - id: actionlint
+
+  - repo: local
+    hooks:
+      - id: conventional-commit
+        name: conventional commit message
+        entry: scripts/check-commit-msg.sh
+        language: script
+        stages: [commit-msg]
+      - id: agent-assets
+        name: agent skills and instructions
+        entry: scripts/agent-assets.sh
+        args: [check]
+        language: script
+        pass_filenames: false
+        files: '^(AGENTS\.md|CLAUDE\.md|\.github/(copilot-instructions\.md|skills/.*|mcp\.json)|\.mcp\.json)$'
+      - id: lint-before-push
+        name: make lint-check
+        entry: make lint-check
+        language: system
+        pass_filenames: false
+        always_run: true
+        stages: [pre-push]

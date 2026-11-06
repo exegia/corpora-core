@@ -1,0 +1,64 @@
+name: Next
+
+# A push to `next` cuts (or refreshes) release/vX.Y.Z and optionally deploys a preview.
+
+on:
+  push:
+    branches:
+      - next
+  workflow_dispatch:
+
+concurrency:
+  group: next
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  cut-release:
+    name: cut-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
+        id: app-token
+        with:
+          app-id: ${{ secrets.AUTOMATION_APP_ID }}
+          private-key: ${{ secrets.AUTOMATION_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ steps.app-token.outputs.token }}
+
+      # Toolchains only, no dependency install: the release commit refreshes lockfiles
+      # (uv lock, cargo update, npm/pnpm lockfile-only) and nothing more.
+      - uses: ./.github/actions/setup
+        with:
+          install: "false"
+
+      - name: Cut or refresh the release branch
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION_CMD: ${{ vars.VERSION_CMD }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          make cut-release
+
+  preview:
+    name: preview
+    if: ${{ vars.PREVIEW_DEPLOY_COMMAND != '' }}
+    runs-on: ubuntu-latest
+    environment: preview
+    env:
+      PREVIEW_DEPLOY_COMMAND: ${{ vars.PREVIEW_DEPLOY_COMMAND }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      - name: Deploy preview
+        # Secrets for the command live in the `preview` environment; they are exposed here by name,
+        # e.g. add `VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}` to this step's env for your provider.
+        run: bash -o pipefail -c "$PREVIEW_DEPLOY_COMMAND"

@@ -1,0 +1,135 @@
+# Repository settings as code.
+#
+# Format follows the Probot "Settings" app (https://github.com/repository-settings/app), so installing
+# that app keeps GitHub in sync automatically. Without the app, `make settings-apply` and
+# `make labels` apply the same file through the GitHub API (needs `gh` and admin rights).
+#
+# Deliberately NOT here:
+#   - branch protection  -> .github/rulesets/*.json (`make rulesets-apply`); the two would fight
+#   - name / description / topics -> set per repository, so generated repos keep their own
+#   - security features (secret scanning, push protection, Dependabot alerts, private
+#     vulnerability reporting) -> .github/scripts/apply-settings.sh enables them
+
+repository:
+  default_branch: dev
+
+  has_issues: true
+  has_projects: true
+  has_wiki: false
+  has_downloads: false
+
+  # Squash feature PRs into dev (the PR title becomes the commit subject, which SemVer
+  # reads); promotion and release PRs use merge commits. The rulesets enforce which
+  # method each branch accepts.
+  allow_squash_merge: true
+  allow_merge_commit: true
+  allow_rebase_merge: false
+  squash_merge_commit_title: PR_TITLE
+  squash_merge_commit_message: PR_BODY
+  merge_commit_title: PR_TITLE
+  merge_commit_message: PR_BODY
+
+  # Required by promote / release / Dependabot (`gh pr merge --auto`).
+  allow_auto_merge: true
+  allow_update_branch: true
+  delete_branch_on_merge: true
+
+labels:
+  # Type
+  - name: "type:bug"
+    color: "d73a4a"
+    description: "Something is broken or behaves incorrectly"
+  - name: "type:feature"
+    color: "0e8a16"
+    description: "New capability or enhancement"
+  - name: "type:docs"
+    color: "0075ca"
+    description: "Documentation only"
+  - name: "type:chore"
+    color: "cfd3d7"
+    description: "Build, CI, deps, refactor, maintenance"
+  - name: "type:question"
+    color: "d876e3"
+    description: "Question or support request"
+
+  # Priority
+  - name: "priority:critical"
+    color: "b60205"
+    description: "Data loss, security, release broken, or app unusable"
+  - name: "priority:high"
+    color: "d93f0b"
+    description: "Major breakage with no workaround"
+  - name: "priority:medium"
+    color: "fbca04"
+    description: "Important, has a workaround (default)"
+  - name: "priority:low"
+    color: "0e8a16"
+    description: "Minor, cosmetic, or nice to have"
+
+  # Status
+  - name: "status:todo"
+    color: "ededed"
+    description: "Triaged, not started"
+  - name: "status:in-progress"
+    color: "1d76db"
+    description: "Work has started"
+  - name: "status:blocked"
+    color: "b60205"
+    description: "Waiting on something external"
+  - name: "icebox"
+    color: "c5def5"
+    description: "Valid but deferred; revisit on a stated trigger"
+
+  # Stack
+  - name: "stack:rust-gpui"
+    color: "5319e7"
+    description: "Rust / GPUI"
+  - name: "stack:python"
+    color: "5319e7"
+    description: "Python"
+  - name: "stack:typescript"
+    color: "5319e7"
+    description: "TypeScript / React"
+  - name: "stack:expo"
+    color: "5319e7"
+    description: "Expo / React Native"
+  - name: "stack:swiftui"
+    color: "5319e7"
+    description: "Swift / SwiftUI"
+  - name: "stack:agents"
+    color: "5319e7"
+    description: "AI agents, prompts, skills, MCP"
+
+  # Automation and release
+  - name: "run-e2e"
+    color: "0e8a16"
+    description: "Run the end-to-end suite on this pull request"
+  - name: "breaking-change"
+    color: "b60205"
+    description: "Changes a public contract; needs a major bump"
+  - name: "release"
+    color: "ededed"
+    description: "Release promotion or release PR"
+  - name: "dependencies"
+    color: "0366d6"
+    description: "Dependency updates"
+  - name: "security"
+    color: "ee0701"
+    description: "Security-related change"
+  - name: "stale"
+    color: "ffffff"
+    description: "No recent activity; will be closed unless updated"
+
+  # Community
+  - name: "good first issue"
+    color: "7057ff"
+    description: "Good for newcomers"
+  - name: "help wanted"
+    color: "008672"
+    description: "Extra attention is needed"
+  - name: "duplicate"
+    color: "cccccc"
+    description: "Already reported elsewhere"
+  - name: "wontfix"
+    color: "ffffff"
+    description: "Will not be worked on"

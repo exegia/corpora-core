@@ -1,0 +1,34 @@
+name: Stale
+
+# Keeps the backlog honest: idle issues and PRs get a label, then are closed unless someone speaks up.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  pull-requests: write
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/stale@4391f3da665fdf50b6810c1a66712fb9ba21aa93 # v11
+        with:
+          days-before-issue-stale: 60
+          days-before-issue-close: 14
+          days-before-pr-stale: 30
+          days-before-pr-close: 14
+          stale-issue-label: stale
+          stale-pr-label: stale
+          exempt-issue-labels: "priority:critical,priority:high,security,icebox,status:in-progress,status:blocked,good first issue,help wanted"
+          exempt-pr-labels: "security,status:blocked,release"
+          exempt-draft-pr: true
+          stale-issue-message: >-
+            No activity for 60 days. This will close in 14 days unless there is an update.
+            If it is valid but not now, label it `icebox` and note what would revive it.
+          stale-pr-message: >-
+            No activity for 30 days. This will close in 14 days unless there is an update.
+            Small PRs that can merge beat large ones that cannot; consider re-scoping.

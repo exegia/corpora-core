@@ -1,0 +1,13 @@
+# Template: replace owners below. A team such as @exegia/maintainers also works.
+# Later matching patterns take precedence over earlier ones.
+
+# Default owner for everything
+* @emmanuel-defreitas
+
+# Uncomment to require specific owners for sensitive areas:
+
+# /.github/            @emmanuel-defreitas
+# /scripts/            @emmanuel-defreitas
+# /.github/skills/     @emmanuel-defreitas
+# AGENTS.md            @emmanuel-defreitas
+# SECURITY.md          @emmanuel-defreitas
