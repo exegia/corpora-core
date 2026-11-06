@@ -1,0 +1,82 @@
+{
+  "Metadata": [
+    ["title", "Option<String>", "Bibliographic title."],
+    ["creators", "Vec<String>", "Ordered creator names as supplied by the source."],
+    ["language", "Option<String>", "Language identifier as supplied; no normalization is imposed."],
+    ["publisher", "Option<String>", "Publisher name."],
+    ["date", "Option<String>", "Publication date, preserving uncertain or partial dates."],
+    ["description", "Option<String>", "Descriptive summary."],
+    ["identifier", "Option<String>", "External bibliographic identifier; distinct from domain identity."],
+    ["rights", "Option<String>", "Rights or licence statement."],
+    ["subjects", "Vec<String>", "Subject terms."],
+    ["properties", "Vec<Property>", "Ordered, repeatable descriptive properties."]
+  ],
+  "Property": [
+    ["key", "String", "Namespaced property key."],
+    ["value", "String", "Textual descriptive value; structured analysis belongs in typed annotations."]
+  ],
+  "Source": [
+    ["locator", "String", "Opaque source locator; never fetched by this crate."],
+    ["description", "Option<String>", "Human-readable source description."],
+    ["format", "Option<String>", "Source format label, such as tei or epub; extensible and not a parser registry."]
+  ],
+  "Provenance": [
+    ["method", "String", "Namespaced derivation method, for example source:transcription or ai:inference."],
+    ["agent", "Option<String>", "Responsible person, software, or model and version."],
+    ["sources", "Vec<Source>", "Evidence consulted."],
+    ["derived_from", "Vec<Reference>", "Inputs from which this value was derived."]
+  ],
+  "Reference": [
+    ["corpus", "CorpusId", "Target corpus."],
+    ["document", "DocumentId", "Target document."],
+    ["node", "Option<NodeId>", "Target node, or the whole document."],
+    ["range", "Option<TextRange>", "Optional Unicode scalar range; requires a block node."]
+  ],
+  "Block": [
+    ["id", "NodeId", "Identity within the document."],
+    ["kind", "String", "Namespaced semantic role, such as text:paragraph or manuscript:line."],
+    ["text", "String", "Canonical text to which byte offsets apply."],
+    ["metadata", "Metadata", "Descriptive properties."]
+  ],
+  "Section": [
+    ["id", "NodeId", "Identity within the document."],
+    ["kind", "String", "Namespaced semantic role, such as bible:chapter or paper:section."],
+    ["title", "Option<String>", "Optional display title."],
+    ["children", "Vec<Node>", "Ordered nested sections and blocks."],
+    ["metadata", "Metadata", "Descriptive properties."]
+  ],
+  "Document": [
+    ["id", "DocumentId", "Identity within its corpus."],
+    ["title", "Option<String>", "Optional display title."],
+    ["children", "Vec<Node>", "Ordered document content."],
+    ["metadata", "Metadata", "Descriptive properties."],
+    ["provenance", "Vec<Provenance>", "Origin and transformations of this document."]
+  ],
+  "Corpus": [
+    ["id", "CorpusId", "Corpus identity."],
+    ["documents", "Vec<Document>", "Ordered documents."],
+    ["metadata", "Metadata", "Descriptive properties."],
+    ["descriptor", "CorpusDescriptor", "Discovery metadata from corpus manifests."]
+  ],
+  "Token": [
+    ["text", "String", "Token text without normalization."],
+    ["after", "String", "Exact following whitespace or punctuation."]
+  ],
+  "CorpusDescriptor": [
+    ["name", "Option<String>", "Manifest display name."],
+    ["description", "Option<String>", "Manifest description."],
+    ["language", "Option<String>", "Manifest language identifier."],
+    ["kind", "Option<String>", "Extensible manifest type, including text, web, parallel, speech, or docs."],
+    ["version", "Option<String>", "Source corpus version; distinct from crate version."],
+    ["licence", "Option<String>", "Manifest licence statement."]
+  ],
+  "InlineMarkup": [
+    ["kind", "InlineKind", "Neutral semantic classification of source inline markup."],
+    ["attributes", "Vec<Property>", "Source attributes with namespace-qualified keys; values are not resolved."]
+  ],
+  "AnnotatedCorpus": [
+    ["format_version", "String", "Envelope version; supported version is ANNOTATED_CORPUS_VERSION."],
+    ["corpus", "Corpus", "Complete corpus tree."],
+    ["annotations", "Vec<Annotation<InlineMarkup>>", "Inline layer including its original provenance."]
+  ]
+}
