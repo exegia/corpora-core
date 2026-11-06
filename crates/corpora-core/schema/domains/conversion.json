@@ -1,0 +1,121 @@
+{
+  "description": "Conversion pipeline contract shared with corpora-py (wire types, not tables).",
+  "types": {
+    "ConversionLog": {
+      "description": "Log entry emitted by a conversion step.",
+      "table": false,
+      "fields": {
+        "step": {
+          "type": "ConversionStepId",
+          "description": "Pipeline step."
+        },
+        "text": {
+          "type": "String",
+          "description": "Log message."
+        },
+        "tone": {
+          "type": "LogTone",
+          "description": "Severity level."
+        }
+      }
+    },
+    "ValidationOutcome": {
+      "description": "Verdict of the post-conversion validation (corpora-py POST /validate).",
+      "table": false,
+      "fields": {
+        "status": {
+          "type": "ValidationStatus",
+          "description": "Validation verdict."
+        },
+        "reasons": {
+          "type": "String[]?",
+          "description": "Failure reasons."
+        },
+        "stats": {
+          "type": "Map<String, i64>?",
+          "description": "Raw CorpusStats (max_slot, node_types, node_features, edge_features)."
+        }
+      }
+    },
+    "ConversionStep": {
+      "description": "State of a conversion pipeline step.",
+      "table": false,
+      "fields": {
+        "id": {
+          "type": "ConversionStepId",
+          "description": "Step identifier."
+        },
+        "title": {
+          "type": "String",
+          "description": "Display title."
+        },
+        "state": {
+          "type": "ConversionStepState",
+          "description": "Current state."
+        },
+        "logs": {
+          "type": "ConversionLog[]",
+          "description": "Step logs."
+        }
+      }
+    },
+    "JobStatusMessage": {
+      "description": "ConversionJob.to_dict() - identical shape for polling and WS frames.",
+      "table": false,
+      "fields": {
+        "id": {
+          "type": "String",
+          "description": "Job id."
+        },
+        "source_format": {
+          "type": "String",
+          "description": "Input format."
+        },
+        "name": {
+          "type": "String",
+          "description": "Original file name."
+        },
+        "display_name": {
+          "type": "String?",
+          "description": "Source-derived title; null while queued."
+        },
+        "status": {
+          "type": "JobStatus",
+          "description": "Job status."
+        },
+        "created_at": {
+          "type": "EpochMillis",
+          "description": "Job creation time."
+        },
+        "started_at": {
+          "type": "EpochMillis?",
+          "description": "Processing start time."
+        },
+        "finished_at": {
+          "type": "EpochMillis?",
+          "description": "Completion time."
+        },
+        "error": {
+          "type": "String?",
+          "description": "Error message."
+        },
+        "logs": {
+          "type": "String[]",
+          "description": "Log lines."
+        },
+        "last_log": {
+          "type": "String?",
+          "description": "Most recent log line."
+        },
+        "result_filename": {
+          "type": "String",
+          "description": "Slug of display_name, always *.corpus."
+        },
+        "download_ready": {
+          "type": "bool",
+          "description": "Archive available for download."
+        }
+      }
+    }
+  }
+}

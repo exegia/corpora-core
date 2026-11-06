@@ -1,0 +1,20 @@
+[package]
+name = "corpora-convert"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Conversion runners for the Corpora apps suite"
+documentation = "https://docs.rs/corpora-convert"
+readme = "README.md"
+keywords = ["corpora", "conversion", "tei", "epub"]
+categories = ["development-tools"]
+include = ["src/**/*", "Cargo.toml", "README.md"]
+
+[dependencies]
+
+[lints]
+workspace = true

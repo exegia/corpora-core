@@ -1,0 +1,196 @@
+{
+  "description": "Corpus exploration API contract (wire types, not tables).",
+  "types": {
+    "SectionEntry": {
+      "description": "Navigation section entry.",
+      "table": false,
+      "fields": {
+        "title": {
+          "type": "String",
+          "description": "Section title."
+        },
+        "ref": {
+          "type": "String",
+          "description": "Section reference."
+        },
+        "otype": {
+          "type": "String?",
+          "description": "Node type."
+        },
+        "child_count": {
+          "type": "i64?",
+          "description": "Number of children."
+        },
+        "nodes": {
+          "type": "i64?",
+          "description": "Node count."
+        },
+        "words": {
+          "type": "i64?",
+          "description": "Word count."
+        },
+        "truncated": {
+          "type": "bool?",
+          "description": "Children truncated."
+        }
+      }
+    },
+    "IndexItem": {
+      "description": "Index entry with resolved children.",
+      "table": false,
+      "extends": "SectionEntry",
+      "fields": {
+        "children": {
+          "type": "SectionEntry[]",
+          "description": "Child sections."
+        }
+      }
+    },
+    "IndexSections": {
+      "description": "Hierarchical section index.",
+      "table": false,
+      "fields": {
+        "levels": {
+          "type": "String[]",
+          "description": "Section level names."
+        },
+        "items": {
+          "type": "IndexItem[]",
+          "description": "Top-level items."
+        }
+      }
+    },
+    "NodeTypeCount": {
+      "description": "Statistics for one node type.",
+      "table": false,
+      "fields": {
+        "type": {
+          "type": "String",
+          "description": "Node type name."
+        },
+        "count": {
+          "type": "i64",
+          "description": "Number of nodes."
+        },
+        "avg_slots": {
+          "type": "f64?",
+          "description": "Average slot count."
+        },
+        "is_slot": {
+          "type": "bool?",
+          "description": "True for the slot type."
+        }
+      }
+    },
+    "CorpusIndex": {
+      "description": "GET .../index response.",
+      "table": false,
+      "fields": {
+        "toc": {
+          "type": "Json",
+          "description": "Raw table of contents."
+        },
+        "sections": {
+          "type": "IndexSections?",
+          "description": "Section hierarchy."
+        },
+        "node_types": {
+          "type": "NodeTypeCount[]",
+          "description": "Node type statistics."
+        }
+      }
+    },
+    "PassageToken": {
+      "description": "Token within a passage.",
+      "table": false,
+      "fields": {
+        "text": {
+          "type": "String",
+          "description": "Token text."
+        },
+        "after": {
+          "type": "String",
+          "description": "Following whitespace or punctuation."
+        },
+        "node": {
+          "type": "i64?",
+          "description": "Node number."
+        }
+      }
+    },
+    "CorpusPassage": {
+      "description": "Text passage from a corpus.",
+      "table": false,
+      "fields": {
+        "ref": {
+          "type": "String",
+          "description": "Passage reference."
+        },
+        "text": {
+          "type": "String",
+          "description": "Plain text."
+        },
+        "node": {
+          "type": "i64?",
+          "description": "Node number."
+        },
+        "tokens": {
+          "type": "PassageToken[]?",
+          "description": "Tokenized form."
+        }
+      }
+    },
+    "CorpusVersion": {
+      "description": "GET .../versions row - history.yml.",
+      "table": false,
+      "fields": {
+        "id": {
+          "type": "String",
+          "description": "Version id."
+        },
+        "label": {
+          "type": "String",
+          "description": "Version label."
+        },
+        "title": {
+          "type": "String",
+          "description": "Version title."
+        },
+        "at": {
+          "type": "String",
+          "description": "Version timestamp."
+        },
+        "current": {
+          "type": "bool",
+          "description": "True for the current version."
+        },
+        "snapshot_key": {
+          "type": "String?",
+          "description": "Snapshot storage key."
+        },
+        "files": {
+          "type": "CorpusVersionFile[]?",
+          "description": "Changed files."
+        },
+        "notes": {
+          "type": "String[]?",
+          "description": "Version notes."
+        }
+      }
+    },
+    "CorpusVersionFile": {
+      "description": "One changed file in a corpus version.",
+      "table": false,
+      "fields": {
+        "path": {
+          "type": "String",
+          "description": "File path."
+        },
+        "kind": {
+          "type": "VersionFileKind",
+          "description": "Change kind."
+        }
+      }
+    }
+  }
+}

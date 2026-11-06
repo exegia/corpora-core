@@ -1,0 +1,190 @@
+{
+  "$id": "https://corpora.io/schema/v1",
+  "title": "Corpora Schema Definition",
+  "description": "Single source of truth for generating Rust, TypeScript, Swift and SQL types. Field type syntax: `T` required, `T?` optional, `T[]` list, `T[]?` optional list, `Map<K,V>` map. Types with a `table` string become Postgres tables; `table: false` types are value objects (embedded or JSONB).",
+  "version": "1.0.0",
+  "config": {
+    "rust": {
+      "crate": "corpora-types",
+      "derives": ["Debug", "Clone", "PartialEq", "Serialize", "Deserialize"]
+    },
+    "typescript": {
+      "package": "@corpora/types"
+    },
+    "swift": {
+      "package": "CorporaTypes"
+    },
+    "sql": {
+      "schema": "public"
+    }
+  },
+  "scalars": {
+    "CorpusId": {
+      "rust": "String",
+      "typescript": "string",
+      "swift": "String",
+      "sql": "TEXT",
+      "description": "Corpus identifier."
+    },
+    "DocumentId": {
+      "rust": "String",
+      "typescript": "string",
+      "swift": "String",
+      "sql": "TEXT",
+      "description": "Document identifier."
+    },
+    "NodeId": {
+      "rust": "u64",
+      "typescript": "number",
+      "swift": "UInt64",
+      "sql": "BIGINT",
+      "description": "Node identifier within a document."
+    },
+    "Uuid": {
+      "rust": "uuid::Uuid",
+      "typescript": "string",
+      "swift": "UUID",
+      "sql": "UUID",
+      "description": "UUID identity."
+    },
+    "Timestamp": {
+      "rust": "chrono::DateTime<chrono::Utc>",
+      "typescript": "string",
+      "swift": "Date",
+      "sql": "TIMESTAMPTZ",
+      "description": "RFC 3339 timestamp; decode in Swift with .iso8601."
+    },
+    "EpochMillis": {
+      "rust": "i64",
+      "typescript": "number",
+      "swift": "Int64",
+      "sql": "BIGINT",
+      "description": "Milliseconds since the Unix epoch."
+    },
+    "Json": {
+      "rust": "serde_json::Value",
+      "typescript": "unknown",
+      "swift": "JSONValue",
+      "sql": "JSONB",
+      "description": "Arbitrary JSON payload."
+    }
+  },
+  "enums": {
+    "ProjectStatus": {
+      "description": "Workflow status for a project.",
+      "values": ["draft", "started", "ready-for-review", "published", "failed"]
+    },
+    "BookType": {
+      "description": "Classification of textual works.",
+      "values": [
+        "bible",
+        "commentary",
+        "lexicon",
+        "biography",
+        "review",
+        "manuscript",
+        "tanakh",
+        "quran",
+        "apocrypha",
+        "regular"
+      ]
+    },
+    "LanguageType": {
+      "description": "Source languages for scriptural works.",
+      "values": [
+        "hebrew",
+        "greek",
+        "syriac",
+        "arabic",
+        "aramaic",
+        "protoCuneiform",
+        "akkadian",
+        "ugaritic",
+        "pali",
+        "latin",
+        "dutch",
+        "french",
+        "italian",
+        "english"
+      ]
+    },
+    "CategoryType": {
+      "description": "Content category for categorized book types.",
+      "values": ["biblical", "religious", "literary", "historical", "paratext"]
+    },
+    "CorpusType": {
+      "description": "Manifest type in the corpora-py contract.",
+      "values": ["text", "web", "parallel", "speech", "docs"]
+    },
+    "CorpusSource": {
+      "description": "Origin of a corpus document.",
+      "values": ["upload", "huggingface"]
+    },
+    "DocumentStatus": {
+      "description": "Processing status of a corpus document.",
+      "values": ["uploaded", "converted"]
+    },
+    "LicenseStatus": {
+      "description": "Lifecycle status of a licence.",
+      "values": ["active", "retired", "superseded"]
+    },
+    "LicenseConformance": {
+      "description": "Open Definition / OSD review verdict.",
+      "values": ["not reviewed", "approved", "rejected"]
+    },
+    "JobStatus": {
+      "description": "Server-side conversion job lifecycle.",
+      "values": ["queued", "running", "succeeded", "failed"]
+    },
+    "ConversionStatus": {
+      "description": "Client-side conversion tracking (corpora-py UploadStatus).",
+      "values": ["uploading", "queued", "converting", "validating", "ready", "success", "error"]
+    },
+    "ConversionStepId": {
+      "description": "Conversion pipeline step.",
+      "values": ["receive", "validate", "convert", "index"]
+    },
+    "ConversionStepState": {
+      "description": "State of a conversion pipeline step.",
+      "values": ["pending", "active", "completed", "failed"]
+    },
+    "LogTone": {
+      "description": "Severity of a conversion log line.",
+      "values": ["info", "success", "error"]
+    },
+    "ValidationStatus": {
+      "description": "Post-conversion validation verdict.",
+      "values": ["running", "valid", "invalid", "skipped"]
+    },
+    "SourceFormat": {
+      "description": "Formats the conversion service accepts; .xml routes to tei (corpora-py#105).",
+      "values": ["epub", "html", "tei", "pdf", "plain", "tf_zip", "tei_zip"]
+    },
+    "VersionFileKind": {
+      "description": "Kind of change recorded in a corpus version.",
+      "values": ["added", "modified", "deleted"]
+    },
+    "InlineKind": {
+      "description": "Neutral semantic classification of source inline markup.",
+      "values": [
+        "emphasis",
+        "strong",
+        "quote",
+        "note",
+        "reference",
+        "foreign",
+        "term",
+        "correction",
+        "supplied",
+        "unclear",
+        "other"
+      ]
+    }
+  },
+  "unions": {
+    "Node": {
+      "description": "A document content node: a structural section or a leaf block.",
+      "variants": ["Section", "Block"]
+    }
+  }
+}
