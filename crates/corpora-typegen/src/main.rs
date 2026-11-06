@@ -11,7 +11,7 @@
 use std::path::PathBuf;
 
 use anyhow::Context as _;
-use corpora_typegen::{Schema, rust, sql, typescript};
+use corpora_typegen::{Schema, rust, sql, swift, typescript};
 
 fn main() -> anyhow::Result<()> {
     let mut schema_path = PathBuf::from("crates/corpora-core/schema");
@@ -45,6 +45,9 @@ fn main() -> anyhow::Result<()> {
     }
     for (name, content) in typescript::emit(&schema) {
         outputs.push((out_dir.join("typescript").join(name), content));
+    }
+    for (name, content) in swift::emit(&schema) {
+        outputs.push((out_dir.join("swift").join(name), content));
     }
     outputs.push((out_dir.join("sql").join("schema.sql"), sql::emit(&schema)));
 

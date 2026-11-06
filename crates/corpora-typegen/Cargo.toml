@@ -1,6 +1,6 @@
 [package]
 name = "corpora-typegen"
-description = "Generates Rust, TypeScript and SQL types from the Corpora schema definition"
+description = "Generates Rust, TypeScript, Swift and SQL types from the Corpora schema definition"
 documentation = "https://docs.rs/corpora-typegen"
 readme = "README.md"
 keywords = ["corpora", "codegen", "typescript", "sql"]

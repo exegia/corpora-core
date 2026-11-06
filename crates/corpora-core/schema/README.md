@@ -8,11 +8,16 @@ This directory is the **single source of truth** for the shared data model:
 The `corpora-typegen` crate reads the directory and emits one file per
 domain, plus barrels:
 
-| Target     | Output                                           | Consumed by                    |
-| ---------- | ------------------------------------------------ | ------------------------------ |
-| Rust       | `generated/rust/{mod,enums,<domain>}.rs`         | corpora-core crates            |
-| TypeScript | `generated/typescript/{index,enums,<domain>}.ts` | corpora-web and other TS apps  |
-| SQL        | `generated/sql/schema.sql`                       | Postgres (Supabase) migrations |
+| Target     | Output                                           | Consumed by                       |
+| ---------- | ------------------------------------------------ | --------------------------------- |
+| Rust       | `generated/rust/{mod,enums,<domain>}.rs`         | corpora-core crates               |
+| TypeScript | `generated/typescript/{index,enums,<domain>}.ts` | corpora-web and other TS apps     |
+| Swift      | `generated/swift/{Enums,Support,<Domain>}.swift` | SwiftUI apps (one SwiftPM target) |
+| SQL        | `generated/sql/schema.sql`                       | Postgres (Supabase) migrations    |
+
+Swift notes: wire keys stay `snake_case` via `CodingKeys` (matching the Rust
+serialization); decode with `JSONDecoder.dateDecodingStrategy = .iso8601`;
+`Support.swift` provides `JSONValue` for the `Json` scalar.
 
 SQL stays a single file because `CREATE TABLE` ordering follows foreign-key
 dependencies across domains.
@@ -25,7 +30,7 @@ cargo run -p corpora-typegen
 
 ## Why JSON source, generated SQL (not `.sql` source files)
 
-- **One format, three targets.** Relationships, optionality and docs are
+- **One format, four targets.** Relationships, optionality and docs are
   declared once; the SQL emitter derives `NOT NULL`, `REFERENCES`, `CHECK`
   and `PRIMARY KEY` from the same declarations that produce Rust `Option<T>`
   and TypeScript `| null`. Hand-written `.sql` would have to be re-parsed to

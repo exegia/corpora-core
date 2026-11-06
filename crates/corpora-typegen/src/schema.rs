@@ -57,6 +57,8 @@ pub struct Scalar {
     pub rust: String,
     /// TypeScript type expression.
     pub typescript: String,
+    /// Swift type name.
+    pub swift: String,
     /// SQL column type.
     pub sql: String,
     /// Human description.
