@@ -1,14 +1,15 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Generates Rust, TypeScript and SQL types from the Corpora schema definition.
+//!
+//! The schema lives at `crates/corpora-core/schema/model.json` and is the
+//! single source of truth for every generated artifact:
+//!
+//! - **Rust**: structs and enums with serde derives ([`rust::emit`]).
+//! - **TypeScript**: interfaces and string-literal unions ([`typescript::emit`]).
+//! - **SQL**: Postgres `CREATE TABLE` DDL for table-backed types ([`sql::emit`]).
 
-#[cfg(test)]
-mod tests {
-    use super::*;
+pub mod rust;
+pub mod schema;
+pub mod sql;
+pub mod typescript;
 
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub use schema::{Schema, SchemaError};
