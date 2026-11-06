@@ -54,6 +54,12 @@ workspace = true
 
 Crates are published to crates.io on tagged releases. Set `PUBLISH_CRATES=true` in repository variables and add `CARGO_REGISTRY_TOKEN` to the `crates` environment.
 
+With `PUBLISH_GITHUB_PACKAGES=true`, `packages.yml` additionally publishes the generated types on each release:
+
+- **npm**: `@exegia/corpora-types` to GitHub Packages (`npm.pkg.github.com`), assembled from `generated/typescript/`
+- **Cargo**: `.crate` files attached to the GitHub Release (GitHub Packages has no Cargo registry)
+- **SwiftPM**: the root `Package.swift` exposes `CorporaTypes` from `generated/swift/`; consume it straight from git with `.package(url: "https://github.com/exegia/corpora-core.git", from: "X.Y.Z")`
+
 ## License
 
 MIT OR Apache-2.0

@@ -49,16 +49,17 @@ opened with it never get their required checks.
 
 Variables:
 
-| Name                                                       | Effect                                                                   |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------ |
-| `CI_RUNNERS`                                               | JSON array of runner labels for PR checks (default from stack detection) |
-| `MATRIX_RUNNERS`                                           | Runners for `matrix.yml` (default ubuntu + macOS)                        |
-| `XCODE_SCHEME`, `XCODE_DESTINATION`, `XCODE_UITEST_TARGET` | Swift/Xcode builds, tests and UI tests                                   |
-| `VERSION_CMD`                                              | Replaces `scripts/version.sh set` at release cut (monorepos)             |
-| `PUBLISH_PYPI`, `PUBLISH_NPM`, `PUBLISH_CRATES`            | `true` enables that publish job                                          |
-| `EAS_BUILD_PROFILE`                                        | Queues an EAS build for that profile                                     |
-| `PREVIEW_DEPLOY_COMMAND`, `DEPLOY_COMMAND`                 | Shell run after `next` pushes / production tags                          |
-| `DEPENDENCY_REVIEW`, `CODEQL`                              | `false` switches that security job off                                   |
+| Name                                                       | Effect                                                                                        |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `CI_RUNNERS`                                               | JSON array of runner labels for PR checks (default from stack detection)                      |
+| `MATRIX_RUNNERS`                                           | Runners for `matrix.yml` (default ubuntu + macOS)                                             |
+| `XCODE_SCHEME`, `XCODE_DESTINATION`, `XCODE_UITEST_TARGET` | Swift/Xcode builds, tests and UI tests                                                        |
+| `VERSION_CMD`                                              | Replaces `scripts/version.sh set` at release cut (monorepos)                                  |
+| `PUBLISH_PYPI`, `PUBLISH_NPM`, `PUBLISH_CRATES`            | `true` enables that publish job                                                               |
+| `PUBLISH_GITHUB_PACKAGES`                                  | `true` enables `packages.yml`: npm to GitHub Packages, `.crate` release assets, SwiftPM check |
+| `EAS_BUILD_PROFILE`                                        | Queues an EAS build for that profile                                                          |
+| `PREVIEW_DEPLOY_COMMAND`, `DEPLOY_COMMAND`                 | Shell run after `next` pushes / production tags                                               |
+| `DEPENDENCY_REVIEW`, `CODEQL`                              | `false` switches that security job off                                                        |
 
 Locally: `make env-init` creates `.env` (mode 600) from `.env.example`; `make env-check` diffs keys;
 `make secrets-push [ENV_FILE=.env.ci] [ENVIRONMENT=npm]` and `make secrets-vars-push` load dotenv files into

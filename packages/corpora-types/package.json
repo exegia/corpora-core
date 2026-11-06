@@ -1,0 +1,23 @@
+{
+  "name": "@exegia/corpora-types",
+  "version": "0.0.0",
+  "description": "Generated TypeScript types for the Corpora apps suite",
+  "license": "(MIT OR Apache-2.0)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/exegia/corpora-core.git",
+    "directory": "packages/corpora-types"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "types": "./index.ts",
+  "main": "./index.ts",
+  "files": [
+    "*.ts",
+    "README.md"
+  ],
+  "scripts": {
+    "prepack": "test -f index.ts || { echo 'run: cargo run -p corpora-typegen, then copy generated/typescript/*.ts here (CI does this)'; exit 1; }"
+  }
+}
