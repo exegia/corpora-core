@@ -18,20 +18,8 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 name = "corpora_core"
 path = "src/lib.rs"
 
-[[bin]]
-name = "corpora-core"
-path = "src/main.rs"
-required-features = ["cli"]
-
-[features]
-default = []
-cli = ["dep:clap"]
-
 [dependencies]
 thiserror = "2"
-
-# CLI dependencies (optional)
-clap = { version = "4", features = ["derive"], optional = true }
 
 [dev-dependencies]
 insta = "1"
