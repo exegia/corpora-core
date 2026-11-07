@@ -33,15 +33,15 @@ dependencies = [
 
 [[package]]
 name = "corpora-agent"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "corpora-convert"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "corpora-core"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "insta",
  "serde",
@@ -50,15 +50,15 @@ dependencies = [
 
 [[package]]
 name = "corpora-fabric"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "corpora-source"
-version = "0.0.0"
+version = "0.1.0"
 
 [[package]]
 name = "corpora-typegen"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "insta",
