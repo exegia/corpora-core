@@ -1,0 +1,20 @@
+[package]
+name = "corpora-fabric"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Text-Fabric corpus builder for the Corpora apps suite"
+documentation = "https://docs.rs/corpora-fabric"
+readme = "README.md"
+keywords = ["corpora", "text-fabric", "corpus"]
+categories = ["development-tools"]
+include = ["src/**/*", "Cargo.toml", "README.md"]
+
+[dependencies]
+
+[lints]
+workspace = true

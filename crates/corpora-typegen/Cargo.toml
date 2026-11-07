@@ -1,0 +1,31 @@
+[package]
+name = "corpora-typegen"
+description = "Generates Rust, TypeScript, Swift and SQL types from the Corpora schema definition"
+documentation = "https://docs.rs/corpora-typegen"
+readme = "README.md"
+keywords = ["corpora", "codegen", "typescript", "sql"]
+categories = ["development-tools"]
+include = ["src/**/*", "Cargo.toml", "README.md"]
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+serde.workspace = true
+serde_json = { workspace = true, features = ["preserve_order"] }
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "corpora-typegen"
+path = "src/main.rs"

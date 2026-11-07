@@ -1,0 +1,6 @@
+# SwiftLint configuration. Generated sources are excluded: they are emitted
+# by corpora-typegen and validated by `swift test`, not hand-maintained.
+excluded:
+  - .build
+  - generated/swift
+  - target
