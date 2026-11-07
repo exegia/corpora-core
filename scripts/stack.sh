@@ -196,7 +196,15 @@ task_rust_pack() {
   cargo build --workspace --release $(rust_locked)
   info "release binaries are in target/release; set PACK_CMD to bundle them into $DIST_DIR (e.g. cargo-bundle)"
 }
-task_rust_dev() { need cargo; cargo run; }
+task_rust_dev() {
+  need cargo
+  # Check if there's a binary target
+  if cargo metadata --format-version=1 --no-deps 2>/dev/null | grep -q '"kind":\["bin"\]'; then
+    cargo run
+  else
+    skip "no binary target; this is a library crate (set DEV_CMD to run examples or a dev server)"
+  fi
+}
 
 # ── Swift (SwiftPM or Xcode project; SwiftUI) ────────────────────────────────
 

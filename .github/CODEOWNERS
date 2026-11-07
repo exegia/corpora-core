@@ -3,11 +3,8 @@
 
 # Default owner for everything
 * @emmanuel-defreitas
+* @exegia
+* @claude
+* @codex
 
 # Uncomment to require specific owners for sensitive areas:
-
-# /.github/            @emmanuel-defreitas
-# /scripts/            @emmanuel-defreitas
-# /.github/skills/     @emmanuel-defreitas
-# AGENTS.md            @emmanuel-defreitas
-# SECURITY.md          @emmanuel-defreitas

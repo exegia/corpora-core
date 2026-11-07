@@ -7,18 +7,18 @@ change; keep the list short and current.
 
 ### First 30 minutes after using this template
 
-- [ ] Click **Use this template** on GitHub and create the new repository
-- [ ] Run `make doctor` and install anything it reports missing
-- [ ] Run `make setup` (deps, pre-commit hooks, `.gitmessage` commit template)
-- [ ] Run `.github/scripts/bootstrap-repo.sh` to configure repo settings, labels, and branches
-- [ ] Set repo secrets `AUTOMATION_APP_ID` and `AUTOMATION_APP_PRIVATE_KEY`
-- [ ] Optional: set repo secret `CLAUDE_CODE_OAUTH_TOKEN` for Claude-powered workflows
+- [x] Click **Use this template** on GitHub and create the new repository
+- [x] Run `make doctor` and install anything it reports missing
+- [x] Run `make setup` (deps, pre-commit hooks, `.gitmessage` commit template)
+- [x] Run `.github/scripts/bootstrap-repo.sh` to configure repo settings, labels, and branches
+- [x] Set repo secrets `AUTOMATION_APP_ID` and `AUTOMATION_APP_PRIVATE_KEY`
+- [x] Optional: set repo secret `CLAUDE_CODE_OAUTH_TOKEN` for Claude-powered workflows
 - [ ] Fill in the `README.md` placeholders
-- [ ] Replace the copyright holder in `LICENSE`
+- [x] Replace the copyright holder in `LICENSE`
 - [ ] Replace every `REPLACE_ME` value in `SECURITY.md` and `CODE_OF_CONDUCT.md`
 - [ ] Update the security advisory link slug in `SECURITY.md` and `.github/ISSUE_TEMPLATE/config.yml`
-- [ ] Edit `.github/CODEOWNERS` (users or a team such as `@exegia/maintainers`)
-- [ ] Delete stacks you do not use from `.env.example`
+- [x] Edit `.github/CODEOWNERS` (users or a team such as `@exegia/maintainers`)
+- [x] Delete stacks you do not use from `.env.example`
 - [ ] Run `make dependabot` to generate Dependabot config for your stacks
 - [ ] Enable branch rulesets with `make rulesets-apply`
 - [ ] Run `make ci` and confirm it passes on a clean clone

@@ -1,0 +1,330 @@
+{
+  "description": "Platform entities backing the corpora apps (Postgres tables).",
+  "types": {
+    "User": {
+      "description": "Directory user with profile fields.",
+      "table": "user_directory",
+      "fields": {
+        "id": {
+          "type": "Uuid",
+          "primary_key": true,
+          "description": "User identity."
+        },
+        "username": {
+          "type": "String",
+          "unique": true,
+          "description": "Handle used in mentions and links, without the @."
+        },
+        "email": {
+          "type": "String",
+          "unique": true,
+          "description": "Email address."
+        },
+        "name": {
+          "type": "String?",
+          "description": "Full name, shown across Corpora."
+        },
+        "avatar_url": {
+          "type": "String?",
+          "description": "Portrait image URL; the UI falls back to initials."
+        },
+        "vocation": {
+          "type": "String?",
+          "description": "One of VOCATIONS, or a value written before the list existed."
+        },
+        "tradition": {
+          "type": "String?",
+          "description": "One of TRADITIONS, or a value written before the list existed."
+        },
+        "languages": {
+          "type": "String?",
+          "description": "Working languages, freeform."
+        },
+        "affiliation": {
+          "type": "String?",
+          "description": "Institution or society."
+        },
+        "website": {
+          "type": "String?",
+          "description": "Personal or academic site, without the scheme."
+        },
+        "bio": {
+          "type": "String?",
+          "description": "Short profile summary."
+        },
+        "created_at": {
+          "type": "Timestamp",
+          "description": "Account creation time."
+        },
+        "updated_at": {
+          "type": "Timestamp?",
+          "description": "Last profile update."
+        }
+      }
+    },
+    "Organization": {
+      "description": "Organization or institution owning projects.",
+      "table": "organizations",
+      "fields": {
+        "id": {
+          "type": "Uuid",
+          "primary_key": true,
+          "description": "Organization identity."
+        },
+        "name": {
+          "type": "String",
+          "description": "Organization name."
+        },
+        "website": {
+          "type": "String?",
+          "description": "Organization website."
+        },
+        "created_at": {
+          "type": "Timestamp",
+          "description": "Creation time."
+        }
+      }
+    },
+    "Project": {
+      "description": "A scholarly project; scriptural types require languages (FR-006), categorized types require a category (FR-007).",
+      "table": "projects",
+      "fields": {
+        "id": {
+          "type": "Uuid",
+          "primary_key": true,
+          "description": "Project identity."
+        },
+        "name": {
+          "type": "String",
+          "description": "Project name."
+        },
+        "description": {
+          "type": "String?",
+          "description": "Project description."
+        },
+        "status": {
+          "type": "ProjectStatus",
+          "default": "draft",
+          "description": "Workflow status."
+        },
+        "type": {
+          "type": "BookType?",
+          "description": "Work classification."
+        },
+        "language": {
+          "type": "LanguageType[]?",
+          "description": "Source languages for scriptural types; empty when not applicable."
+        },
+        "category": {
+          "type": "CategoryType?",
+          "description": "Content category for categorized types."
+        },
+        "creator_id": {
+          "type": "Uuid",
+          "references": "User.id",
+          "description": "Creating user; never null (FR-015)."
+        },
+        "organization_id": {
+          "type": "Uuid?",
+          "references": "Organization.id",
+          "description": "Owning organization."
+        },
+        "created_at": {
+          "type": "Timestamp",
+          "description": "Creation time."
+        },
+        "updated_at": {
+          "type": "Timestamp",
+          "description": "Last update time."
+        }
+      }
+    },
+    "CorpusDocument": {
+      "description": "Corpus archive imported into a project, with conversion metadata from the corpora-py contract.",
+      "table": "corpus_documents",
+      "fields": {
+        "id": {
+          "type": "Uuid",
+          "primary_key": true,
+          "description": "Record identity."
+        },
+        "project_id": {
+          "type": "Uuid",
+          "references": "Project.id",
+          "description": "Owning project."
+        },
+        "name": {
+          "type": "String",
+          "description": "Corpus name."
+        },
+        "source": {
+          "type": "CorpusSource",
+          "description": "Origin: upload or huggingface."
+        },
+        "path": {
+          "type": "String",
+          "description": "Storage path for uploads, the full URL for Hugging Face."
+        },
+        "filename": {
+          "type": "String?",
+          "description": "Original filename."
+        },
+        "job_id": {
+          "type": "String?",
+          "description": "Conversion job id for explore routes; null on uploads."
+        },
+        "uploaded_at": {
+          "type": "Timestamp",
+          "description": "Upload time."
+        },
+        "corpus_type": {
+          "type": "CorpusType?",
+          "description": "Manifest type; null on legacy rows."
+        },
+        "source_format": {
+          "type": "String?",
+          "description": "source_format as sent to POST /convert (text-fabric, tei, ...)."
+        },
+        "licence": {
+          "type": "String?",
+          "description": "Licence from the manifest."
+        },
+        "language": {
+          "type": "String?",
+          "description": "Language from the manifest."
+        },
+        "size_bytes": {
+          "type": "i64?",
+          "description": "Archive size in bytes."
+        },
+        "docs_count": {
+          "type": "i64?",
+          "description": "Document count."
+        },
+        "nodes": {
+          "type": "i64?",
+          "description": "Total node count."
+        },
+        "words": {
+          "type": "i64?",
+          "description": "Total word count."
+        },
+        "status": {
+          "type": "DocumentStatus?",
+          "description": "Processing status."
+        },
+        "converted_at": {
+          "type": "Timestamp?",
+          "description": "Conversion completion time."
+        },
+        "description": {
+          "type": "String?",
+          "description": "Manifest description, captured at conversion time."
+        },
+        "toc": {
+          "type": "CorpusTocSection[]?",
+          "sql_type": "JSONB",
+          "description": "toc.yml section rows captured at conversion time."
+        }
+      }
+    },
+    "CorpusCommit": {
+      "description": "One commit from the corpus' nested .git, newest first.",
+      "table": "corpus_commits",
+      "fields": {
+        "id": {
+          "type": "Uuid",
+          "primary_key": true,
+          "description": "Commit record identity."
+        },
+        "document_id": {
+          "type": "Uuid",
+          "references": "CorpusDocument.id",
+          "description": "Parent corpus document."
+        },
+        "sha": {
+          "type": "String",
+          "description": "Commit SHA."
+        },
+        "message": {
+          "type": "String",
+          "description": "Commit message."
+        },
+        "author_name": {
+          "type": "String?",
+          "description": "Author name."
+        },
+        "author_email": {
+          "type": "String?",
+          "description": "Author email."
+        },
+        "branch": {
+          "type": "String?",
+          "description": "Branch name."
+        },
+        "committed_at": {
+          "type": "Timestamp?",
+          "description": "Commit timestamp."
+        }
+      }
+    },
+    "LibraryCorpus": {
+      "description": "Published corpus in the library catalog.",
+      "table": "corpora",
+      "fields": {
+        "uid": {
+          "type": "String",
+          "primary_key": true,
+          "description": "Unique corpus identifier."
+        },
+        "name": {
+          "type": "String",
+          "description": "Display name."
+        },
+        "language": {
+          "type": "String?",
+          "description": "Primary language."
+        },
+        "type": {
+          "type": "String?",
+          "description": "Corpus type."
+        },
+        "category": {
+          "type": "String?",
+          "description": "Content category."
+        },
+        "version": {
+          "type": "String",
+          "description": "Corpus version."
+        },
+        "available": {
+          "type": "bool",
+          "default": true,
+          "description": "Availability flag."
+        }
+      }
+    },
+    "ProjectCorpusLink": {
+      "description": "Library corpora loaded alongside a project's dataset.",
+      "table": "project_corpora",
+      "fields": {
+        "project_id": {
+          "type": "Uuid",
+          "references": "Project.id",
+          "primary_key": true,
+          "description": "Project."
+        },
+        "corpus_id": {
+          "type": "String",
+          "references": "LibraryCorpus.uid",
+          "primary_key": true,
+          "description": "Library corpus."
+        },
+        "linked_at": {
+          "type": "Timestamp",
+          "description": "Link creation time."
+        }
+      }
+    }
+  }
+}

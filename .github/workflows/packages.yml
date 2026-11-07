@@ -1,0 +1,77 @@
+name: Packages
+
+# Publishes the generated types as packages when release.yml pushes a vX.Y.Z tag.
+# All jobs are opt-in through PUBLISH_GITHUB_PACKAGES=true.
+#
+#   ecosystem  job            where it lands
+#   npm        npm-github     @exegia/corpora-types on npm.pkg.github.com (GitHub Packages)
+#   cargo      crate-assets   .crate files attached to the GitHub Release
+#                             (GitHub Packages has no Cargo registry; crates.io
+#                             publishing stays in publish.yml)
+#   swiftpm    spm-check      validates Package.swift so the tag is consumable
+#                             with SwiftPM straight from git (no SPM registry)
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm-github:
+    name: npm-github
+    if: ${{ vars.PUBLISH_GITHUB_PACKAGES == 'true' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: lts/*
+          registry-url: https://npm.pkg.github.com
+      - name: Assemble package from generated types
+        run: cp generated/typescript/*.ts packages/corpora-types/
+      - name: Set version from the release tag
+        working-directory: packages/corpora-types
+        env:
+          TAG: ${{ github.ref_name }}
+        run: npm version --no-git-tag-version --allow-same-version "${TAG#v}"
+      - name: Publish to GitHub Packages
+        working-directory: packages/corpora-types
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  crate-assets:
+    name: crate-assets
+    if: ${{ vars.PUBLISH_GITHUB_PACKAGES == 'true' && startsWith(github.ref, 'refs/tags/v') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # upload release assets
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          install: "false"
+      - name: Package workspace crates
+        run: cargo package --workspace --locked --allow-dirty
+      - name: Attach .crate files to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: gh release upload "$TAG" target/package/*.crate --clobber
+
+  spm-check:
+    name: spm-check
+    if: ${{ vars.PUBLISH_GITHUB_PACKAGES == 'true' }}
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate the SwiftPM package
+        run: swift test
