@@ -2,6 +2,10 @@
 
 use crate::{
     Error, Result,
+    diagnostic::{
+        Applicability, Certainty, Diagnostic, DiagnosticCategory, DiagnosticReport, Severity,
+        SourceMap, Suggestion, TextEdit,
+    },
     language::{DICTIONARIES, LanguageDetection, detect_language},
 };
 use matchum_dict::{
@@ -329,6 +333,68 @@ impl SpellEngine {
             diagnostics,
         })
     }
+
+    /// Check one text segment using the shared source-bound diagnostic contract.
+    ///
+    /// Coordinates refer to this exact decoded segment, not to an enclosing XML file.
+    /// Pass a segment-specific identity and retain its mapping to source XML at the API layer.
+    /// The legacy [`Self::check`] report and JSON shape remain unchanged.
+    pub fn check_diagnostics(
+        &self,
+        source_id: &str,
+        text: &str,
+        role: TextRole,
+        hint: Option<&str>,
+    ) -> Result<DiagnosticReport> {
+        let report = self.check(text, role, hint)?;
+        let positions = SourceMap::new(text);
+        let diagnostics = report
+            .diagnostics
+            .into_iter()
+            .map(|issue| {
+                let range = positions.scalar_range(issue.start..issue.end)?;
+                let mut candidates = issue.suggestions;
+                if let Some(replacement) = &issue.replacement {
+                    candidates.retain(|candidate| candidate != replacement);
+                    candidates.insert(0, replacement.clone());
+                }
+                let suggestions = candidates
+                    .into_iter()
+                    .map(|after| Suggestion {
+                        message:
+                            "Dictionary candidate; apply only under caller policy and revalidate"
+                                .into(),
+                        applicability: if issue.replacement.as_ref() == Some(&after) {
+                            Applicability::Automatic
+                        } else {
+                            Applicability::Review
+                        },
+                        edits: vec![TextEdit {
+                            range: range.clone(),
+                            before: issue.text.clone(),
+                            after,
+                        }],
+                    })
+                    .collect();
+                Ok(Diagnostic {
+                    code: issue.code,
+                    category: DiagnosticCategory::Spelling,
+                    severity: if issue.blocking {
+                        Severity::Error
+                    } else {
+                        Severity::Warning
+                    },
+                    blocking: issue.blocking,
+                    score: Some(issue.score),
+                    certainty: Certainty::Possible,
+                    message: issue.reason,
+                    locations: vec![range],
+                    suggestions,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        Ok(DiagnosticReport::new(source_id, text, diagnostics))
+    }
 }
 
 fn repeated_letter_fix(word: &str, dictionary: &dyn Dictionary) -> Option<String> {
@@ -439,5 +505,44 @@ mod tests {
             (report.diagnostics[0].start, report.diagnostics[0].end),
             (2, 8)
         );
+    }
+
+    #[test]
+    fn shared_spelling_diagnostics_preserve_policy_and_bind_the_segment() {
+        let text = "😀 helllo";
+        let engine = engine();
+        let report = engine
+            .check_diagnostics("doc#segment", text, TextRole::Metadata, Some("en"))
+            .unwrap();
+        let issue = &report.diagnostics[0];
+        let range = &issue.locations[0];
+        assert_eq!(
+            (range.start.byte, range.start.scalar, range.end.scalar),
+            (5, 2, 8)
+        );
+        assert_eq!(issue.score, Some(90));
+        assert!(!report.passed());
+        let edit = &issue.suggestions[0].edits[0];
+        assert_eq!(edit.after, "hello");
+        assert!(edit.matches_source(&report, text));
+        assert!(!edit.matches_source(&report, "😀 helllo!"));
+        let corpus = engine
+            .check_diagnostics("doc#body", text, TextRole::Corpus, Some("en"))
+            .unwrap();
+        assert!(
+            corpus
+                .diagnostics
+                .iter()
+                .flat_map(|d| &d.suggestions)
+                .all(|s| s.applicability == Applicability::Review)
+        );
+        let legacy =
+            serde_json::to_value(engine.check(text, TextRole::Metadata, Some("en")).unwrap())
+                .unwrap();
+        assert!(legacy.get("source_sha256").is_none());
+        assert_eq!(legacy["diagnostics"][0]["start"], 2);
+        let json = serde_json::to_string(&report).unwrap();
+        let decoded: DiagnosticReport = serde_json::from_str(&json).unwrap();
+        assert_eq!(report, decoded);
     }
 }

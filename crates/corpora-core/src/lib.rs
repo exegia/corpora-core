@@ -11,10 +11,12 @@
 
 #[cfg(feature = "spellcheck")]
 mod compact_trie;
+pub mod diagnostic;
 mod error;
 pub mod language;
 #[cfg(feature = "spellcheck")]
 pub mod spellcheck;
+pub mod structural;
 
 pub use error::Error;
 
