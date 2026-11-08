@@ -110,6 +110,36 @@ def test_ambiguity_is_not_silently_flattened(body, policy, error):
         doc(tei(body), policy)
 
 
+@pytest.mark.parametrize("marker", ["<!-- annotation -->", "<?annotation test?>"])
+@pytest.mark.parametrize(
+    "alternatives,policy",
+    [
+        ("<choice><orig>A</orig>{}<reg>B</reg></choice>", Policy(choice="original")),
+        ("<choice><orig>A</orig>{}<reg>B</reg></choice>", Policy(choice="edited")),
+        ('<app><lem>A</lem>{}<rdg wit="#A">B</rdg></app>', Policy(apparatus="lemma")),
+        (
+            '<app><lem>A</lem>{}<rdg wit="#A">B</rdg></app>',
+            Policy(apparatus="witness", witness="#A"),
+        ),
+    ],
+)
+def test_comment_and_pi_tails_cannot_hide_ambiguous_alternative_text(marker, alternatives, policy):
+    with pytest.raises(ConversionError, match="Ambiguous text between"):
+        doc(tei("<p>" + alternatives.format(marker + "lost é😀") + "</p>"), policy)
+
+
+@pytest.mark.parametrize("marker", ["<!-- annotation -->", "<?annotation test?>"])
+@pytest.mark.parametrize(
+    "alternatives,policy",
+    [
+        ("<choice><orig>A</orig>{}<reg>B</reg></choice>", Policy(choice="original")),
+        ('<app><lem>A</lem>{}<rdg wit="#A">B</rdg></app>', Policy(apparatus="lemma")),
+    ],
+)
+def test_comments_and_pis_allow_whitespace_between_alternatives(marker, alternatives, policy):
+    assert doc(tei("<p>X" + alternatives.format(marker + " \t\n") + "Y</p>"), policy).text == "XAY"
+
+
 def test_notes_are_explicit_and_tail_is_preserved():
     data = tei("<p>A<note>Comment</note>B</p>")
     assert doc(data).text == "AB"
