@@ -216,6 +216,42 @@ fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn passive_svg(bytes: &[u8]) -> bool {
+    let Ok(source) = std::str::from_utf8(bytes) else {
+        return false;
+    };
+    let Ok(tree) = Document::parse(source) else {
+        return false;
+    };
+    tree.root_element().tag_name().namespace() == Some("http://www.w3.org/2000/svg")
+        && tree.descendants().filter(Node::is_element).all(|element| {
+            !matches!(element.tag_name().name(), "script" | "foreignObject" | "image")
+                && element.attributes().all(|attribute| {
+                    !attribute.name().starts_with("on")
+                        && !attribute.value().contains("http:")
+                        && !attribute.value().contains("https:")
+                        && !attribute.value().contains("javascript:")
+                        && !attribute.value().contains("data:")
+                })
+        })
+}
+
+fn supported_asset_type(kind: &str, media: &str) -> bool {
+    match kind {
+        "image" => media.starts_with("image/"),
+        "audio" => media.starts_with("audio/"),
+        "video" => media.starts_with("video/"),
+        "track" => media == "text/vtt" || media == "application/ttml+xml",
+        "object" | "embed" => {
+            media.starts_with("image/")
+                || media.starts_with("audio/")
+                || media.starts_with("video/")
+                || media == "application/pdf"
+        }
+        _ => false,
+    }
+}
+
 fn safe_path(path: &str) -> bool {
     !path.is_empty()
         && !path.starts_with('/')
@@ -1165,41 +1201,40 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
             result.finding(&member, source, code, message, Some(byte), true);
         }
     }
-    let mut image_issues: Vec<(String, usize, String)> = Vec::new();
-    for image in &mut result.images {
-        let target = relative_path(&image.member, &image.href);
-        let manifest = target
-            .as_ref()
-            .and_then(|path| items.values().find(|(item_path, _, _)| item_path == path));
-        match (target, manifest) {
-            (Some(path), Some((_, media, _)))
-                if matches!(
-                    media.as_str(),
-                    "image/jpeg" | "image/png" | "image/gif" | "image/webp"
-                ) && sources.contains_key(&path) =>
-            {
-                let data = &sources[&path];
-                image.target_member = path;
-                image.media_type.clone_from(media);
-                image.sha256 = hash(data);
-                image.bytes = data.len();
+    let mut asset_issues: Vec<(String, usize, String)> = Vec::new();
+    for asset in &mut result.assets {
+        let resolved = if let Some(end) = asset.source_end {
+            sources.get(&asset.member).and_then(|data| data.get(asset.source_byte..end)).map(|data| {
+                (asset.member.clone(), if asset.kind == "math" { "application/mathml+xml" } else { "image/svg+xml" }.to_owned(), data)
+            })
+        } else {
+            relative_path(&asset.member, &asset.href).and_then(|path| {
+                items.values().find(|(item_path, media, _)| item_path == &path && supported_asset_type(&asset.kind, media)).and_then(|(_, media, _)| {
+                    sources.get(&path).map(|data| (path.clone(), media.clone(), data.as_slice()))
+                })
+            })
+        };
+        match resolved {
+            Some((path, media, data)) if media != "image/svg+xml" || passive_svg(data) => {
+                asset.target_member = path;
+                asset.media_type = media;
+                asset.sha256 = hash(data);
+                asset.bytes = data.len();
             }
-            _ => image_issues.push((
-                image.member.clone(),
-                image.source_byte,
-                format!(
-                    "Image {} must resolve to a manifest-declared JPEG, PNG, GIF or WebP member",
-                    image.href
-                ),
+            _ => asset_issues.push((
+                asset.member.clone(),
+                asset.source_byte,
+                format!("Asset {} must resolve to a safe, manifest-declared resource of the expected type", asset.href),
             )),
         }
     }
-    for (member, byte, message) in image_issues {
+    result.images = result.assets.iter().filter(|asset| asset.kind == "image").cloned().collect();
+    for (member, byte, message) in asset_issues {
         if let Some(source) = sources
             .get(&member)
             .and_then(|data| std::str::from_utf8(data).ok())
         {
-            result.finding(&member, source, "EPUB_IMAGE", &message, Some(byte), true);
+            result.finding(&member, source, "EPUB_ASSET", &message, Some(byte), true);
         }
     }
     let total_slots = result
