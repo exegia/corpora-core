@@ -173,6 +173,8 @@ def inspect_tree(
         "resp",
     }
     groups: list[tuple[tuple[str, str, str | None], list[tuple[Any, str]]]] = []
+    reading_groups: dict[tuple[str, str, str | None], int] = {}
+    previous_key = None
     metadata_contexts: dict[tuple[str, str | None], list[str]] = {}
     metadata_selections: list[dict[str, Any]] = []
     for node, field, role, hint in segments:
@@ -186,10 +188,15 @@ def inspect_tree(
             owner,
         )
         key = (tree.getpath(block), role, hint)
-        if groups and groups[-1][0] == key:
+        if role != "metadata" and key in reading_groups:
+            groups[reading_groups[key]][1].append((node, field))
+        elif role == "metadata" and groups and previous_key == key and groups[-1][0] == key:
             groups[-1][1].append((node, field))
         else:
+            if role != "metadata":
+                reading_groups[key] = len(groups)
             groups.append((key, [(node, field)]))
+        previous_key = key
         if role == "metadata":
             scope_path = tree.getpath(metadata_scope(owner))
             metadata_contexts.setdefault((scope_path, hint), []).append(getattr(node, field))
@@ -228,7 +235,13 @@ def inspect_tree(
                 else selection.get("locale")
             )
             metadata_selections.append(
-                dict(path=path, language=selection, basis=basis, locale_hint=selected_hint)
+                dict(
+                    path=path,
+                    language=selection,
+                    basis=basis,
+                    locale_hint=selected_hint,
+                    fields=[dict(path=tree.getpath(n), field=f) for n, f in fields],
+                )
             )
         report: dict[str, Any]
         if selection is not None and not selection.get("dictionary"):
@@ -264,6 +277,7 @@ def inspect_tree(
             if selection is not None:
                 issue["language_selection"] = selection
                 issue["language_basis"] = basis
+                issue["metadata_scope"] = tree.getpath(metadata_scope(block_node))
             score = (
                 90
                 if issue["code"] == "language_unresolved"
@@ -287,6 +301,13 @@ def inspect_tree(
                     issue["replacement"] = replacement
                     issue["reason"] = issue.get("reason", "") + "; explicit correction map"
             # A correction must fit within one original XML field; never flatten markup.
+            if issue["code"] == "language_unresolved":
+                issue["ranges"] = [
+                    dict(
+                        path=tree.getpath(node), field=field, start=0, end=len(getattr(node, field))
+                    )
+                    for node, field in fields
+                ]
             offset = 0
             for node, field in fields:
                 size = len(getattr(node, field))
@@ -308,7 +329,31 @@ def inspect_tree(
             issue["repairable"] = issue.get("replacement") is not None
             diagnostics.append(issue)
     detection["metadata_segments"] = metadata_selections
-    return diagnostics, detection
+    # One missing context can affect many small fields. Keep every exact occurrence,
+    # but present the shared language problem once rather than inventing spelling errors.
+    grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
+    combined = []
+    for issue in diagnostics:
+        if issue["code"] != "language_unresolved":
+            combined.append(issue)
+            continue
+        unresolved_key = (
+            issue["metadata_scope"],
+            issue["language"].get("locale", "und"),
+            issue["language_basis"],
+        )
+        if unresolved_key not in grouped:
+            grouped[unresolved_key] = dict(issue, affected_segments=[], occurrence_count=0)
+            combined.append(grouped[unresolved_key])
+        group = grouped[unresolved_key]
+        group["affected_segments"].append(issue)
+        group["occurrence_count"] += 1
+    for group in grouped.values():
+        group["reason"] += (
+            f" ({group['occurrence_count']} segments; "
+            "exact locations retained in affected_segments)"
+        )
+    return combined, detection
 
 
 def repair_spelling(

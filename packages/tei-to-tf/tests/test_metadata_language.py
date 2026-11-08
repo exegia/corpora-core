@@ -129,6 +129,30 @@ def test_confident_unsupported_segment_does_not_fall_back_to_english_context():
     assert not any(text == DUTCH for text, _, _ in checker.calls)
 
 
+def test_unresolved_context_keeps_all_locations_in_one_blocking_group():
+    issues, _ = inspect_tree(
+        document("<author>Unknown</author><publisher>Strange</publisher>"),
+        LanguageChecker(),
+        "fr-FR",
+        {},
+    )
+    assert len(issues) == 1
+    group = issues[0]
+    assert group["blocking"] and group["occurrence_count"] == 2
+    assert {s["text"] for s in group["affected_segments"]} == {"Unknown", "Strange"}
+    assert len({s["ranges"][0]["path"] for s in group["affected_segments"]}) == 2
+    assert all(s["ranges"][0]["end"] == len(s["text"]) for s in group["affected_segments"])
+
+
+def test_corpus_word_across_separate_note_retains_existing_grouping():
+    checker = LanguageChecker()
+    inspect_tree(
+        document(f"<p>{ENGLISH}</p>", body="wo<note>annotation</note>rld"), checker, "fr-FR", {}
+    )
+    assert ("world", "corpus", "fr-FR") in checker.calls
+    assert not any(text in {"wo", "rld"} and role == "corpus" for text, role, _ in checker.calls)
+
+
 def test_collection_metadata_context_does_not_leak_between_members():
     first = (
         f"<TEI><teiHeader><p>{ENGLISH}</p><author>and</author></teiHeader>"
