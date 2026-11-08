@@ -160,3 +160,10 @@ and `npm test --prefix packages/quality-ai`; CI runs these without hosted creden
 Use `--ai-bridge packages/quality-ai/bridge.mjs` with `AI_GATEWAY_API_KEY` in the
 process environment. Never put credentials in reports or browser assets. See
 `packages/quality-ai/README.md` for model selection, request budgets and limitations.
+
+### ShellCheck hook installation
+
+The ShellCheck pre-commit hook installs pinned `shellcheck-py==0.11.0.1` from
+PyPI, using its prebuilt wheel on supported platforms instead of rebuilding the
+Git checkout and downloading a binary from GitHub. The hook still checks shell
+scripts with `-S warning -x`; CI runs it as part of `hygiene`.
