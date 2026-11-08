@@ -10,6 +10,11 @@ from .parse import secure_tree
 
 def _report(checker: Any, text: str, source_id: str) -> dict[str, Any]:
     report = checker.structural(text, source_id)
+    return validate_core_report(report, text, source_id)
+
+
+def validate_core_report(report: Any, text: str, source_id: str) -> dict[str, Any]:
+    """Validate the shared source binding used by structural and purpose receipts."""
     if (
         not isinstance(report, dict)
         or type(report.get("schema_version")) is not int

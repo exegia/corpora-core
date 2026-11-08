@@ -122,6 +122,9 @@ def suggest_spelling(tree: Any, issues: list[dict[str, Any]], checker: Any, ai: 
     nodes = {tree.getpath(n): n for n in tree.iter()}
     groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for issue in issues:
+        if issue.get("validation_kind") == "purpose":
+            issue["ai_status"] = "purpose_validation"
+            continue
         if issue["code"] == "language_unresolved":
             issue["ai_status"] = "language_unresolved"
             continue

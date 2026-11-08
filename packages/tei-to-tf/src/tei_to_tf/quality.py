@@ -14,6 +14,7 @@ from .convert import convert, validate_schema, write_json
 from .hosted_ai import structural_proposal, suggest_spelling
 from .model import ConversionError, Policy, Source
 from .parse import parse, secure_tree
+from .purpose import inspect_purposes
 from .structural import structural_diagnostics
 from .structural import structural_preview as structural_preview
 
@@ -64,6 +65,23 @@ class SpellProcess:
     def structural(self, text: str, source_id: str) -> dict[str, Any]:
         return self.send(dict(operation="structure", source_id=source_id, text=text))
 
+    def purpose(
+        self,
+        text: str,
+        source_id: str,
+        expected_document_id: str | None,
+        allow_no_namespace: bool = False,
+    ) -> dict[str, Any]:
+        return self.send(
+            dict(
+                operation="purpose",
+                source_id=source_id,
+                text=text,
+                expected_document_id=expected_document_id,
+                allow_no_namespace=allow_no_namespace,
+            )
+        )
+
     def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         assert self.process.stdin is not None and self.process.stdout is not None
         self.process.stdin.write(json.dumps(payload) + "\n")
@@ -88,9 +106,11 @@ class SpellProcess:
             self.process.wait()
 
 
-def text_segments(tree: etree._ElementTree) -> list[tuple[Any, str, str, str | None]]:
+def text_segments(
+    tree: etree._ElementTree, purpose_paths: set[str] | None = None
+) -> list[tuple[Any, str, str, str | None]]:
     """Disjoint text/tail fields; markup and machine-readable attributes are not prose."""
-    result = []
+    result: list[tuple[Any, str, str, str | None]] = []
 
     def classify(owner: Any) -> tuple[str, str | None]:
         chain = [owner, *owner.iterancestors()]
@@ -117,6 +137,10 @@ def text_segments(tree: etree._ElementTree) -> list[tuple[Any, str, str, str | N
         return role, locale
 
     def visit(node: Any) -> None:
+        if purpose_paths and isinstance(node.tag, str) and tree.getpath(node) in purpose_paths:
+            # A boundary event is necessary even for an empty structured element.
+            result.append((node, "text", "purpose_boundary", None))
+            return
         if isinstance(node.tag, str) and node.text:
             role, language = classify(node)
             result.append((node, "text", role, language))
@@ -136,8 +160,26 @@ def inspect_tree(
     locale: str | None,
     corrections: dict[str, str],
     metadata_locale: str | None = None,
+    source_xml: bytes | None = None,
+    source_id: str = "<inspection>",
+    expected_document_id: str | None = None,
+    allow_no_namespace: bool = False,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
-    segments = text_segments(tree)
+    """Check metadata purposes and spelling without changing the parsed tree.
+
+    Supply the matching raw ``source_xml`` to retain original XML byte locations.
+    Without it, purpose locations refer to the explicitly hashed tree serialization.
+    ``expected_document_id`` is the caller's primary-ID policy, not a guessed repair.
+    """
+    purpose_diagnostics, purpose_paths, purpose_audit = inspect_purposes(
+        tree,
+        checker,
+        source_xml if source_xml is not None else etree.tostring(tree, encoding="utf-8"),
+        source_id,
+        expected_document_id,
+        allow_no_namespace,
+    )
+    segments = text_segments(tree, purpose_paths)
     # Prefer declared document language; otherwise infer from the body rather than publishers.
     declared = tree.getroot().get(XML_LANG)
     sample = " ".join(getattr(node, field) for node, field, role, _ in segments if role == "corpus")
@@ -146,7 +188,7 @@ def inspect_tree(
     # Preserve a French reform hint rather than collapsing it to fr-FR in the response.
     if detection.get("dictionary") == "fr_FR_90":
         fallback = "fr-FR-1990"
-    diagnostics = []
+    diagnostics = purpose_diagnostics
     blocks = {
         "p",
         "l",
@@ -178,6 +220,9 @@ def inspect_tree(
     metadata_contexts: dict[tuple[str, str | None], list[str]] = {}
     metadata_selections: list[dict[str, Any]] = []
     for node, field, role, hint in segments:
+        if role == "purpose_boundary":
+            previous_key = None
+            continue
         owner = node if field == "text" else node.getparent()
         block = next(
             (
@@ -329,6 +374,7 @@ def inspect_tree(
             issue["repairable"] = issue.get("replacement") is not None
             diagnostics.append(issue)
     detection["metadata_segments"] = metadata_selections
+    detection["purpose_fields"] = purpose_audit
     # One missing context can affect many small fields. Keep every exact occurrence,
     # but present the shared language problem once rather than inventing spelling errors.
     grouped: dict[tuple[str, str, str], dict[str, Any]] = {}
@@ -481,7 +527,15 @@ def quality_convert(
                     if schema:
                         validate_schema(prepared, schema)
                     diagnostics, detection = inspect_tree(
-                        tree, checker, locale, corrections or {}, metadata_locale
+                        tree,
+                        checker,
+                        locale,
+                        corrections or {},
+                        metadata_locale,
+                        source_xml=preview,
+                        source_id=source.origin,
+                        expected_document_id=Path(source.name).stem,
+                        allow_no_namespace=policy.allow_no_namespace,
                     )
                     suggest_spelling(tree, diagnostics, checker, ai)
                     row["language"] = detection
@@ -509,7 +563,15 @@ def quality_convert(
                     if corpus_before != corpus_after:
                         raise ConversionError("Repair changed primary corpus text")
                     cycle["pass_3"], final_detection = inspect_tree(
-                        final_tree, checker, locale, corrections or {}, metadata_locale
+                        final_tree,
+                        checker,
+                        locale,
+                        corrections or {},
+                        metadata_locale,
+                        source_xml=repaired,
+                        source_id=source.origin,
+                        expected_document_id=Path(source.name).stem,
+                        allow_no_namespace=policy.allow_no_namespace,
                     )
                     row["language"] = final_detection
                     suggest_spelling(final_tree, cycle["pass_3"], checker, ai)
