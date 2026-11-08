@@ -1,5 +1,41 @@
 # Verification — 2026-11-06
 
+## Rust structural adapter — 2026-11-08
+
+Python quality conversion and explicit collection repair previews now consume the
+core's version-1 structural reports through `corpora-text-check`. Python's former
+parser-message/regex diagnosis has been removed. Source acquisition, projection,
+schema validation and guarded repair orchestration remain in Python.
+
+Executed on this checkout:
+
+- `make fmt`, `make ci`: passed, including all-feature Rust/Swift and automation checks.
+- `cargo test --locked -p corpora-core --all-features`: 27 tests passed, including
+  structural operation without dictionaries and unchanged legacy detection shape.
+- `make -C packages/tei-to-tf check build`, with `CORPORA_TEXT_CHECK`,
+  `CSPELL_DICTIONARIES` and `TF_VALIDATOR` configured: lint, format and strict mypy
+  passed; **107 tests passed, 2 cached-corpus tests skipped**; wheel/sdist built.
+- `git diff --check`: passed.
+
+Real bridge acceptance checks sequential Unicode/CRLF ampersand and closing-tag
+repairs, current-snapshot hashes/coordinates, undefined entity rollback, DTD refusal,
+and successful quality conversion preserving original bytes. Real dictionary
+repair/revalidation also passed. External-validator collection tests verify corrected
+previews and that a core-blocked source stays failed and excluded while another
+source exports and loads through TF/CF. Report fields retain raw core findings plus
+the browser's existing before/after/repairable projection.
+
+Regression tests reject stale/old bridge responses and inconsistent edit coordinates,
+prevent Python parsing from bypassing core blockers, and require native revalidation
+after AI candidates and serialized spelling repairs. Core requests report the first
+XML failure; previews attempt at most 32 lexical edits and roll back partial failure.
+The native quality path requires UTF-8 XML and a rebuilt bridge. Plain conversion and
+existing quality-report consumption keep their previous dependency boundary.
+
+The full pinned 163-source regressions, live hosted AI, and visual browser inspection
+were not rerun for this adapter change. Earlier collection/visual receipts below are
+historical evidence, not fresh acceptance of this revision.
+
 ## Executed
 
 | Check | Result |

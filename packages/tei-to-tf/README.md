@@ -193,6 +193,28 @@ sources at revision `71fb49a3738a4533913327beffb39fd90633b0f1`.
 
 ## Three-pass quality conversion
 
+Structural diagnosis in quality mode now comes from the Rust core through
+`corpora-text-check`'s `operation: "structure"` request. Rebuild the executable after
+updating the crate; an old executable fails closed instead of falling back to Python
+diagnosis. The plain converter still uses its existing Python parsing/projection path.
+The native quality path accepts UTF-8 XML; other encodings need an explicit prior
+conversion with original-byte provenance retained. Rust checks XML well-formedness;
+Python still checks projection compatibility, editorial policy and any supplied schema.
+
+Python applies only the existing bounded lexical fixes (bare-ampersand escaping and
+case-only closing tags), checking the source hash, before text and byte/scalar/line
+coordinates. Every intermediate candidate receives a fresh Rust report; no more than
+32 lexical edits are attempted per preview. A partial failure returns the original
+bytes and keeps the attempted edits as proposals. Core diagnostics, schema version
+and source hashes are retained alongside the browser's existing receipt fields.
+AI proposals and the final serialized spelling repairs must also pass core structural
+checks before export. A preview passing structural checks is not spelling approval.
+
+Programmatic collection previews using `run_collection(..., repair_structural=True)`
+must pass `structural_checker=SpellProcess(path_to_executable)` and close that process
+when finished. Loading an existing `quality_report` or running plain comparison does
+not require a new native checker.
+
 Build the core engine and install dictionary data using `crates/corpora-core/README.md`.
 Enable the quality pipeline explicitly (the plain structural converter stays available):
 

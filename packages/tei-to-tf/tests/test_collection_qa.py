@@ -192,7 +192,45 @@ def test_collection_accounts_for_invalid_file_and_all_valid_documents(tmp_path):
 
 
 @pytest.mark.skipif(not os.environ.get("TF_VALIDATOR"), reason="Requires external TF validator")
+def test_collection_retains_core_blocker_and_exports_only_other_sources(tmp_path):
+    from test_quality import Checker
+
+    class SelectiveCore(Checker):
+        def structural(self, text, source_id):
+            report = super().structural(text, source_id)
+            if source_id.endswith("blocked.xml"):
+                report["diagnostics"] = [
+                    dict(
+                        code="xml_node_limit",
+                        message="Budget exceeded",
+                        category="structural",
+                        blocking=True,
+                        locations=[],
+                        suggestions=[],
+                    )
+                ]
+            return report
+
+    output = tmp_path / "output"
+    report = run_collection(
+        [source("blocked.xml", "<p>blocked</p>"), source("valid.xml", "<p>valid</p>")],
+        output,
+        Path(os.environ["TF_VALIDATOR"]) / "scripts/tf_validate.py",
+        repair_structural=True,
+        structural_checker=SelectiveCore(),
+    )
+    assert (report["passed"], report["failed"]) == (1, 1)
+    blocked = next(row for row in report["documents"] if row["name"] == "blocked.xml")
+    assert blocked["status"] == "failed"
+    assert blocked["structural_diagnostics"][0]["core_diagnostic"]["code"] == "xml_node_limit"
+    assert "document_id" not in blocked
+    assert len(report["loaders"]["context-fabric-warm"]) == 1
+
+
+@pytest.mark.skipif(not os.environ.get("TF_VALIDATOR"), reason="Requires external TF validator")
 def test_repaired_xml_is_previewed_even_when_spelling_is_blocked(tmp_path):
+    from test_quality import Checker
+
     from tei_to_tf.qa_quality import attach_quality
 
     original = source("case.xml", "<p>bad</P>")
@@ -202,6 +240,7 @@ def test_repaired_xml_is_previewed_even_when_spelling_is_blocked(tmp_path):
         output,
         Path(os.environ["TF_VALIDATOR"]) / "scripts/tf_validate.py",
         repair_structural=True,
+        structural_checker=Checker(),
     )
     row = report["documents"][0]
     assert row["status"] == "passed"

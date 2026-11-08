@@ -6,6 +6,7 @@ import re
 from pathlib import Path
 
 import pytest
+from core_stub import core_report
 
 from tei_to_tf.model import Source
 from tei_to_tf.parse import secure_tree
@@ -27,6 +28,9 @@ def xml(header="hello", body="world"):
 
 
 class Checker:
+    def structural(self, text, source_id):
+        return core_report(text, source_id)
+
     def detect(self, text, locale):
         return {"locale": locale or "en-US", "dictionary": "en_US"}
 
@@ -105,7 +109,7 @@ def test_unresolved_metadata_cannot_pass(tmp_path):
 
 def test_safe_xml_repairs_are_proposed_and_traceable():
     source = b"<a>one & two</A>"
-    fixed, changes = structural_preview(source)
+    fixed, changes = structural_preview(source, Checker())
     assert fixed == b"<a>one &amp; two</a>"
     assert {d["code"] for d in changes} == {"xml_bare_ampersand", "xml_tag_case"}
     assert all(d["repairable"] for d in changes)
@@ -113,7 +117,7 @@ def test_safe_xml_repairs_are_proposed_and_traceable():
 
 def test_ambiguous_xml_is_not_recovered_by_dropping_nodes():
     original = b"<a><b>text</a>"
-    fixed, diagnostics = structural_preview(original)
+    fixed, diagnostics = structural_preview(original, Checker())
     assert fixed == original
     assert not diagnostics[0]["repairable"]
 

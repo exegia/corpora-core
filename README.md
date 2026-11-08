@@ -73,6 +73,13 @@ the Rust runtime or claim universal lossless document conversion.
 
 ## TEI → Text-Fabric
 
+The Rust core also exposes [shared structural and spelling diagnostics](crates/corpora-core/README.md#shared-structural-and-spelling-diagnostics).
+Callers can check XML without Python and receive source-bound locations and candidate
+edits through the same report type as spelling. API callers own repair execution and
+revalidation; the Python converter retains acquisition, projection and schema checks.
+Python quality and repair previews request structural diagnostics through the same
+Rust JSON-lines bridge used for spelling.
+
 [The converter package](packages/tei-to-tf/README.md) accepts local TEI files or
 GitHub/Hugging Face URLs, separates metadata and explicit TOCs from reading text,
 and preserves source bytes, structure and annotation spans.
