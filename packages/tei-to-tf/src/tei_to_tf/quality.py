@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import re
 import select
 import subprocess
 from pathlib import Path
@@ -15,36 +14,18 @@ from .convert import convert, validate_schema, write_json
 from .hosted_ai import structural_proposal, suggest_spelling
 from .model import ConversionError, Policy, Source
 from .parse import parse, secure_tree
+from .structural import structural_diagnostics
+from .structural import structural_preview as structural_preview
 
 XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
-
-
-def xml_diagnostics(data: bytes) -> list[dict[str, Any]]:
-    """Retain every diagnostic emitted by the strict parser, without recovery."""
-    parser = etree.XMLParser(resolve_entities=False, load_dtd=False, no_network=True)
-    try:
-        etree.fromstring(data, parser)
-    except etree.XMLSyntaxError:
-        pass
-    return [
-        dict(
-            code="xml_parse_error",
-            message=e.message,
-            line=e.line,
-            column=e.column,
-            blocking=True,
-            repairable=False,
-        )
-        for e in parser.error_log
-    ]
 
 
 class SpellProcess:
     """One JSON-lines Matchum process, caching dictionaries across segments."""
 
-    def __init__(self, executable: Path, dictionaries: Path):
+    def __init__(self, executable: Path, dictionaries: Path | None = None):
         self.process = subprocess.Popen(
-            [str(executable.resolve()), str(dictionaries.resolve())],
+            [str(executable.resolve()), *([str(dictionaries.resolve())] if dictionaries else [])],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -61,11 +42,14 @@ class SpellProcess:
     def request(
         self, text: str, role: str, locale: str | None, detect_only: bool
     ) -> dict[str, Any]:
+        return self.send(dict(text=text, role=role, locale=locale, detect_only=detect_only))
+
+    def structural(self, text: str, source_id: str) -> dict[str, Any]:
+        return self.send(dict(operation="structure", source_id=source_id, text=text))
+
+    def send(self, payload: dict[str, Any]) -> dict[str, Any]:
         assert self.process.stdin is not None and self.process.stdout is not None
-        self.process.stdin.write(
-            json.dumps({"text": text, "role": role, "locale": locale, "detect_only": detect_only})
-            + "\n"
-        )
+        self.process.stdin.write(json.dumps(payload) + "\n")
         self.process.stdin.flush()
         if not select.select([self.process.stdout], [], [], 120)[0]:
             raise ConversionError("Matchum response timed out")
@@ -74,7 +58,7 @@ class SpellProcess:
             raise ConversionError("Matchum process exited without a response")
         response: dict[str, Any] = json.loads(line)
         if "error" in response:
-            raise ConversionError(f"Spellcheck unavailable: {response['error']}")
+            raise ConversionError(f"Core engine unavailable: {response['error']}")
         return response
 
     def close(self) -> None:
@@ -85,103 +69,6 @@ class SpellProcess:
         except subprocess.TimeoutExpired:
             self.process.kill()
             self.process.wait()
-
-
-def structural_preview(data: bytes) -> tuple[bytes, list[dict[str, Any]]]:
-    """Propose only lexical XML fixes with explicit, reviewable before/after evidence.
-
-    Never use lxml recovery: it can silently drop nodes. Ambiguous tag changes,
-    undefined entities, truncation and DTD-dependent documents remain blocking.
-    """
-    try:
-        secure_tree(data)
-        return data, []
-    except ConversionError as error:
-        original_error = str(error)
-    try:
-        text = data.decode("utf-8")
-    except UnicodeDecodeError:
-        return data, [
-            {
-                "code": "xml_invalid",
-                "blocking": True,
-                "repairable": False,
-                "message": original_error,
-            }
-        ]
-    changes = []
-    # Do not reinterpret a non-UTF8 declaration or a DTD.
-    if re.search(r'encoding=["\'](?![Uu][Tt][Ff]-?8)[^"\']+', text) or "<!DOCTYPE" in text:
-        return data, [
-            {
-                "code": "xml_invalid",
-                "blocking": True,
-                "repairable": False,
-                "message": original_error,
-            }
-        ]
-    protected = re.compile(r"<!--.*?-->|<!\[CDATA\[.*?\]\]>|<\?.*?\?>", re.S)
-    bare = re.compile(r"&(?!#[0-9]+;|#x[0-9a-fA-F]+;|[A-Za-z_:][\w:.-]*;)")
-    ranges = [(m.start(), m.end()) for m in protected.finditer(text)]
-    offsets = [
-        m.start() for m in bare.finditer(text) if not any(a <= m.start() < b for a, b in ranges)
-    ]
-    for offset in reversed(offsets):
-        text = text[:offset] + "&amp;" + text[offset + 1 :]
-        changes.append(
-            {
-                "code": "xml_bare_ampersand",
-                "blocking": True,
-                "repairable": True,
-                "start": offset,
-                "before": "&",
-                "after": "&amp;",
-            }
-        )
-    for _ in range(32):
-        try:
-            secure_tree(text.encode())
-            return text.encode(), changes
-        except ConversionError as error:
-            message = str(error)
-        match = re.search(
-            r"Opening and ending tag mismatch: ([\w:.-]+) line \d+ and "
-            r"([\w:.-]+), line (\d+), column (\d+)",
-            message,
-        )
-        if not match or match[1] == match[2] or match[1].lower() != match[2].lower():
-            break
-        lines = text.splitlines(keepends=True)
-        line = int(match[3]) - 1
-        if line >= len(lines):
-            break
-        before = f"</{match[2]}>"
-        # Require one exact close tag on the reported line; avoid broad replacements.
-        if lines[line].count(before) != 1:
-            break
-        after = f"</{match[1]}>"
-        lines[line] = lines[line].replace(before, after)
-        changes.append(
-            {
-                "code": "xml_tag_case",
-                "blocking": True,
-                "repairable": True,
-                "line": line + 1,
-                "before": before,
-                "after": after,
-            }
-        )
-        text = "".join(lines)
-    # Do not apply a partial structural repair that still cannot be parsed.
-    return data, [
-        {
-            "code": "xml_invalid",
-            "blocking": True,
-            "repairable": False,
-            "message": original_error,
-            "proposed_partial_fixes": changes,
-        }
-    ]
 
 
 def text_segments(tree: etree._ElementTree) -> list[tuple[Any, str, str, str | None]]:
@@ -413,8 +300,7 @@ def quality_convert(
                 row["cycles"].append(cycle)
                 signature = hashlib.sha256(candidate).hexdigest()
                 seen.add(signature)
-                preview, structural = structural_preview(candidate)
-                cycle["pass_1"].extend(xml_diagnostics(candidate))
+                preview, structural = structural_preview(candidate, checker, source.origin)
                 cycle["pass_1"].extend(structural)
                 for issue in cycle["pass_1"]:
                     issue["ai_status"] = "not_configured" if ai is None else "pending"
@@ -426,6 +312,9 @@ def quality_convert(
                     elif preview != candidate:
                         cycle["pass_2"].extend(structural)
                 try:
+                    cycle["pass_3"] = structural_diagnostics(preview, checker, source.origin)
+                    if any(d["blocking"] for d in cycle["pass_3"]):
+                        raise ConversionError("Core structural validation failed")
                     tree = secure_tree(preview)
                     prepared = Source(source.name, source.origin, preview, source.revision)
                     parsed, classification = parse(prepared, policy)
@@ -451,6 +340,9 @@ def quality_convert(
                         else preview
                     )
                     prepared = Source(source.name, source.origin, repaired, source.revision)
+                    cycle["pass_3"] = structural_diagnostics(repaired, checker, source.origin)
+                    if any(d["blocking"] for d in cycle["pass_3"]):
+                        raise ConversionError("Core structural revalidation failed")
                     final_tree = secure_tree(repaired)
                     corpus_after = "".join(
                         getattr(n, f)

@@ -289,6 +289,7 @@ def run_collection(
     validator: Path,
     repair_structural: bool = False,
     quality_report: Path | None = None,
+    structural_checker: Any = None,
 ) -> dict[str, Any]:
     require(not output.exists(), f"Output already exists: {output}")
     require(validator.is_file(), "Validator script not found")
@@ -297,17 +298,23 @@ def run_collection(
     require(len({s.origin for s in sources}) == len(sources), "Duplicate source origins")
     originals = {s.origin: s.data for s in sources}
     repairs: dict[str, Any] = {}
+    structural_findings: dict[str, list[dict[str, Any]]] = {}
     if quality_report:
         from .qa_quality import repaired_sources
 
         sources, repairs = repaired_sources(sources, quality_report)
     elif repair_structural:
+        require(structural_checker is not None, "Structural preview requires a Rust core checker")
         prepared = []
         for source in sources:
-            candidate, diagnostics = structural_preview(source.data)
+            candidate, diagnostics = structural_preview(
+                source.data, structural_checker, source.origin
+            )
             if diagnostics and all(d["repairable"] for d in diagnostics):
                 repairs[source.origin] = diagnostics
                 source = Source(source.name, source.origin, candidate, source.revision)
+            else:
+                structural_findings[source.origin] = diagnostics
             prepared.append(source)
         sources = prepared
     accepted: list[Source] = []
@@ -321,10 +328,15 @@ def run_collection(
             "sha256": hashlib.sha256(originals[source.origin]).hexdigest(),
             "comparison_sha256": hashlib.sha256(source.data).hexdigest(),
             "structural_repairs": repairs.get(source.origin, []),
+            "structural_diagnostics": structural_findings.get(source.origin, []),
             "title": Path(source.name).stem,
             "status": "failed",
         }
         try:
+            require(
+                not any(d["blocking"] for d in row["structural_diagnostics"]),
+                "Core structural validation failed",
+            )
             view = oracle(source.data)
             docs, _ = parse(source, POLICY)
             require(len(docs) == 1 and bool(docs[0].text.strip()), "Expected one nonempty document")
