@@ -167,3 +167,6 @@ The ShellCheck pre-commit hook installs pinned `shellcheck-py==0.11.0.1` from
 PyPI, using its prebuilt wheel on supported platforms instead of rebuilding the
 Git checkout and downloading a binary from GitHub. The hook still checks shell
 scripts with `-S warning -x`; CI runs it as part of `hygiene`.
+The secret-scan workflow retries the pinned gitleaks release download, then builds
+the same pinned version through the Go module proxy if the release CDN is unavailable.
+Both installation paths run the same required, redacted scan.
