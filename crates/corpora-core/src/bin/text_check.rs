@@ -2,6 +2,7 @@
 use corpora_core::{
     language::detect_language,
     spellcheck::{SpellEngine, TextRole},
+    structural::check_xml,
 };
 use serde::Deserialize;
 use std::{
@@ -10,7 +11,15 @@ use std::{
 };
 
 #[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Operation {
+    Structure,
+}
+
+#[derive(Deserialize)]
 struct Request {
+    operation: Option<Operation>,
+    source_id: Option<String>,
     text: String,
     locale: Option<String>,
     role: Option<TextRole>,
@@ -26,6 +35,12 @@ fn main() {
     for line in io::stdin().lock().lines() {
         let result = (|| -> Result<serde_json::Value, Box<dyn std::error::Error>> {
             let request: Request = serde_json::from_str(&line?)?;
+            if matches!(request.operation, Some(Operation::Structure)) {
+                return Ok(serde_json::to_value(check_xml(
+                    request.source_id.as_deref().unwrap_or("<input>"),
+                    &request.text,
+                )?)?);
+            }
             Ok(
                 if let Some(root) = root.as_ref().filter(|_| !request.detect_only) {
                     let detection = detect_language(&request.text, request.locale.as_deref())?;
