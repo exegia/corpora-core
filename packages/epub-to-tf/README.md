@@ -13,9 +13,8 @@ expanded member hashes, OPF identifier/metadata, a linear spine reading projecti
 and shared `corpora-core` diagnostics. The CLI emits this as JSON and exits 1 on
 blocking findings. The Python exporter only writes a bundle after validation;
 it keeps the original EPUB under `sources/`, per-item JSON and exact main text under
-`documents/`, note JSON and exact note text under `notes/`, referenced raster images
-under `assets/`, and deterministic `.tf`
-files under `tf/`. Its internal Text-Fabric
+`documents/`, note JSON and exact note text under `notes/`, referenced assets
+under `tf/assets/`, and deterministic `.tf` files under `tf/`. Its internal Text-Fabric
 round trip is verified before publication. Runtime caches are removed from the
 bundle.
 
@@ -40,15 +39,26 @@ bundle.
   Each note has a stable `member#fragment` source key. Marker records retain
   their original `href`, label, member and raw member-byte offset. These keys
   can later be mapped to database rows without relying on TF node numbers.
-- Referenced JPEG, PNG, GIF and WebP images in linear XHTML are copied byte-for-byte
-  to content-addressed `assets/` files. The manifest and each document's
-  `image_assets` TF feature carry the source member, original `src` and `alt`,
-  expanded-member byte offset, Unicode scalar text position, media type, hash,
-  and asset path. Images occupy no character slots, so adjacent words are never
-  separated by invented whitespace. The original archive retains all resources,
-  including images not referenced by reading XHTML.
-- Non-linear spine items remain unsupported. Missing manifest/spine targets, unsupported media or layout,
-  scripted/rich media, responsive images, images inside note bodies, encryption and malformed XML also block. No
+- Referenced `image/*`, `audio/*`, and `video/*` manifest resources, captions
+  (`text/vtt` or TTML), embedded PDFs, inline passive SVG and inline MathML
+  are copied byte-for-byte to content-addressed `tf/assets/` files. Supported
+  references come from `img`, `audio`, `video`, `source`, `track`, `object` and
+  `embed` elements. Video posters are image references. Each document or note
+  node has an `asset_refs` TF feature containing JSON records with kind, MIME
+  type, source member, raw expanded-member byte offset, Unicode scalar text
+  offset within that document or note, hash, and `tf_path` relative to `tf/`.
+  Inline XML assets also retain their exclusive source byte end. The manifest
+  keeps the same records with bundle-relative `file` paths. The existing
+  document `image_assets` feature remains for image-only queries.
+- Assets occupy no character slots; inline SVG and MathML content is preserved
+  in the exact XML asset, not added to `T.text()`. Fallback XHTML text in audio,
+  video and object elements remains in the reading string. The original archive
+  retains all resources, including those not referenced by reading XHTML.
+  Opaque media bytes are preserved, but this converter does not decode them or
+  guarantee playback in a particular reader.
+- Non-linear spine items remain unsupported. Missing manifest/spine targets,
+  unsupported media or layout, scripts/iframes, responsive `srcset`, active or
+  externally linked SVG, encryption and malformed XML block export. No
   spelling or AI step can clear these structural findings. Fix the source and
   rerun validation; this package does not repair it.
 - Maximum 80 MiB original archive, 1024 members, 16 MiB expanded per member, 64 MiB expanded total, and
@@ -74,3 +84,20 @@ uv run --group dev mypy src
 uv run --group dev pytest -q
 uv build
 ```
+
+## Local browser comparison
+
+Generate a dark-mode QA page from any exported bundle, then serve it locally:
+
+```sh
+uv run --project packages/epub-to-tf python packages/epub-to-tf/tools/qa_browser.py \
+  output/bundle target/epub-qa
+python3 -m http.server 8769 --directory target/epub-qa
+```
+
+Open `http://127.0.0.1:8769/index.html`. The original XHTML is shown in a
+sandboxed iframe with its EPUB styling, while the TF text and asset inventory
+use dark mode. The text status independently parses each original XHTML body
+using the same documented note and inline-asset exclusion policy. This page is
+a visual QA aid; the package tests and actual TF/Context-Fabric loads remain the
+conversion acceptance checks.

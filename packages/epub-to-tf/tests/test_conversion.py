@@ -3,6 +3,7 @@
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
@@ -64,7 +65,7 @@ def test_unicode_structure_metadata_and_real_loaders(tmp_path: Path) -> None:
         (e["tag"], e["start"], e["end"]) for e in doc["elements"] if e["tag"] in {"h1", "em", "p"}
     ] == [("h1", 0, 2), ("em", 1, 2), ("p", 2, 11)]
     node = manifest["graph"]["node_ids"]["document:chapter"]
-    assert not any(path.is_dir() for path in (output / "tf").iterdir())
+    assert {path.name for path in (output / "tf").iterdir() if path.is_dir()} == {"assets"}
     tf = Fabric(locations=str(output / "tf"), silent="deep").load(
         "text document xhtml_tag", silent="deep"
     )
@@ -89,7 +90,7 @@ def test_unicode_structure_metadata_and_real_loaders(tmp_path: Path) -> None:
             None,
             "EPUB_NONLINEAR",
         ),
-        (OPF, CHAPTER.replace(b"<section>", b'<section><img src="a.png"/>'), None, "EPUB_IMAGE"),
+        (OPF, CHAPTER.replace(b"<section>", b'<section><img src="a.png"/>'), None, "EPUB_ASSET"),
         (
             OPF,
             CHAPTER.replace(
@@ -187,7 +188,7 @@ def test_note_has_separate_slots_and_link_in_both_loaders(tmp_path: Path) -> Non
     note_node = manifest["graph"]["node_ids"]["note:OEBPS/chapter.xhtml#n1"]
     anchor_key = manifest["note_references"][0]["anchor_key"]
     anchor_node = manifest["graph"]["node_ids"]["document:chapter:" + anchor_key]
-    assert not any(path.is_dir() for path in (output / "tf").iterdir())
+    assert {path.name for path in (output / "tf").iterdir() if path.is_dir()} == {"assets"}
     tf = Fabric(locations=str(output / "tf"), silent="deep").load(
         "text document noteref note_kind", silent="deep"
     )
@@ -333,16 +334,152 @@ def test_unsupported_dtd_blocks(tmp_path: Path) -> None:
         convert(source, tmp_path / "out", CHECKER)
 
 
-def test_unsupported_image_variant_blocks(tmp_path: Path) -> None:
-    source = tmp_path / "svg.epub"
-    chapter = b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Text<img src="art.svg"/></p></body></html>'
+def test_responsive_image_variant_blocks(tmp_path: Path) -> None:
+    source = tmp_path / "responsive.epub"
+    chapter = b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Text<img src="art.png" srcset="art.png 2x"/></p></body></html>'
     opf = OPF.replace(
         b'<item id="nav"',
-        b'<item id="art" href="art.svg" media-type="image/svg+xml"/><item id="nav"',
+        b'<item id="art" href="art.png" media-type="image/png"/><item id="nav"',
     )
-    fixture(source, opf=opf, chapter=chapter, extra={"OEBPS/art.svg": b"<svg/>"})
-    assert "EPUB_IMAGE" in [
+    fixture(source, opf=opf, chapter=chapter, extra={"OEBPS/art.png": b"opaque-png"})
+    assert "EPUB_ASSET" in [
         d["code"] for f in check(source)["findings"] for d in f["report"]["diagnostics"]
     ]
     with pytest.raises(ConversionError):
         convert(source, tmp_path / "out", CHECKER)
+
+
+def test_svg_media_and_document_assets_have_tf_locations(tmp_path: Path) -> None:
+    source = tmp_path / "assets.epub"
+    svg = b'<svg xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></svg>'
+    chapter = (
+        b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>A'
+        b'<img src="art.svg" alt="art"/>B' + svg + b'C<audio src="sound.mp3">fallback</audio>D'
+        b'<video poster="poster.png"><source src="clip.mp4"/><track src="captions.vtt"/></video>E'
+        b'<object data="paper.pdf">download</object>F</p></body></html>'
+    )
+    assets = {
+        "art.svg": ("image/svg+xml", svg),
+        "sound.mp3": ("audio/mpeg", b"opaque-audio"),
+        "poster.png": ("image/png", b"opaque-png"),
+        "clip.mp4": ("video/mp4", b"opaque-video"),
+        "captions.vtt": ("text/vtt", b"WEBVTT\n\n"),
+        "paper.pdf": ("application/pdf", b"%PDF-opaque"),
+    }
+    declarations = b"".join(
+        f'<item id="asset-{index}" href="{name}" media-type="{media}"/>'.encode()
+        for index, (name, (media, _)) in enumerate(assets.items())
+    )
+    opf = OPF.replace(b'<item id="nav"', declarations + b'<item id="nav"')
+    fixture(
+        source,
+        opf=opf,
+        chapter=chapter,
+        extra={"OEBPS/" + name: data for name, (_, data) in assets.items()},
+    )
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER)
+    assert (output / "documents/0001.txt").read_text() == "ABCfallbackDEdownloadF"
+    assert len(manifest["assets"]) == 7
+    assert len(manifest["images"]) == 3
+    assert [asset["kind"] for asset in manifest["assets"]] == [
+        "image",
+        "image",
+        "audio",
+        "image",
+        "video",
+        "track",
+        "object",
+    ]
+    assert [asset["text_offset"] for asset in manifest["assets"]] == [1, 2, 3, 12, 12, 12, 13]
+    for asset in manifest["assets"]:
+        assert asset["file"].startswith("tf/assets/")
+        assert asset["tf_path"].startswith("assets/")
+        data = (output / asset["file"]).read_bytes()
+        assert hashlib.sha256(data).hexdigest() == asset["sha256"]
+        assert chapter[asset["source_byte"] :].startswith(b"<")
+    inline = manifest["assets"][1]
+    assert inline["source_end"] is not None
+    assert (output / inline["file"]).read_bytes() == svg
+    node = manifest["graph"]["node_ids"]["document:chapter"]
+    tf = Fabric(locations=str(output / "tf"), silent="deep").load(
+        "text asset_refs image_assets", silent="deep"
+    )
+    cf = ContextFabric(locations=str(output / "tf")).loadAll()
+    for api in (tf, cf):
+        assert api.T.text(node) == "ABCfallbackDEdownloadF"
+        assert json.loads(api.F.asset_refs.v(node)) == manifest["assets"]
+        assert json.loads(api.F.image_assets.v(node)) == manifest["images"]
+
+
+def test_active_external_svg_blocks(tmp_path: Path) -> None:
+    source = tmp_path / "active-svg.epub"
+    chapter = b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>A<img src="art.svg"/>B</p></body></html>'
+    opf = OPF.replace(
+        b'<item id="nav"',
+        b'<item id="art" href="art.svg" media-type="image/svg+xml"/><item id="nav"',
+    )
+    active = b'<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'
+    fixture(source, opf=opf, chapter=chapter, extra={"OEBPS/art.svg": active})
+    assert "EPUB_ASSET" in [
+        d["code"] for f in check(source)["findings"] for d in f["report"]["diagnostics"]
+    ]
+    with pytest.raises(ConversionError):
+        convert(source, tmp_path / "out", CHECKER)
+
+
+def test_dark_qa_browser_compares_original_and_bundle(tmp_path: Path) -> None:
+    source = tmp_path / "qa.epub"
+    fixture(source)
+    bundle = tmp_path / "bundle"
+    convert(source, bundle, CHECKER)
+    site = tmp_path / "site"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "packages/epub-to-tf/tools/qa_browser.py"),
+            str(bundle),
+            str(site),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    page = (site / "index.html").read_text()
+    assert ":root{color-scheme:dark}" in page
+    assert 'iframe id="source" class="source-view" sandbox=""' in page
+    assert '"source": "Áβcafé & 東京"' in page
+    assert '"tf": "Áβcafé & 東京"' in page
+
+
+def test_note_image_and_inline_math_keep_scope_and_offsets(tmp_path: Path) -> None:
+    source = tmp_path / "note-assets.epub"
+    chapter = b"""<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body><p>A<a epub:type="noteref" href="#n">1</a><math xmlns="http://www.w3.org/1998/Math/MathML"><mi>x</mi></math>B</p><aside epub:type="footnote" id="n">Note<img src="art.png"/> body</aside></body></html>"""
+    opf = OPF.replace(
+        b'<item id="nav"', b'<item id="art" href="art.png" media-type="image/png"/><item id="nav"'
+    )
+    fixture(source, opf=opf, chapter=chapter, extra={"OEBPS/art.png": b"opaque-image"})
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER)
+    assert (output / "documents/0001.txt").read_text() == "A1B"
+    assert (output / "notes/0001.txt").read_text() == "Note body"
+    math, image = manifest["assets"]
+    assert (math["scope"], math["kind"], math["media_type"], math["text_offset"]) == (
+        "document",
+        "math",
+        "application/mathml+xml",
+        2,
+    )
+    assert (image["scope"], image["scope_id"], image["kind"], image["text_offset"]) == (
+        "note",
+        "OEBPS/chapter.xhtml#n",
+        "image",
+        4,
+    )
+    assert (output / math["file"]).read_bytes() == chapter[math["source_byte"] : math["source_end"]]
+    note_node = manifest["graph"]["node_ids"]["note:OEBPS/chapter.xhtml#n"]
+    tf = Fabric(locations=str(output / "tf"), silent="deep").load("text asset_refs", silent="deep")
+    cf = ContextFabric(locations=str(output / "tf")).loadAll()
+    for api in (tf, cf):
+        assert api.T.text(note_node) == "Note body"
+        assert json.loads(api.F.asset_refs.v(note_node)) == [image]

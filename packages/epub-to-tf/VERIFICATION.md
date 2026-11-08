@@ -76,6 +76,31 @@ itself remains preserved under `sources/original.epub`.
 The QA script and browser files live in ignored `target/`, not in the exported
 bundle or tracked source. Loading a bundle with Context-Fabric can create
 runtime `.cfm` caches afterward; the exporter removes caches before publication.
-The accepted input remains unencrypted reflowable EPUB with the explicit
-limits in the README. DRM, fixed layout, SVG and scripted/rich media are still
-blocked rather than represented as a successful but incomplete conversion.
+At that stage, SVG and media were still blocked. The supported input remains
+unencrypted reflowable EPUB with the explicit limits in the README; DRM and
+fixed layout remain blocked.
+
+## Dark QA page and general TF assets
+
+The next increment preserves referenced images, passive SVG, audio, video,
+caption tracks, embedded PDF and inline MathML in `tf/assets/`. Document and
+note `asset_refs` features retain the TF-relative path, MIME type, kind, source
+member and byte offset, Unicode scalar position within that reading scope,
+and SHA-256. The earlier document `image_assets` feature remains available.
+Active or externally linked SVG and responsive `srcset` remain blocking.
+
+| Command | Result |
+| --- | --- |
+| `make doctor` / `make fmt` / `make ci` | Passed; root Rust and Swift checks completed. |
+| `cargo clippy -p corpora-convert --all-targets --all-features -- -D warnings` | Passed. |
+| EPUB package Ruff, format check, mypy, `uv run --group dev pytest -q`, `uv build` | Passed; 31 tests, including SVG/media/note-asset TF and Context-Fabric round trips and dark QA generation. |
+| `make -C packages/tei-to-tf check build` | Passed; 138 tests, 11 skipped. |
+| Full original Marcion EPUB → `target/qa-marcion-assets/` | Passed; five documents, 252,115 exact characters, nine image assets under `tf/assets/`, unchanged archive hash above. |
+| `uv run --project packages/epub-to-tf --group dev python target/qa-marcion-verify.py` | Passed; independently parsed all five XHTML bodies, checked all nine copied image bytes/hashes, and reloaded exact text plus `asset_refs`/`image_assets` with Text-Fabric and Context-Fabric. |
+| Static `tf_validate.py target/qa-marcion-assets/tf` | 0 errors, TF064 warning and TF065 info from intentional character slots and no invented separators. |
+| `uv run --group dev python tools/qa_browser.py ../../target/qa-marcion-assets ../../target/qa-marcion-browser` | Passed; Aside Browser at `http://127.0.0.1:8769/index.html` showed dark UI, original cover and study-guide chapter, exact text status, and matching source/bundle image previews. Screenshot: `/Users/emmanuel/.aside/u/0/sessions/2026-11-08_yYnt1KNgw9Tr9Vxd/artifacts/marcion-dark-reusable-final.png`. |
+| Bundle checksum and cache check | 34 file checksums valid; `tf/assets/` is the only subdirectory under `tf/` after loader caches were removed. |
+
+The browser generator is tracked at `packages/epub-to-tf/tools/qa_browser.py`;
+generated pages remain under ignored `target/`. Neither bundle nor source was
+committed or pushed by the agent.

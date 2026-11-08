@@ -30,7 +30,7 @@ def _write_graph(
     documents: list[dict[str, Any]],
     notes: list[dict[str, Any]],
     references: list[dict[str, Any]],
-    images: list[dict[str, Any]],
+    assets: list[dict[str, Any]],
     destination: Path,
 ) -> dict[str, Any]:
     node: dict[str, dict[int, Any]] = defaultdict(dict)
@@ -47,7 +47,12 @@ def _write_graph(
         if slot == start:
             raise ConversionError(f"Empty reading spine item: {document['member']}")
         doc_key = "document:" + document["id"]
-        document_images = [image for image in images if image["document_id"] == document["id"]]
+        document_assets = [
+            asset
+            for asset in assets
+            if asset["scope"] == "document" and asset["scope_id"] == document["id"]
+        ]
+        document_images = [asset for asset in document_assets if asset["kind"] == "image"]
         specs.append(
             (
                 "document",
@@ -57,6 +62,7 @@ def _write_graph(
                     "document": document["id"],
                     "source_member": document["member"],
                     "image_assets": json.dumps(document_images, ensure_ascii=False, sort_keys=True),
+                    "asset_refs": json.dumps(document_assets, ensure_ascii=False, sort_keys=True),
                 },
                 None,
             )
@@ -100,6 +106,15 @@ def _write_graph(
                     "source_member": note["member"],
                     "note_fragment": note["fragment"],
                     "note_kind": note["kind"],
+                    "asset_refs": json.dumps(
+                        [
+                            asset
+                            for asset in assets
+                            if asset["scope"] == "note" and asset["scope_id"] == note["source_key"]
+                        ],
+                        ensure_ascii=False,
+                        sort_keys=True,
+                    ),
                 },
                 None,
             )
@@ -161,7 +176,7 @@ def _write_graph(
         "sectionTypes": "document",
         "sectionFeatures": "document",
     }
-    destination.mkdir()
+    destination.mkdir(exist_ok=True)
     if not Fabric(locations=str(destination), silent="deep").save(
         nodeFeatures=dict(node), edgeFeatures=dict(edge), metaData=meta, silent="deep"
     ):
@@ -224,33 +239,50 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
         for index, note in enumerate(report["notes"], 1):
             _json(stage / "notes" / f"{index:04}.json", note)
             (stage / "notes" / f"{index:04}.txt").write_text(note["text"], encoding="utf-8")
-        (stage / "assets").mkdir()
+        (stage / "tf" / "assets").mkdir(parents=True)
         with ZipFile(BytesIO(original)) as archive:
-            for image in report["images"]:
-                data = archive.read(image["target_member"])
+            for asset in report["assets"]:
+                data = archive.read(asset["target_member"])
+                if asset["source_end"] is not None:
+                    data = data[asset["source_byte"] : asset["source_end"]]
                 if (
-                    len(data) != image["bytes"]
-                    or hashlib.sha256(data).hexdigest() != image["sha256"]
+                    len(data) != asset["bytes"]
+                    or hashlib.sha256(data).hexdigest() != asset["sha256"]
                 ):
                     raise ConversionError(
-                        f"Image changed after validation: {image['target_member']}"
+                        f"Asset changed after validation: {asset['target_member']}"
                     )
                 suffix = {
                     "image/jpeg": ".jpg",
                     "image/png": ".png",
                     "image/gif": ".gif",
                     "image/webp": ".webp",
-                }[image["media_type"]]
-                image["file"] = "assets/" + image["sha256"] + suffix
-                (stage / image["file"]).write_bytes(data)
+                    "image/svg+xml": ".svg",
+                    "image/avif": ".avif",
+                    "audio/mpeg": ".mp3",
+                    "audio/mp4": ".m4a",
+                    "audio/ogg": ".ogg",
+                    "audio/webm": ".webm",
+                    "video/mp4": ".mp4",
+                    "video/webm": ".webm",
+                    "video/ogg": ".ogv",
+                    "text/vtt": ".vtt",
+                    "application/ttml+xml": ".ttml",
+                    "application/pdf": ".pdf",
+                    "application/mathml+xml": ".mml",
+                }.get(asset["media_type"], ".bin")
+                asset["tf_path"] = "assets/" + asset["sha256"] + suffix
+                asset["file"] = "tf/" + asset["tf_path"]
+                (stage / asset["file"]).write_bytes(data)
+        report["images"] = [asset for asset in report["assets"] if asset["kind"] == "image"]
         graph = _write_graph(
             report["documents"],
             report["notes"],
             report["note_references"],
-            report["images"],
+            report["assets"],
             stage / "tf",
         )
-        features = "text document source_member xhtml_tag image_assets"
+        features = "text document source_member xhtml_tag image_assets asset_refs"
         if report["notes"]:
             features += " note_kind source_key noteref"
         api = Fabric(locations=str(stage / "tf"), silent="deep").load(features, silent="deep")
@@ -261,14 +293,30 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
             if api.T.text(node) != document["text"]:
                 raise ConversionError(f"Text round-trip failed: {document['member']}")
             image_assets = [
-                image for image in report["images"] if image["document_id"] == document["id"]
+                image
+                for image in report["images"]
+                if image["scope"] == "document" and image["scope_id"] == document["id"]
             ]
             if json.loads(api.F.image_assets.v(node)) != image_assets:
                 raise ConversionError(f"Image round-trip failed: {document['member']}")
+            asset_refs = [
+                asset
+                for asset in report["assets"]
+                if asset["scope"] == "document" and asset["scope_id"] == document["id"]
+            ]
+            if json.loads(api.F.asset_refs.v(node)) != asset_refs:
+                raise ConversionError(f"Asset round-trip failed: {document['member']}")
         for note in report["notes"]:
             number = graph["node_ids"]["note:" + note["source_key"]]
             if api.T.text(number) != note["text"]:
                 raise ConversionError(f"Note text round-trip failed: {note['source_key']}")
+            note_assets = [
+                asset
+                for asset in report["assets"]
+                if asset["scope"] == "note" and asset["scope_id"] == note["source_key"]
+            ]
+            if json.loads(api.F.asset_refs.v(number)) != note_assets:
+                raise ConversionError(f"Note asset round-trip failed: {note['source_key']}")
         for reference in report["note_references"]:
             anchor = graph["node_ids"][
                 "document:" + reference["document_id"] + ":" + reference["anchor_key"]
@@ -277,7 +325,7 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
             if target not in api.E.noteref.f(anchor):
                 raise ConversionError(f"Note link round-trip failed: {reference['href']}")
         for path in (stage / "tf").iterdir():
-            if path.is_dir():
+            if path.is_dir() and path.name in {".tf", ".cfm"}:
                 shutil.rmtree(path)
         manifest = {
             "format": "corpora-epub-to-tf/1",
@@ -290,6 +338,7 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
             "notes": [note["source_key"] for note in report["notes"]],
             "note_references": report["note_references"],
             "images": report["images"],
+            "assets": report["assets"],
             "graph": graph,
         }
         _json(stage / "manifest.json", manifest)

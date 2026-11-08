@@ -225,14 +225,16 @@ fn passive_svg(bytes: &[u8]) -> bool {
     };
     tree.root_element().tag_name().namespace() == Some("http://www.w3.org/2000/svg")
         && tree.descendants().filter(Node::is_element).all(|element| {
-            !matches!(element.tag_name().name(), "script" | "foreignObject" | "image")
-                && element.attributes().all(|attribute| {
-                    !attribute.name().starts_with("on")
-                        && !attribute.value().contains("http:")
-                        && !attribute.value().contains("https:")
-                        && !attribute.value().contains("javascript:")
-                        && !attribute.value().contains("data:")
-                })
+            !matches!(
+                element.tag_name().name(),
+                "script" | "foreignObject" | "image"
+            ) && element.attributes().all(|attribute| {
+                !attribute.name().starts_with("on")
+                    && !attribute.value().contains("http:")
+                    && !attribute.value().contains("https:")
+                    && !attribute.value().contains("javascript:")
+                    && !attribute.value().contains("data:")
+            })
         })
 }
 
@@ -351,6 +353,8 @@ fn append_text(
     text: &mut String,
     elements: &mut Vec<Element>,
     counter: &mut usize,
+    owner: &AssetOwner<'_>,
+    assets: &mut Vec<AssetReference>,
 ) {
     if node.is_text() {
         text.push_str(node.text().unwrap_or(""));
@@ -374,8 +378,11 @@ fn append_text(
         start,
         end: start,
     });
+    if push_assets(node, &key, start, owner, assets) {
+        return;
+    }
     for nested in node.children() {
-        append_text(nested, Some(&key), text, elements, counter);
+        append_text(nested, Some(&key), text, elements, counter, owner, assets);
     }
     elements[index].end = text.chars().count();
 }
@@ -397,6 +404,91 @@ fn note_kind(node: Node<'_, '_>) -> Option<&'static str> {
 
 fn is_note_reference(node: Node<'_, '_>) -> bool {
     epub_type(node, "noteref") || node.attribute("role") == Some("doc-noteref")
+}
+
+struct AssetOwner<'a> {
+    member: &'a str,
+    document_id: &'a str,
+    scope: &'a str,
+    scope_id: &'a str,
+}
+
+fn push_assets(
+    node: Node<'_, '_>,
+    key: &str,
+    text_offset: usize,
+    owner: &AssetOwner<'_>,
+    assets: &mut Vec<AssetReference>,
+) -> bool {
+    let tag = node.tag_name().name();
+    let resource = match tag {
+        "img" => Some(("image", node.attribute("src").unwrap_or(""), None)),
+        "audio" | "video" if node.attribute("src").is_some() => {
+            Some((tag, node.attribute("src").unwrap_or(""), None))
+        }
+        "source" => node
+            .parent_element()
+            .and_then(|parent| match parent.tag_name().name() {
+                "audio" | "video" => Some((
+                    parent.tag_name().name(),
+                    node.attribute("src").unwrap_or(""),
+                    None,
+                )),
+                _ => None,
+            }),
+        "track" => Some(("track", node.attribute("src").unwrap_or(""), None)),
+        "object" => Some(("object", node.attribute("data").unwrap_or(""), None)),
+        "embed" => Some(("embed", node.attribute("src").unwrap_or(""), None)),
+        "svg" if node.tag_name().namespace() == Some("http://www.w3.org/2000/svg") => {
+            Some(("image", "", Some(node.range().end)))
+        }
+        "math" if node.tag_name().namespace() == Some("http://www.w3.org/1998/Math/MathML") => {
+            Some(("math", "", Some(node.range().end)))
+        }
+        _ => None,
+    };
+    let inline_asset = resource.as_ref().is_some_and(|(_, _, end)| end.is_some());
+    if let Some((kind, href, source_end)) = resource {
+        assets.push(AssetReference {
+            document_id: owner.document_id.into(),
+            scope: owner.scope.into(),
+            scope_id: owner.scope_id.into(),
+            kind: kind.into(),
+            member: owner.member.into(),
+            element_key: key.into(),
+            href: href.into(),
+            target_member: String::new(),
+            media_type: String::new(),
+            sha256: String::new(),
+            bytes: 0,
+            alt: node.attribute("alt").unwrap_or("").into(),
+            text_offset,
+            source_byte: node.range().start,
+            source_end,
+        });
+    }
+    if tag == "video" {
+        if let Some(poster) = node.attribute("poster") {
+            assets.push(AssetReference {
+                document_id: owner.document_id.into(),
+                scope: owner.scope.into(),
+                scope_id: owner.scope_id.into(),
+                kind: "image".into(),
+                member: owner.member.into(),
+                element_key: key.into(),
+                href: poster.into(),
+                target_member: String::new(),
+                media_type: String::new(),
+                sha256: String::new(),
+                bytes: 0,
+                alt: String::new(),
+                text_offset,
+                source_byte: node.range().start,
+                source_end: None,
+            });
+        }
+    }
+    inline_asset
 }
 
 struct ReadingProjection<'a> {
@@ -424,18 +516,27 @@ fn append_reading(
     }
     if let Some(kind) = note_kind(node) {
         let fragment = node.attribute("id").unwrap_or("").to_owned();
+        let source_key = format!("{}#{fragment}", projection.member);
         let mut note_text = String::new();
         let mut note_elements = Vec::new();
         let mut note_counter = 0;
+        let owner = AssetOwner {
+            member: projection.member,
+            document_id: projection.document_id,
+            scope: "note",
+            scope_id: &source_key,
+        };
         append_text(
             node,
             None,
             &mut note_text,
             &mut note_elements,
             &mut note_counter,
+            &owner,
+            projection.assets,
         );
         projection.notes.push(NoteBody {
-            source_key: format!("{}#{fragment}", projection.member),
+            source_key,
             member: projection.member.into(),
             fragment,
             source_byte: node.range().start,
@@ -461,68 +562,13 @@ fn append_reading(
         start,
         end: start,
     });
-    let tag = node.tag_name().name();
-    let resource = match tag {
-        "img" => Some(("image", node.attribute("src").unwrap_or(""), None)),
-        "audio" | "video" if node.attribute("src").is_some() => {
-            Some((tag, node.attribute("src").unwrap_or(""), None))
-        }
-        "source" => node.parent_element().and_then(|parent| match parent.tag_name().name() {
-            "audio" | "video" => Some((parent.tag_name().name(), node.attribute("src").unwrap_or(""), None)),
-            _ => None,
-        }),
-        "track" => Some(("track", node.attribute("src").unwrap_or(""), None)),
-        "object" => Some(("object", node.attribute("data").unwrap_or(""), None)),
-        "embed" => Some(("embed", node.attribute("src").unwrap_or(""), None)),
-        "svg" if node.tag_name().namespace() == Some("http://www.w3.org/2000/svg") => {
-            Some(("image", "", Some(node.range().end)))
-        }
-        "math" if node.tag_name().namespace() == Some("http://www.w3.org/1998/Math/MathML") => {
-            Some(("math", "", Some(node.range().end)))
-        }
-        _ => None,
+    let owner = AssetOwner {
+        member: projection.member,
+        document_id: projection.document_id,
+        scope: "document",
+        scope_id: projection.document_id,
     };
-    let inline_asset = resource.as_ref().is_some_and(|(_, _, end)| end.is_some());
-    if let Some((kind, href, source_end)) = resource {
-        projection.assets.push(AssetReference {
-            document_id: projection.document_id.into(),
-            scope: "document".into(),
-            scope_id: projection.document_id.into(),
-            kind: kind.into(),
-            member: projection.member.into(),
-            element_key: key.clone(),
-            href: href.into(),
-            target_member: String::new(),
-            media_type: String::new(),
-            sha256: String::new(),
-            bytes: 0,
-            alt: node.attribute("alt").unwrap_or("").into(),
-            text_offset: start,
-            source_byte: node.range().start,
-            source_end,
-        });
-    }
-    if tag == "video" {
-        if let Some(poster) = node.attribute("poster") {
-            projection.assets.push(AssetReference {
-                document_id: projection.document_id.into(),
-                scope: "document".into(),
-                scope_id: projection.document_id.into(),
-                kind: "image".into(),
-                member: projection.member.into(),
-                element_key: key.clone(),
-                href: poster.into(),
-                target_member: String::new(),
-                media_type: String::new(),
-                sha256: String::new(),
-                bytes: 0,
-                alt: String::new(),
-                text_offset: start,
-                source_byte: node.range().start,
-                source_end: None,
-            });
-        }
-    }
+    let inline_asset = push_assets(node, &key, start, &owner, projection.assets);
     if inline_asset {
         return;
     }
@@ -1033,13 +1079,10 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
             result.finding(path, source, "EPUB_XHTML", "Missing XHTML body", None, true);
             continue;
         };
-        if body.descendants().any(|n| {
-            n.is_element()
-                && matches!(
-                    n.tag_name().name(),
-                    "script" | "iframe"
-                )
-        }) {
+        if body
+            .descendants()
+            .any(|n| n.is_element() && matches!(n.tag_name().name(), "script" | "iframe"))
+        {
             result.finding(
                 path,
                 source,
@@ -1051,30 +1094,54 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
         }
         let mut seen_ids = BTreeSet::new();
         for element in body.descendants().filter(Node::is_element) {
-            if element.attribute("srcset").is_some()
-                || (matches!(element.tag_name().name(), "img" | "audio" | "video" | "source" | "track" | "svg" | "math" | "object" | "embed")
-                    && element.ancestors().skip(1).any(|parent| note_kind(parent).is_some()))
+            if element.attribute("srcset").is_some() {
+                result.finding(
+                    path,
+                    source,
+                    "EPUB_ASSET",
+                    "Responsive asset selection is unsupported",
+                    Some(element.range().start),
+                    true,
+                );
+            }
+            if (element.tag_name().name() == "source"
+                && element
+                    .parent_element()
+                    .is_none_or(|parent| !matches!(parent.tag_name().name(), "audio" | "video")))
+                || (element.tag_name().name() == "svg"
+                    && element.tag_name().namespace() != Some("http://www.w3.org/2000/svg"))
+                || (element.tag_name().name() == "math"
+                    && element.tag_name().namespace() != Some("http://www.w3.org/1998/Math/MathML"))
             {
                 result.finding(
                     path,
                     source,
                     "EPUB_ASSET",
-                    "Responsive or note-body assets are unsupported",
+                    "Asset element has an unsupported context or namespace",
                     Some(element.range().start),
                     true,
                 );
             }
             if element.tag_name().namespace() == Some("http://www.w3.org/2000/svg")
-                && (matches!(element.tag_name().name(), "script" | "foreignObject" | "image")
-                    || element.attributes().any(|attribute| {
-                        attribute.name().starts_with("on")
-                            || attribute.value().contains("http:")
-                            || attribute.value().contains("https:")
-                            || attribute.value().contains("javascript:")
-                            || attribute.value().contains("data:")
-                    }))
+                && (matches!(
+                    element.tag_name().name(),
+                    "script" | "foreignObject" | "image"
+                ) || element.attributes().any(|attribute| {
+                    attribute.name().starts_with("on")
+                        || attribute.value().contains("http:")
+                        || attribute.value().contains("https:")
+                        || attribute.value().contains("javascript:")
+                        || attribute.value().contains("data:")
+                }))
             {
-                result.finding(path, source, "EPUB_SVG", "Active or externally linked inline SVG is unsupported", Some(element.range().start), true);
+                result.finding(
+                    path,
+                    source,
+                    "EPUB_SVG",
+                    "Active or externally linked inline SVG is unsupported",
+                    Some(element.range().start),
+                    true,
+                );
             }
             if let Some(id) = element.attribute("id") {
                 if !seen_ids.insert(id) {
@@ -1204,14 +1271,33 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
     let mut asset_issues: Vec<(String, usize, String)> = Vec::new();
     for asset in &mut result.assets {
         let resolved = if let Some(end) = asset.source_end {
-            sources.get(&asset.member).and_then(|data| data.get(asset.source_byte..end)).map(|data| {
-                (asset.member.clone(), if asset.kind == "math" { "application/mathml+xml" } else { "image/svg+xml" }.to_owned(), data)
-            })
+            sources
+                .get(&asset.member)
+                .and_then(|data| data.get(asset.source_byte..end))
+                .map(|data| {
+                    (
+                        asset.member.clone(),
+                        if asset.kind == "math" {
+                            "application/mathml+xml"
+                        } else {
+                            "image/svg+xml"
+                        }
+                        .to_owned(),
+                        data,
+                    )
+                })
         } else {
             relative_path(&asset.member, &asset.href).and_then(|path| {
-                items.values().find(|(item_path, media, _)| item_path == &path && supported_asset_type(&asset.kind, media)).and_then(|(_, media, _)| {
-                    sources.get(&path).map(|data| (path.clone(), media.clone(), data.as_slice()))
-                })
+                items
+                    .values()
+                    .find(|(item_path, media, _)| {
+                        item_path == &path && supported_asset_type(&asset.kind, media)
+                    })
+                    .and_then(|(_, media, _)| {
+                        sources
+                            .get(&path)
+                            .map(|data| (path.clone(), media.clone(), data.as_slice()))
+                    })
             })
         };
         match resolved {
@@ -1228,7 +1314,12 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
             )),
         }
     }
-    result.images = result.assets.iter().filter(|asset| asset.kind == "image").cloned().collect();
+    result.images = result
+        .assets
+        .iter()
+        .filter(|asset| asset.kind == "image")
+        .cloned()
+        .collect();
     for (member, byte, message) in asset_issues {
         if let Some(source) = sources
             .get(&member)
