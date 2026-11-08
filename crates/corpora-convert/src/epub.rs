@@ -4,7 +4,7 @@ use corpora_core::diagnostic::{
     Applicability, Certainty, Diagnostic, DiagnosticCategory, DiagnosticReport, Severity,
     SourceRange, Suggestion,
 };
-use roxmltree::{Document, Node};
+use roxmltree::{Document, Node, ParsingOptions};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -31,7 +31,7 @@ pub struct Member {
 /// An XHTML element over Unicode scalar positions in the projected text.
 #[derive(Debug, Serialize)]
 pub struct Element {
-    /// Preorder key, stable within this source member.
+    /// Projection preorder key, stable within this document or note.
     pub key: String,
     /// Parent preorder key.
     pub parent: Option<String>,
@@ -58,6 +58,79 @@ pub struct ReadingDocument {
     pub elements: Vec<Element>,
 }
 
+/// A note body excluded from the main reading stream but retained as text.
+#[derive(Debug, Serialize)]
+pub struct NoteBody {
+    /// Stable EPUB identity: archive member plus XHTML fragment ID.
+    pub source_key: String,
+    /// Source archive member.
+    pub member: String,
+    /// XHTML fragment ID.
+    pub fragment: String,
+    /// Raw byte offset of the note element in its expanded UTF-8 member.
+    pub source_byte: usize,
+    /// EPUB note kind, `footnote` or `endnote`.
+    pub kind: String,
+    /// Exact decoded XHTML text of the note body.
+    pub text: String,
+    /// Nonempty source XHTML hierarchy inside this note.
+    pub elements: Vec<Element>,
+}
+
+/// A note marker retained in main text and linked to a note body.
+#[derive(Debug, Serialize)]
+pub struct NoteReference {
+    /// Manifest ID of the containing linear spine item.
+    pub document_id: String,
+    /// Source archive member containing the marker.
+    pub member: String,
+    /// Preorder key of the marker's XHTML element.
+    pub anchor_key: String,
+    /// Original EPUB link target.
+    pub href: String,
+    /// Exact marker text (never generated numbering).
+    pub label: String,
+    /// Resolved stable note identity.
+    pub target_key: String,
+    /// Raw byte offset in the expanded UTF-8 source member.
+    pub source_byte: usize,
+}
+
+/// A referenced non-text resource retained outside character slots.
+#[derive(Clone, Debug, Serialize)]
+pub struct AssetReference {
+    /// Manifest ID of the containing spine item.
+    pub document_id: String,
+    /// `document` or `note`; offsets are relative to this reading scope.
+    pub scope: String,
+    /// Manifest ID for a document or `member#fragment` for a note.
+    pub scope_id: String,
+    /// `image`, `audio`, or `video`.
+    pub kind: String,
+    /// XHTML member containing the image element.
+    pub member: String,
+    /// Element key in the reading projection.
+    pub element_key: String,
+    /// Original `src` attribute.
+    pub href: String,
+    /// Resolved archive member, checked against the OPF manifest.
+    pub target_member: String,
+    /// Manifest-declared media type.
+    pub media_type: String,
+    /// Hash of exact expanded image bytes.
+    pub sha256: String,
+    /// Expanded image byte count.
+    pub bytes: usize,
+    /// Original alternative text, possibly empty for decorative images.
+    pub alt: String,
+    /// Zero-width position in the main reading text, in Unicode scalars.
+    pub text_offset: usize,
+    /// Raw byte offset of the `img` element in the expanded XHTML member.
+    pub source_byte: usize,
+    /// Exclusive expanded-member byte end for an inline XML asset.
+    pub source_end: Option<usize>,
+}
+
 /// Member-scoped diagnostics use offsets in expanded UTF-8 member bytes.
 #[derive(Debug, Serialize)]
 pub struct MemberReport {
@@ -82,6 +155,14 @@ pub struct EpubReport {
     pub navigation: Vec<String>,
     /// Linear spine content only, in spine order.
     pub documents: Vec<ReadingDocument>,
+    /// Note bodies, outside document text, in deterministic source order.
+    pub notes: Vec<NoteBody>,
+    /// Validated marker-to-note links.
+    pub note_references: Vec<NoteReference>,
+    /// Image assets at exact source and reading-text positions.
+    pub images: Vec<AssetReference>,
+    /// All referenced non-text assets, including images and media.
+    pub assets: Vec<AssetReference>,
     /// Actionable findings, with member-local source coordinates where possible.
     pub findings: Vec<MemberReport>,
 }
@@ -168,19 +249,38 @@ fn relative_path(base: &str, href: &str) -> Option<String> {
     safe_path(&path).then_some(path)
 }
 
-fn xml<'a>(report: &mut EpubReport, member: &str, source: &'a str) -> Option<Document<'a>> {
-    if let Some(offset) = source.find("<!DOCTYPE") {
-        report.finding(
-            member,
-            source,
-            "EPUB_XML_DTD",
-            "DOCTYPE is unsupported; external entities are never loaded",
-            Some(offset),
-            true,
+fn xml<'a>(
+    report: &mut EpubReport,
+    member: &str,
+    source: &'a str,
+    xhtml: bool,
+) -> Option<Document<'a>> {
+    let allow_dtd = if let Some(offset) = source.find("<!DOCTYPE") {
+        let end = source[offset..].find('>').map(|relative| offset + relative);
+        let declaration = end.and_then(|last| source.get(offset..=last));
+        let normalized =
+            declaration.map(|text| text.split_whitespace().collect::<Vec<_>>().join(" "));
+        let known = matches!(
+            normalized.as_deref(),
+            Some(
+                "<!DOCTYPE html>"
+                    | "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">"
+            )
         );
-        return None;
-    }
-    match Document::parse(source) {
+        if !xhtml || !known {
+            report.finding(member, source, "EPUB_XML_DTD", "Only the bounded XHTML 1.1 or HTML doctype is supported; external entities are never loaded", Some(offset), true);
+            return None;
+        }
+        true
+    } else {
+        false
+    };
+    let options = ParsingOptions {
+        allow_dtd,
+        nodes_limit: 1_000_000,
+        entity_resolver: None,
+    };
+    match Document::parse_with_options(source, options) {
         Ok(tree) => Some(tree),
         Err(error) => {
             let line = error.pos().row as usize;
@@ -244,11 +344,191 @@ fn append_text(
     elements[index].end = text.chars().count();
 }
 
+fn epub_type(node: Node<'_, '_>, token: &str) -> bool {
+    node.attribute(("http://www.idpf.org/2007/ops", "type"))
+        .is_some_and(|value| value.split_whitespace().any(|part| part == token))
+}
+
+fn note_kind(node: Node<'_, '_>) -> Option<&'static str> {
+    if epub_type(node, "footnote") || node.attribute("role") == Some("doc-footnote") {
+        Some("footnote")
+    } else if epub_type(node, "endnote") || node.attribute("role") == Some("doc-endnote") {
+        Some("endnote")
+    } else {
+        None
+    }
+}
+
+fn is_note_reference(node: Node<'_, '_>) -> bool {
+    epub_type(node, "noteref") || node.attribute("role") == Some("doc-noteref")
+}
+
+struct ReadingProjection<'a> {
+    member: &'a str,
+    document_id: &'a str,
+    text: String,
+    elements: Vec<Element>,
+    counter: usize,
+    notes: &'a mut Vec<NoteBody>,
+    references: &'a mut Vec<NoteReference>,
+    assets: &'a mut Vec<AssetReference>,
+}
+
+fn append_reading(
+    node: Node<'_, '_>,
+    parent: Option<&str>,
+    projection: &mut ReadingProjection<'_>,
+) {
+    if node.is_text() {
+        projection.text.push_str(node.text().unwrap_or(""));
+        return;
+    }
+    if !node.is_element() {
+        return;
+    }
+    if let Some(kind) = note_kind(node) {
+        let fragment = node.attribute("id").unwrap_or("").to_owned();
+        let mut note_text = String::new();
+        let mut note_elements = Vec::new();
+        let mut note_counter = 0;
+        append_text(
+            node,
+            None,
+            &mut note_text,
+            &mut note_elements,
+            &mut note_counter,
+        );
+        projection.notes.push(NoteBody {
+            source_key: format!("{}#{fragment}", projection.member),
+            member: projection.member.into(),
+            fragment,
+            source_byte: node.range().start,
+            kind: kind.into(),
+            text: note_text,
+            elements: note_elements,
+        });
+        return;
+    }
+    projection.counter += 1;
+    let key = projection.counter.to_string();
+    let start = projection.text.chars().count();
+    let byte_start = projection.text.len();
+    let index = projection.elements.len();
+    projection.elements.push(Element {
+        key: key.clone(),
+        parent: parent.map(str::to_owned),
+        tag: node.tag_name().name().into(),
+        attributes: node
+            .attributes()
+            .map(|attr| (attr.name().into(), attr.value().into()))
+            .collect(),
+        start,
+        end: start,
+    });
+    let tag = node.tag_name().name();
+    let resource = match tag {
+        "img" => Some(("image", node.attribute("src").unwrap_or(""), None)),
+        "audio" | "video" if node.attribute("src").is_some() => {
+            Some((tag, node.attribute("src").unwrap_or(""), None))
+        }
+        "source" => node.parent_element().and_then(|parent| match parent.tag_name().name() {
+            "audio" | "video" => Some((parent.tag_name().name(), node.attribute("src").unwrap_or(""), None)),
+            _ => None,
+        }),
+        "track" => Some(("track", node.attribute("src").unwrap_or(""), None)),
+        "object" => Some(("object", node.attribute("data").unwrap_or(""), None)),
+        "embed" => Some(("embed", node.attribute("src").unwrap_or(""), None)),
+        "svg" if node.tag_name().namespace() == Some("http://www.w3.org/2000/svg") => {
+            Some(("image", "", Some(node.range().end)))
+        }
+        "math" if node.tag_name().namespace() == Some("http://www.w3.org/1998/Math/MathML") => {
+            Some(("math", "", Some(node.range().end)))
+        }
+        _ => None,
+    };
+    let inline_asset = resource.as_ref().is_some_and(|(_, _, end)| end.is_some());
+    if let Some((kind, href, source_end)) = resource {
+        projection.assets.push(AssetReference {
+            document_id: projection.document_id.into(),
+            scope: "document".into(),
+            scope_id: projection.document_id.into(),
+            kind: kind.into(),
+            member: projection.member.into(),
+            element_key: key.clone(),
+            href: href.into(),
+            target_member: String::new(),
+            media_type: String::new(),
+            sha256: String::new(),
+            bytes: 0,
+            alt: node.attribute("alt").unwrap_or("").into(),
+            text_offset: start,
+            source_byte: node.range().start,
+            source_end,
+        });
+    }
+    if tag == "video" {
+        if let Some(poster) = node.attribute("poster") {
+            projection.assets.push(AssetReference {
+                document_id: projection.document_id.into(),
+                scope: "document".into(),
+                scope_id: projection.document_id.into(),
+                kind: "image".into(),
+                member: projection.member.into(),
+                element_key: key.clone(),
+                href: poster.into(),
+                target_member: String::new(),
+                media_type: String::new(),
+                sha256: String::new(),
+                bytes: 0,
+                alt: String::new(),
+                text_offset: start,
+                source_byte: node.range().start,
+                source_end: None,
+            });
+        }
+    }
+    if inline_asset {
+        return;
+    }
+    for nested in node.children() {
+        append_reading(nested, Some(&key), projection);
+    }
+    projection.elements[index].end = projection.text.chars().count();
+    if is_note_reference(node) {
+        projection.references.push(NoteReference {
+            document_id: projection.document_id.into(),
+            member: projection.member.into(),
+            anchor_key: key,
+            href: node.attribute("href").unwrap_or("").into(),
+            label: projection.text[byte_start..].into(),
+            target_key: String::new(),
+            source_byte: node.range().start,
+        });
+    }
+}
+
+fn resolve_note_href(member: &str, href: &str) -> Option<String> {
+    let (resource, fragment) = href.split_once('#')?;
+    if fragment.is_empty()
+        || fragment.contains('#')
+        || fragment.contains('%')
+        || fragment.chars().any(char::is_whitespace)
+    {
+        return None;
+    }
+    let path = if resource.is_empty() {
+        member.into()
+    } else {
+        relative_path(member, resource)?
+    };
+    Some(format!("{path}#{fragment}"))
+}
+
 /// Validate a local EPUB byte snapshot and project its linear XHTML content.
 ///
 /// No archive member is extracted to disk. Limits are checked before expansion.
 /// Only UTF-8 XML, unencrypted reflowable XHTML and linear spine content are supported.
-/// Notes and non-linear spine items block export; navigation and metadata are excluded.
+/// Referenced footnotes/endnotes use separate text slots; non-linear spine items block.
 #[expect(
     clippy::too_many_lines,
     reason = "single pass keeps archive and XML lifetime-bound sources together"
@@ -261,6 +541,10 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
         metadata: BTreeMap::new(),
         navigation: vec![],
         documents: vec![],
+        notes: vec![],
+        note_references: vec![],
+        images: vec![],
+        assets: vec![],
         findings: vec![],
     };
     if bytes.len() > MAX_ARCHIVE_BYTES {
@@ -395,7 +679,7 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
         );
         return result;
     };
-    let Some(tree) = xml(&mut result, "META-INF/container.xml", container) else {
+    let Some(tree) = xml(&mut result, "META-INF/container.xml", container, false) else {
         return result;
     };
     let rootfiles: Vec<_> = tree
@@ -446,7 +730,7 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
         );
         return result;
     };
-    let Some(tree) = xml(&mut result, opf_path, opf) else {
+    let Some(tree) = xml(&mut result, opf_path, opf, false) else {
         return result;
     };
     let root = tree.root_element();
@@ -695,7 +979,7 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
             result.finding(path, "", "EPUB_ENCODING", "XHTML must be UTF-8", None, true);
             continue;
         };
-        let Some(xhtml) = xml(&mut result, path, source) else {
+        let Some(xhtml) = xml(&mut result, path, source, true) else {
             continue;
         };
         if xhtml.root_element().tag_name().namespace() != Some("http://www.w3.org/1999/xhtml") {
@@ -717,67 +1001,106 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
             n.is_element()
                 && matches!(
                     n.tag_name().name(),
-                    "script"
-                        | "iframe"
-                        | "object"
-                        | "embed"
-                        | "svg"
-                        | "math"
-                        | "img"
-                        | "audio"
-                        | "video"
+                    "script" | "iframe"
                 )
         }) {
             result.finding(
                 path,
                 source,
                 "EPUB_CONTENT",
-                "Embedded, scripted, image or media reading content is unsupported",
+                "Embedded, scripted or rich media reading content is unsupported",
                 Some(body.range().start),
                 true,
             );
         }
-        if let Some(note) = body.descendants().find(|n| {
-            n.is_element() && n.attribute("epub:type").is_some_and(|v| v.contains("note"))
-                || n.attribute(("http://www.idpf.org/2007/ops", "type"))
-                    .is_some_and(|v| v.contains("note"))
-        }) {
-            result.finding(
-                path,
-                source,
-                "EPUB_NOTE",
-                "Notes require a separate reading projection policy",
-                Some(note.range().start),
-                true,
-            );
+        let mut seen_ids = BTreeSet::new();
+        for element in body.descendants().filter(Node::is_element) {
+            if element.attribute("srcset").is_some()
+                || (matches!(element.tag_name().name(), "img" | "audio" | "video" | "source" | "track" | "svg" | "math" | "object" | "embed")
+                    && element.ancestors().skip(1).any(|parent| note_kind(parent).is_some()))
+            {
+                result.finding(
+                    path,
+                    source,
+                    "EPUB_ASSET",
+                    "Responsive or note-body assets are unsupported",
+                    Some(element.range().start),
+                    true,
+                );
+            }
+            if element.tag_name().namespace() == Some("http://www.w3.org/2000/svg")
+                && (matches!(element.tag_name().name(), "script" | "foreignObject" | "image")
+                    || element.attributes().any(|attribute| {
+                        attribute.name().starts_with("on")
+                            || attribute.value().contains("http:")
+                            || attribute.value().contains("https:")
+                            || attribute.value().contains("javascript:")
+                            || attribute.value().contains("data:")
+                    }))
+            {
+                result.finding(path, source, "EPUB_SVG", "Active or externally linked inline SVG is unsupported", Some(element.range().start), true);
+            }
+            if let Some(id) = element.attribute("id") {
+                if !seen_ids.insert(id) {
+                    result.finding(
+                        path,
+                        source,
+                        "EPUB_NOTE_ID",
+                        "Duplicate XHTML fragment ID",
+                        Some(element.range().start),
+                        true,
+                    );
+                }
+            }
+            if element
+                .attribute(("http://www.idpf.org/2007/ops", "type"))
+                .is_some_and(|value| {
+                    value
+                        .split_whitespace()
+                        .any(|token| matches!(token, "note" | "rearnote" | "marginalia"))
+                })
+            {
+                result.finding(
+                    path,
+                    source,
+                    "EPUB_NOTE_KIND",
+                    "Only footnote and endnote bodies are supported",
+                    Some(element.range().start),
+                    true,
+                );
+            }
+            if note_kind(element).is_some()
+                && element.descendants().skip(1).any(|nested| {
+                    nested.is_element()
+                        && (note_kind(nested).is_some() || is_note_reference(nested))
+                })
+            {
+                result.finding(
+                    path,
+                    source,
+                    "EPUB_NOTE_NESTED",
+                    "Nested notes or note references inside a note are unsupported",
+                    Some(element.range().start),
+                    true,
+                );
+            }
         }
-        let mut text = String::new();
-        let mut elements = vec![];
-        let mut counter = 0;
-        append_text(body, None, &mut text, &mut elements, &mut counter);
-        if text.chars().count() > MAX_SLOTS
-            || result
-                .documents
-                .iter()
-                .map(|d| d.text.chars().count())
-                .sum::<usize>()
-                + text.chars().count()
-                > MAX_SLOTS
-        {
-            result.finding(
-                path,
-                source,
-                "EPUB_LIMIT",
-                "Reading projection exceeds one million character slots",
-                Some(body.range().start),
-                true,
-            );
-        }
+        let mut projection = ReadingProjection {
+            member: path,
+            document_id: idref,
+            text: String::new(),
+            elements: Vec::new(),
+            counter: 0,
+            notes: &mut result.notes,
+            references: &mut result.note_references,
+            assets: &mut result.assets,
+        };
+        append_reading(body, None, &mut projection);
         result.documents.push(ReadingDocument {
             id: idref.into(),
             member: path.clone(),
-            text,
-            elements,
+            text: projection.text,
+            elements: projection.elements,
         });
     }
     if result.documents.is_empty() {
@@ -787,6 +1110,115 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
             "EPUB_SPINE",
             "No supported linear reading content",
             Some(spine.range().start),
+            true,
+        );
+    }
+    let mut note_keys = BTreeSet::new();
+    let mut note_issues: Vec<(String, usize, &str, &str)> = Vec::new();
+    for note in &result.notes {
+        if note.fragment.is_empty()
+            || note.text.trim().is_empty()
+            || !note_keys.insert(note.source_key.clone())
+        {
+            note_issues.push((
+                note.member.clone(),
+                note.source_byte,
+                "EPUB_NOTE_ID",
+                "Note needs a unique fragment ID and nonempty body",
+            ));
+        }
+    }
+    for reference in &mut result.note_references {
+        reference.target_key =
+            resolve_note_href(&reference.member, &reference.href).unwrap_or_default();
+    }
+    for reference in &result.note_references {
+        if reference.label.is_empty() || !note_keys.contains(&reference.target_key) {
+            note_issues.push((
+                reference.member.clone(),
+                reference.source_byte,
+                "EPUB_NOTE_REF",
+                "Note marker must have text and resolve to one supported note body",
+            ));
+        }
+    }
+    let targets: BTreeSet<_> = result
+        .note_references
+        .iter()
+        .map(|reference| reference.target_key.as_str())
+        .collect();
+    for note in &result.notes {
+        if !targets.contains(note.source_key.as_str()) {
+            note_issues.push((
+                note.member.clone(),
+                note.source_byte,
+                "EPUB_NOTE_ORPHAN",
+                "Note body has no supported reference marker",
+            ));
+        }
+    }
+    for (member, byte, code, message) in note_issues {
+        if let Some(source) = sources
+            .get(&member)
+            .and_then(|data| std::str::from_utf8(data).ok())
+        {
+            result.finding(&member, source, code, message, Some(byte), true);
+        }
+    }
+    let mut image_issues: Vec<(String, usize, String)> = Vec::new();
+    for image in &mut result.images {
+        let target = relative_path(&image.member, &image.href);
+        let manifest = target
+            .as_ref()
+            .and_then(|path| items.values().find(|(item_path, _, _)| item_path == path));
+        match (target, manifest) {
+            (Some(path), Some((_, media, _)))
+                if matches!(
+                    media.as_str(),
+                    "image/jpeg" | "image/png" | "image/gif" | "image/webp"
+                ) && sources.contains_key(&path) =>
+            {
+                let data = &sources[&path];
+                image.target_member = path;
+                image.media_type.clone_from(media);
+                image.sha256 = hash(data);
+                image.bytes = data.len();
+            }
+            _ => image_issues.push((
+                image.member.clone(),
+                image.source_byte,
+                format!(
+                    "Image {} must resolve to a manifest-declared JPEG, PNG, GIF or WebP member",
+                    image.href
+                ),
+            )),
+        }
+    }
+    for (member, byte, message) in image_issues {
+        if let Some(source) = sources
+            .get(&member)
+            .and_then(|data| std::str::from_utf8(data).ok())
+        {
+            result.finding(&member, source, "EPUB_IMAGE", &message, Some(byte), true);
+        }
+    }
+    let total_slots = result
+        .documents
+        .iter()
+        .map(|document| document.text.chars().count())
+        .sum::<usize>()
+        + result
+            .notes
+            .iter()
+            .map(|note| note.text.chars().count())
+            .sum::<usize>();
+    if total_slots > MAX_SLOTS {
+        result.finding(
+            "<archive>",
+            "",
+            "EPUB_LIMIT",
+            "Reading and note projection exceeds one million character slots",
+            None,
             true,
         );
     }

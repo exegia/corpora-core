@@ -8,8 +8,10 @@ import shutil
 import subprocess
 import tempfile
 from collections import defaultdict
+from io import BytesIO
 from pathlib import Path
 from typing import Any
+from zipfile import ZipFile
 
 from tf.fabric import Fabric
 
@@ -24,10 +26,16 @@ def _json(path: Path, value: Any) -> None:
     )
 
 
-def _write_graph(documents: list[dict[str, Any]], destination: Path) -> dict[str, Any]:
+def _write_graph(
+    documents: list[dict[str, Any]],
+    notes: list[dict[str, Any]],
+    references: list[dict[str, Any]],
+    images: list[dict[str, Any]],
+    destination: Path,
+) -> dict[str, Any]:
     node: dict[str, dict[int, Any]] = defaultdict(dict)
     edge: dict[str, dict[int, set[int]]] = defaultdict(dict)
-    specs: list[tuple[str, list[int], dict[str, Any], str | None]] = []
+    specs: list[tuple[str, str, list[int], dict[str, Any], str | None]] = []
     lookup: dict[str, int] = {}
     slot = 0
     for document in documents:
@@ -39,11 +47,17 @@ def _write_graph(documents: list[dict[str, Any]], destination: Path) -> dict[str
         if slot == start:
             raise ConversionError(f"Empty reading spine item: {document['member']}")
         doc_key = "document:" + document["id"]
+        document_images = [image for image in images if image["document_id"] == document["id"]]
         specs.append(
             (
+                "document",
                 doc_key,
                 list(range(start + 1, slot + 1)),
-                {"document": document["id"], "source_member": document["member"]},
+                {
+                    "document": document["id"],
+                    "source_member": document["member"],
+                    "image_assets": json.dumps(document_images, ensure_ascii=False, sort_keys=True),
+                },
                 None,
             )
         )
@@ -54,6 +68,7 @@ def _write_graph(documents: list[dict[str, Any]], destination: Path) -> dict[str
             parent = doc_key + ":" + element["parent"] if element["parent"] else doc_key
             specs.append(
                 (
+                    "element",
                     key,
                     list(range(start + element["start"] + 1, start + element["end"] + 1)),
                     {
@@ -68,10 +83,52 @@ def _write_graph(documents: list[dict[str, Any]], destination: Path) -> dict[str
                     parent,
                 )
             )
+    for note in notes:
+        start = slot
+        for char in note["text"]:
+            slot += 1
+            node["otype"][slot] = "character"
+            node["text"][slot] = char
+        note_key = "note:" + note["source_key"]
+        specs.append(
+            (
+                "note",
+                note_key,
+                list(range(start + 1, slot + 1)),
+                {
+                    "source_key": note["source_key"],
+                    "source_member": note["member"],
+                    "note_fragment": note["fragment"],
+                    "note_kind": note["kind"],
+                },
+                None,
+            )
+        )
+        for element in note["elements"]:
+            if element["end"] == element["start"]:
+                continue
+            parent = note_key + ":" + element["parent"] if element["parent"] else note_key
+            specs.append(
+                (
+                    "element",
+                    note_key + ":" + element["key"],
+                    list(range(start + element["start"] + 1, start + element["end"] + 1)),
+                    {
+                        "xhtml_tag": element["tag"],
+                        "attributes": json.dumps(
+                            element["attributes"], ensure_ascii=False, sort_keys=True
+                        ),
+                        "source_member": note["member"],
+                        "start": element["start"],
+                        "end": element["end"],
+                    },
+                    parent,
+                )
+            )
     # TF requires one contiguous node block per type.
-    for kind in ("document", "element"):
-        for key, slots, features, parent in specs:
-            if (parent is None) != (kind == "document"):
+    for kind in ("document", "note", "element"):
+        for spec_kind, key, slots, features, _ in specs:
+            if spec_kind != kind:
                 continue
             number = len(node["otype"]) + 1
             lookup[key] = number
@@ -79,9 +136,21 @@ def _write_graph(documents: list[dict[str, Any]], destination: Path) -> dict[str
             edge["oslots"][number] = set(slots)
             for name, value in features.items():
                 node[name][number] = value
-    for key, _, _, parent in specs:
+    for _, key, _, _, parent in specs:
         if parent and key in lookup and parent in lookup:
             edge["parent"][lookup[key]] = {lookup[parent]}
+    for reference in references:
+        anchor_key = "document:" + reference["document_id"] + ":" + reference["anchor_key"]
+        note_key = "note:" + reference["target_key"]
+        anchor = lookup.get(anchor_key)
+        target = lookup.get(note_key)
+        if anchor is None or target is None:
+            raise ConversionError(f"Missing projected note link: {reference['href']}")
+        edge["noteref"].setdefault(anchor, set()).add(target)
+        node["note_href"][anchor] = reference["href"]
+        node["note_label"][anchor] = reference["label"]
+        node["note_target_key"][anchor] = reference["target_key"]
+        node["note_anchor_key"][anchor] = f"{reference['member']}@{reference['source_byte']}"
     meta: dict[str, dict[str, str]] = {
         name: {"valueType": "int" if name in {"start", "end"} else "str"} for name in node
     }
@@ -151,16 +220,62 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
         for index, document in enumerate(report["documents"], 1):
             _json(stage / "documents" / f"{index:04}.json", document)
             (stage / "documents" / f"{index:04}.txt").write_text(document["text"], encoding="utf-8")
-        graph = _write_graph(report["documents"], stage / "tf")
-        api = Fabric(locations=str(stage / "tf"), silent="deep").load(
-            "text document source_member xhtml_tag", silent="deep"
+        (stage / "notes").mkdir()
+        for index, note in enumerate(report["notes"], 1):
+            _json(stage / "notes" / f"{index:04}.json", note)
+            (stage / "notes" / f"{index:04}.txt").write_text(note["text"], encoding="utf-8")
+        (stage / "assets").mkdir()
+        with ZipFile(BytesIO(original)) as archive:
+            for image in report["images"]:
+                data = archive.read(image["target_member"])
+                if (
+                    len(data) != image["bytes"]
+                    or hashlib.sha256(data).hexdigest() != image["sha256"]
+                ):
+                    raise ConversionError(
+                        f"Image changed after validation: {image['target_member']}"
+                    )
+                suffix = {
+                    "image/jpeg": ".jpg",
+                    "image/png": ".png",
+                    "image/gif": ".gif",
+                    "image/webp": ".webp",
+                }[image["media_type"]]
+                image["file"] = "assets/" + image["sha256"] + suffix
+                (stage / image["file"]).write_bytes(data)
+        graph = _write_graph(
+            report["documents"],
+            report["notes"],
+            report["note_references"],
+            report["images"],
+            stage / "tf",
         )
+        features = "text document source_member xhtml_tag image_assets"
+        if report["notes"]:
+            features += " note_kind source_key noteref"
+        api = Fabric(locations=str(stage / "tf"), silent="deep").load(features, silent="deep")
         if api is False:
             raise ConversionError("Real Text-Fabric loader rejected export")
         for document in report["documents"]:
             node = graph["node_ids"]["document:" + document["id"]]
             if api.T.text(node) != document["text"]:
                 raise ConversionError(f"Text round-trip failed: {document['member']}")
+            image_assets = [
+                image for image in report["images"] if image["document_id"] == document["id"]
+            ]
+            if json.loads(api.F.image_assets.v(node)) != image_assets:
+                raise ConversionError(f"Image round-trip failed: {document['member']}")
+        for note in report["notes"]:
+            number = graph["node_ids"]["note:" + note["source_key"]]
+            if api.T.text(number) != note["text"]:
+                raise ConversionError(f"Note text round-trip failed: {note['source_key']}")
+        for reference in report["note_references"]:
+            anchor = graph["node_ids"][
+                "document:" + reference["document_id"] + ":" + reference["anchor_key"]
+            ]
+            target = graph["node_ids"]["note:" + reference["target_key"]]
+            if target not in api.E.noteref.f(anchor):
+                raise ConversionError(f"Note link round-trip failed: {reference['href']}")
         for path in (stage / "tf").iterdir():
             if path.is_dir():
                 shutil.rmtree(path)
@@ -172,6 +287,9 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
             "metadata": report["metadata"],
             "navigation": report["navigation"],
             "documents": [doc["id"] for doc in report["documents"]],
+            "notes": [note["source_key"] for note in report["notes"]],
+            "note_references": report["note_references"],
+            "images": report["images"],
             "graph": graph,
         }
         _json(stage / "manifest.json", manifest)
