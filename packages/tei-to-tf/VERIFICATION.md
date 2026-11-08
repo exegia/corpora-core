@@ -1,5 +1,93 @@
 # Verification — 2026-11-06
 
+## Purpose-aware TEI dates and identifiers — 2026-11-08
+
+Final acceptance: `target/qa-purpose-final-20261108-011818/acceptance-summary.json`.
+The Rust `purpose::validate_tei_metadata` library API and dictionary-free bridge
+`operation: "purpose"` now return source/policy-bound shared diagnostics and complete
+structured-field receipts. Python consumes these on both initial and final snapshots.
+Valid structured values bypass language/spelling; blocked values retain exact raw XML
+locations and cannot be cleared by spelling AI or correction maps. No ID edits are
+proposed automatically. Caller expectations are limited to the supported primary
+untyped publication identifier; typed/collection IDs need another policy.
+
+Fresh pinned 163-source run, with corpus `fr-FR`, original/lemma/separate-note policy,
+no metadata override, no correction map and no hosted AI:
+
+| Result | Count |
+| --- | --- |
+| Native metadata dates validated | 560 |
+| Native primary identifiers validated | 154 |
+| Inconsistent identifiers kept blocked | 2 |
+| Original source hashes verified | 163 |
+| Prepared files byte-identical to metadata-language baseline | 156 |
+
+The two blocked values are `FDM-015-015-000-015` in `FDM-016-016-000-017.xml` and
+`FDM-055-062-000-064-` in `FDM-055-062-000-064.xml`. Exact source ranges, decoded values,
+caller expectations, policy versions and guidance remain in the receipts. Filename
+disagreement establishes a caller-policy inconsistency, not authority to rewrite an ID.
+
+Unresolved-language segments fell from 4,709 to 4,076; their groups fell from 126 to
+125. Total reported blockers changed from 526 to 539: two explicit ID blockers and
+12 additional dictionary findings exposed after metadata context changed, offset by
+one resolved language group. All 163 documents remain quality-blocked. No source text
+was changed and no uncertain language was silently approved.
+
+Executed: `make fmt`, `make ci`, strict all-feature Clippy and `git diff --check`
+passed. Core tests: **32 passed** with all features, **20 passed** without default
+features. With the rebuilt optimized native bridge, dictionary data, external TF
+validator and both pinned corpus caches configured,
+`make -C packages/tei-to-tf check build` passed **137 tests, zero skips**, lint,
+format, strict mypy and wheel/sdist builds.
+
+Coverage includes valid/invalid leap days and intervals, date attributes conflicting
+with text, unsupported calendars/markup, caller ID mismatches, typed/collection IDs,
+foreign/reading scopes, namespace opt-in, Unicode/CRLF/entities/CDATA/comments, exact
+raw coordinates, stale source/policy receipts, complete field coverage, purpose AI
+exclusion, final-pass blockers and prose boundaries around empty structured elements.
+The bounded Gregorian policy is not full TEI schema or historical date validation.
+No new browser inspection or live hosted-AI evaluation was performed for this change.
+
+## Independent metadata language — 2026-11-08
+
+Final collection receipt: `target/qa-metadata-language-final-20261108-004245/acceptance-summary.json`.
+All 163 inputs matched the pinned inventory at
+`71fb49a3738a4533913327beffb39fd90633b0f1`. The run used the existing optimized Rust
+engine/dictionaries, corpus locale `fr-FR`, original readings, lemma apparatus and
+separate notes. No metadata override, correction map or hosted AI was used.
+
+| Final-pass findings | Previous forced-corpus locale | Independent metadata selection |
+| --- | --- | --- |
+| Blocking spelling/typography findings | 4,805 | 387 |
+| Unresolved-language groups | 0 | 126, retaining 4,709 affected segments |
+| Structural/validation findings | 13 | 13 |
+| Total reported blockers | 4,818 | 526 |
+| Dictionary blockers for metadata `and`, `the`, `edition`, `by` | 1,808 | 113 |
+
+All 163 documents remain quality-blocked; this is improved diagnosis and grouping,
+not approval of uncertain language or proof every remaining dictionary finding is a
+typo. Reliable selection chose English for 436 metadata segments and French for 749.
+Unresolved groups retain every affected field/range and its original language evidence.
+One grouped finding can represent many segments; the lower count does not erase
+their uncertainty. All 163 originals were hash-verified, and all 156 prepared sources
+had exactly the same SHA-256 as the preceding structural acceptance run.
+
+With the native bridge, dictionaries, external validator and both cached-corpus
+fixtures configured, `make -C packages/tei-to-tf check build` passed **120 tests with
+zero skips**, Ruff lint/format, strict mypy and wheel/sdist builds. `make fmt`,
+`make ci` and `git diff --check` passed. Tests cover local metadata hints and overrides,
+empty-language resets, unsupported/unknown languages, separate collection contexts,
+inline language transitions, whole corpus words across separate notes, exact grouped
+locations, reform-French correction validation and actual native English metadata
+checks under a French corpus policy. The repair-only native test now declares its
+known English metadata explicitly rather than relying on a tiny unhinted header.
+
+Implementation fingerprints are recorded in the final receipt. No Rust detector or
+dictionary behavior changed. Browser inspection and hosted-AI evaluation were not
+repeated for this policy change; the earlier structural/browser receipt below remains
+separate. The initial ungrouped experiment is retained under
+`target/qa-metadata-language-20261108-003601` and is not the final acceptance result.
+
 ## Rust structural adapter — 2026-11-08
 
 ### Full pinned collection and native browser acceptance

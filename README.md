@@ -79,6 +79,9 @@ edits through the same report type as spelling. API callers own repair execution
 revalidation; the Python converter retains acquisition, projection and schema checks.
 Python quality and repair previews request structural diagnostics through the same
 Rust JSON-lines bridge used for spelling.
+TEI metadata dates and primary document identifiers also use native
+[purpose-aware validation](crates/corpora-core/README.md#purpose-aware-tei-dates-and-identifiers),
+preserving source locations and keeping identity mismatches blocked.
 
 [The converter package](packages/tei-to-tf/README.md) accepts local TEI files or
 GitHub/Hugging Face URLs, separates metadata and explicit TOCs from reading text,

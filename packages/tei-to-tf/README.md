@@ -195,6 +195,31 @@ sources at revision `71fb49a3738a4533913327beffb39fd90633b0f1`.
 
 ### Independent metadata language
 
+Before language selection, the Rust core validates recognized TEI metadata `date`
+and `idno` fields by purpose. Numeric dates do not need a prose language, and document
+identifiers are compared with an explicit identity expectation. Validated fields are
+recorded in `language.purpose_fields`; blocked values become source-bound structural
+diagnostics rather than dictionary guesses. Their element and raw text/attribute
+ranges remain in the core receipt. Neither accepted nor blocked structured values
+are included in metadata language-context samples.
+
+For this converter, the expected primary document ID is the source filename stem.
+Only an untyped primary `TEI/teiHeader/fileDesc/publicationStmt/idno` uses that
+expectation. A differing value stays blocked; no trailing hyphen or other ID text is
+automatically removed. Core callers can supply their own expectation. Typed IDs such
+as ISBN, collection-member IDs, other identifier scopes and child markup require
+dedicated policy and stay blocked. Dates use the [bounded core policy](../../crates/corpora-core/README.md#purpose-aware-tei-dates-and-identifiers),
+including calendar validity and attribute/text consistency. Unsupported expressions
+remain blocked rather than being relabeled as prose or accepted by a guessed language.
+
+Rebuild the native bridge after updating the crate. Purpose receipts must cover every
+eligible field and match the exact XML snapshot, expected identity and policy version;
+old, incomplete or stale receipts fail closed. Purpose validation runs on initial and
+final candidates and bypasses spelling AI/correction maps. Excluding a structured
+element retains a grouping boundary even when the element is empty, and its tail text
+remains part of the surrounding prose. Reading-text and foreign-namespace fields keep
+their existing language/spelling behavior.
+
 `--locale` keeps the reading/corpus language policy. Header/title-page metadata selects
 its language independently: an explicit `--metadata-locale` override, otherwise the
 nearest `xml:lang` within the metadata scope, otherwise supported reliable detection
