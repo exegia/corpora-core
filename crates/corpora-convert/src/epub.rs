@@ -42,6 +42,8 @@ pub struct Element {
     pub tag: String,
     /// Exact attributes in source order-independent form.
     pub attributes: BTreeMap<String, String>,
+    /// Expanded UTF-8 source-member byte offset of the opening element.
+    pub source_byte: usize,
     /// Inclusive scalar start in this document's reading string.
     pub start: usize,
     /// Exclusive scalar end.
@@ -383,6 +385,7 @@ fn append_text(
             .attributes()
             .map(|attr| (attr.name().into(), attr.value().into()))
             .collect(),
+        source_byte: node.range().start,
         start,
         end: start,
     });
@@ -567,6 +570,7 @@ fn append_reading(
             .attributes()
             .map(|attr| (attr.name().into(), attr.value().into()))
             .collect(),
+        source_byte: node.range().start,
         start,
         end: start,
     });

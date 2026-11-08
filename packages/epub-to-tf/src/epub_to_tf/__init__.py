@@ -15,7 +15,9 @@ from zipfile import ZipFile
 
 from tf.fabric import Fabric
 
+from .reading import annotate_scope
 from .repair import RepairRejected, repair_archive
+from .semantics import annotate_document, extract_toc, toc_by_member
 
 
 class ConversionError(ValueError):
@@ -33,6 +35,7 @@ def _write_graph(
     notes: list[dict[str, Any]],
     references: list[dict[str, Any]],
     assets: list[dict[str, Any]],
+    reading_slots: dict[str, list[str]],
     destination: Path,
 ) -> dict[str, Any]:
     node: dict[str, dict[int, Any]] = defaultdict(dict)
@@ -42,13 +45,15 @@ def _write_graph(
     slot = 0
     for document in documents:
         start = slot
-        for char in document["text"]:
+        doc_key = "document:" + document["id"]
+        for char, display in zip(document["text"], reading_slots[doc_key], strict=True):
             slot += 1
             node["otype"][slot] = "character"
             node["text"][slot] = char
+            if display:
+                node["reading"][slot] = display
         if slot == start:
             raise ConversionError(f"Empty reading spine item: {document['member']}")
-        doc_key = "document:" + document["id"]
         document_assets = [
             asset
             for asset in assets
@@ -65,6 +70,10 @@ def _write_graph(
                     "source_member": document["member"],
                     "image_assets": json.dumps(document_images, ensure_ascii=False, sort_keys=True),
                     "asset_refs": json.dumps(document_assets, ensure_ascii=False, sort_keys=True),
+                    "toc_entries": json.dumps(
+                        document["toc_entries"], ensure_ascii=False, sort_keys=True
+                    ),
+                    "reading_length": len(document["reading_text"]),
                 },
                 None,
             )
@@ -85,19 +94,39 @@ def _write_graph(
                             element["attributes"], ensure_ascii=False, sort_keys=True
                         ),
                         "source_member": document["member"],
+                        "source_byte": element["source_byte"],
                         "start": element["start"],
                         "end": element["end"],
+                        "reading_start": element["reading_start"],
+                        "reading_end": element["reading_end"],
+                        **{
+                            name: element[name]
+                            for name in (
+                                "semantic_kind",
+                                "semantic_label",
+                                "heading_level",
+                                "verse_number",
+                                "link_kind",
+                                "link_href",
+                                "link_target_member",
+                                "link_fragment",
+                                "link_external",
+                            )
+                            if name in element and element[name] != ""
+                        },
                     },
                     parent,
                 )
             )
     for note in notes:
         start = slot
-        for char in note["text"]:
+        note_key = "note:" + note["source_key"]
+        for char, display in zip(note["text"], reading_slots[note_key], strict=True):
             slot += 1
             node["otype"][slot] = "character"
             node["text"][slot] = char
-        note_key = "note:" + note["source_key"]
+            if display:
+                node["reading"][slot] = display
         specs.append(
             (
                 "note",
@@ -136,8 +165,11 @@ def _write_graph(
                             element["attributes"], ensure_ascii=False, sort_keys=True
                         ),
                         "source_member": note["member"],
+                        "source_byte": element["source_byte"],
                         "start": element["start"],
                         "end": element["end"],
+                        "reading_start": element["reading_start"],
+                        "reading_end": element["reading_end"],
                     },
                     parent,
                 )
@@ -168,13 +200,37 @@ def _write_graph(
         node["note_label"][anchor] = reference["label"]
         node["note_target_key"][anchor] = reference["target_key"]
         node["note_anchor_key"][anchor] = f"{reference['member']}@{reference['source_byte']}"
+    reading_empty = not node["reading"]
+    if reading_empty:
+        # TF needs the declared default-format feature even for a blank book.
+        node["reading"][1] = ""
     meta: dict[str, dict[str, str]] = {
-        name: {"valueType": "int" if name in {"start", "end"} else "str"} for name in node
+        name: {
+            "valueType": "int"
+            if name
+            in {
+                "start",
+                "end",
+                "source_byte",
+                "reading_start",
+                "reading_end",
+                "reading_length",
+                "heading_level",
+                "link_external",
+            }
+            else "str"
+        }
+        for name in node
     }
     meta.update({name: {"valueType": "str"} for name in edge})
-    meta[""] = {"converter": "corpora-epub-to-tf", "slotPolicy": "Unicode scalar; no normalization"}
+    meta[""] = {
+        "converter": "corpora-epub-to-tf",
+        "slotPolicy": "one Unicode scalar per original source character",
+        "readingPolicy": "collapse layout whitespace runs; preserve preformatted spans",
+    }
     meta["otext"] = {
-        "fmt:text-orig-full": "{text}",
+        "fmt:text-orig-full": "{reading}",
+        "fmt:text-source-full": "{text}",
         "sectionTypes": "document",
         "sectionFeatures": "document",
     }
@@ -188,6 +244,8 @@ def _write_graph(
         header = "\n".join(
             line for line in header.splitlines() if not line.startswith("@dateWritten=")
         )
+        if path.stem == "reading" and reading_empty:
+            data = "1\t\n"
         if path.stem in edge:
             rows = []
             implicit = 1
@@ -256,6 +314,31 @@ def convert(
             if diagnostic["blocking"]
         ]
         raise ConversionError("EPUB validation blocked export: " + "; ".join(findings))
+    reading_slots: dict[str, list[str]] = {}
+    links: list[dict[str, Any]] = []
+    with ZipFile(BytesIO(candidate_bytes)) as archive:
+        members = set(archive.namelist())
+        try:
+            toc = extract_toc(archive, report["navigation"])
+        except ValueError as error:
+            raise ConversionError(str(error)) from error
+    member_toc = toc_by_member(toc)
+    for document in report["documents"]:
+        document_assets = [
+            asset
+            for asset in report["assets"]
+            if asset["scope"] == "document" and asset["scope_id"] == document["id"]
+        ]
+        reading_slots["document:" + document["id"]] = annotate_scope(document, document_assets)
+        document["toc_entries"] = member_toc.get(document["member"], [])
+        links.extend(annotate_document(document, members))
+    for note in report["notes"]:
+        note_assets = [
+            asset
+            for asset in report["assets"]
+            if asset["scope"] == "note" and asset["scope_id"] == note["source_key"]
+        ]
+        reading_slots["note:" + note["source_key"]] = annotate_scope(note, note_assets)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.mkdir()
     stage = Path(tempfile.mkdtemp(prefix=f".{output.name}-", dir=output.parent))
@@ -273,10 +356,16 @@ def convert(
         for index, document in enumerate(report["documents"], 1):
             _json(stage / "documents" / f"{index:04}.json", document)
             (stage / "documents" / f"{index:04}.txt").write_text(document["text"], encoding="utf-8")
+            (stage / "documents" / f"{index:04}.reading.txt").write_text(
+                document["reading_text"], encoding="utf-8"
+            )
         (stage / "notes").mkdir()
         for index, note in enumerate(report["notes"], 1):
             _json(stage / "notes" / f"{index:04}.json", note)
             (stage / "notes" / f"{index:04}.txt").write_text(note["text"], encoding="utf-8")
+            (stage / "notes" / f"{index:04}.reading.txt").write_text(
+                note["reading_text"], encoding="utf-8"
+            )
         (stage / "tf" / "assets").mkdir(parents=True)
         with ZipFile(BytesIO(candidate_bytes)) as archive:
             for asset in report["assets"]:
@@ -318,9 +407,12 @@ def convert(
             report["notes"],
             report["note_references"],
             report["assets"],
+            reading_slots,
             stage / "tf",
         )
-        features = "text document source_member xhtml_tag image_assets asset_refs"
+        features = (
+            "text reading document source_member xhtml_tag image_assets asset_refs toc_entries"
+        )
         if report["notes"]:
             features += " note_kind source_key noteref"
         api = Fabric(locations=str(stage / "tf"), silent="deep").load(features, silent="deep")
@@ -328,8 +420,12 @@ def convert(
             raise ConversionError("Real Text-Fabric loader rejected export")
         for document in report["documents"]:
             node = graph["node_ids"]["document:" + document["id"]]
-            if api.T.text(node) != document["text"]:
-                raise ConversionError(f"Text round-trip failed: {document['member']}")
+            if api.T.text(node) != document["reading_text"]:
+                raise ConversionError(f"Reading text round-trip failed: {document['member']}")
+            if api.T.text(node, fmt="text-source-full") != document["text"]:
+                raise ConversionError(f"Source text round-trip failed: {document['member']}")
+            if json.loads(api.F.toc_entries.v(node)) != document["toc_entries"]:
+                raise ConversionError(f"TOC round-trip failed: {document['member']}")
             image_assets = [
                 image
                 for image in report["images"]
@@ -346,8 +442,10 @@ def convert(
                 raise ConversionError(f"Asset round-trip failed: {document['member']}")
         for note in report["notes"]:
             number = graph["node_ids"]["note:" + note["source_key"]]
-            if api.T.text(number) != note["text"]:
-                raise ConversionError(f"Note text round-trip failed: {note['source_key']}")
+            if api.T.text(number) != note["reading_text"]:
+                raise ConversionError(f"Note reading text round-trip failed: {note['source_key']}")
+            if api.T.text(number, fmt="text-source-full") != note["text"]:
+                raise ConversionError(f"Note source text round-trip failed: {note['source_key']}")
             note_assets = [
                 asset
                 for asset in report["assets"]
@@ -366,7 +464,7 @@ def convert(
             if path.is_dir() and path.name in {".tf", ".cfm"}:
                 shutil.rmtree(path)
         manifest = {
-            "format": "corpora-epub-to-tf/1",
+            "format": "corpora-epub-to-tf/2",
             "source": {
                 "sha256": hashlib.sha256(original).hexdigest(),
                 "file": "sources/original.epub",
@@ -381,6 +479,11 @@ def convert(
             "identifier": report["identifier"],
             "metadata": report["metadata"],
             "navigation": report["navigation"],
+            "toc": toc,
+            "links": links,
+            "reading_policy": (
+                "layout whitespace runs to one space or newline; preformatted text exact"
+            ),
             "documents": [doc["id"] for doc in report["documents"]],
             "notes": [note["source_key"] for note in report["notes"]],
             "note_references": report["note_references"],

@@ -179,3 +179,36 @@ The browser page is a local QA aid. The repaired XHTML hierarchy is a parser
 interpretation where the original markup was misnested, so this receipt proves
 text, retained explicit tags/attributes, identifiers and loader behavior, not
 that an invalid source had a unique intended tree.
+
+## Semantic markup and reading view
+
+Bundle format `corpora-epub-to-tf/2` retains 5,229,951 exact source character
+slots while exposing 4,974,768 characters in the default reading view. A run
+of layout spaces becomes one space, and a run containing linebreaks becomes one
+linebreak; zero-width layout marks are omitted. Preformatted spans remain
+exact. `T.text(node, fmt="text-source-full")` still returns the source string.
+Each element and asset keeps source and reading offsets.
+
+The full 2001 EPUB bundle at `target/qa-2001-semantic-v2/` has 72 EPUB3 TOC
+entries and 12,230 classified reading links: 3,958 navigation and 8,272
+reference links. Explicit source markup yields 1,947 headings, 71 subtitles,
+33,415 verse-number elements, three tables, and one reading TOC section.
+Navigation links require a TOC or chapter-menu ancestor; prose links are
+references. Missing TOC members or fragments block export.
+
+| Command | Result |
+| --- | --- |
+| `uv run --project packages/epub-to-tf epub-to-tf SOURCE target/qa-2001-semantic-v2 --checker target/debug/corpora-epub-check --repair --max-slots 8000000` | Passed; `SOURCE` is the original iCloud EPUB path above. |
+| `uv run --project packages/epub-to-tf --group dev python target/qa-2001-semantic-verify.py target/qa-2001-semantic-v2` | Independently parsed 73 original XHTML bodies, checked raw text and a separate regular-expression reading projection, and checked both Text-Fabric formats through Context-Fabric. |
+| `python3 /Users/emmanuel/.codex/skills/text-fabric-validator/scripts/tf_validate.py target/qa-2001-semantic-v2/tf --json target/qa-2001-semantic-v2-validation.json --report target/qa-2001-semantic-v2-validation.md --quiet` | Zero errors; TF064 warns about intentionally blank layout slots and TF065 records the no-invented-separators policy. |
+| `uv run --project packages/epub-to-tf --group dev python packages/epub-to-tf/tools/qa_browser.py target/qa-2001-semantic-v2 target/qa-2001-browser` | Passed. Aside Browser at `http://127.0.0.1:8771/index.html?schema=2` showed dark background, 73 documents, 72 TOC entries, exact source/reading status for Numbers, semantic counts, and a working TOC jump to Genesis. |
+| EPUB Ruff, format check, mypy, pytest, `uv build` | Passed; 42 tests, including semantic roles, link kinds, nested EPUB3 TOC, NCX fallback, broken TOC targets, whitespace and a blank reading item. |
+| `make fmt`, `make ci`, `cargo clippy -p corpora-convert --all-targets --all-features -- -D warnings` | Passed. |
+| `make -C packages/tei-to-tf check build` | Passed; 138 tests, 11 skipped. |
+
+The earlier full bundle remains under `target/qa-2001-bundle/` for comparison.
+Neither generated bundle is tracked by Git. The browser page reports a display
+projection; the original archive and exact member text remain available for
+source-faithful work. The external loader's derived `.cfm` cache was removed;
+`tf/assets/` is the final bundle's only directory under `tf/`, and all 351
+checksums match.

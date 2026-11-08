@@ -25,6 +25,10 @@ it keeps the original EPUB under `sources/`, per-item JSON and exact main text u
 under `tf/assets/`, and deterministic `.tf` files under `tf/`. Its internal Text-Fabric
 round trip is verified before publication. Runtime caches are removed from the
 bundle.
+Bundle format `corpora-epub-to-tf/2` keeps exact source text in each `.txt`,
+`text.tf`, and `sources/original.epub`. Each `.reading.txt` and the default
+`T.text()` format use the display projection described below. The explicit
+`T.text(node, fmt="text-source-full")` format returns the exact source string.
 With `--repair`, it keeps `sources/original.epub`, writes the separate
 `sources/repaired.epub`, `sources/repair-ledger.json`, and initial/final Rust
 diagnostics, then requires the repaired archive to pass the same validator.
@@ -36,9 +40,31 @@ The manifest distinguishes original `source` from `validated_source` hashes.
   reflowable XHTML in linear spine order. OPF `unique-identifier` selects the
   publication identity; the filename has no identity role.
 - XHTML body text is concatenated in DOM order with no inserted whitespace or
-  normalization. Character slots preserve Unicode scalar order. Nonempty XHTML
-  elements retain parent, tag, attributes and scalar spans. Publication metadata
-  and EPUB3 navigation resources are recorded outside reading text.
+  normalization in the source projection. Character slots preserve Unicode scalar
+  order. Nonempty XHTML elements retain parent, tag, attributes, member byte
+  coordinate, source scalar spans, and reading-view spans. Publication metadata
+  and EPUB navigation resources are recorded outside reading text.
+- The default reading view reduces each run of horizontal layout whitespace to
+  one ASCII space, or each run containing a linebreak to one `\n`. Leading and
+  trailing layout runs disappear. U+200B zero-width spaces and U+FEFF layout
+  marks disappear from this view; joiners and non-joiners remain. `pre`, `code`,
+  `textarea`, and `xml:space="preserve"` spans retain exact whitespace. This
+  policy never inserts separators absent from the source. The original slots
+  and exact text stay available for audit; asset and element records retain both
+  source and reading offsets.
+- Explicit XHTML headings become `semantic_kind=heading` with `heading_level`;
+  declared subtitles become `subtitle`. Marked verse numbers become
+  `verse_number`. Links carry `link_kind` (`navigation`, `reference`, or `note`),
+  original `link_href`, resolved local member/fragment where possible, and
+  source byte location. Navigation classification requires a `nav`, TOC, or
+  chapter-menu context; ordinary prose links remain references. The converter
+  does not infer verse numbers from bare digits or guess that every internal
+  link is navigation.
+- EPUB3 TOC navigation is parsed into ordered, nested `manifest.json` `toc`
+  entries with label, target member, fragment, parent, level, and source line.
+  NCX is the fallback. Missing/external TOC targets block export. Each target
+  document also has a `toc_entries` TF feature; links in a reading TOC page
+  remain marked as navigation links.
 - Referenced EPUB `footnote` and `endnote` bodies in linear spine XHTML use
   separate character slots and `note` nodes. Markers remain in main text as
   XHTML `element` nodes. A `noteref` edge points from each marker to its note.
@@ -119,9 +145,10 @@ python3 -m http.server 8769 --directory target/epub-qa
 ```
 
 Open `http://127.0.0.1:8769/index.html`. The validated XHTML is shown in a
-sandboxed iframe with its EPUB styling, with a link to the original archive
-member when a repair was needed. The TF text and asset inventory use dark mode.
-The text status independently parses each validated XHTML body using the
-documented note and inline-asset exclusion policy. This page is
+sandboxed iframe with its EPUB styling, with a toggle to the original archive
+member when a repair was needed. The normalized TF reading text, TOC, semantic
+marker counts, and asset inventory use dark mode. The text status independently
+parses each validated XHTML body and checks both source and reading views using
+the documented note and inline-asset exclusion policy. This page is
 a visual QA aid; the package tests and actual TF/Context-Fabric loads remain the
 conversion acceptance checks.

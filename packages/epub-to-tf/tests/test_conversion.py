@@ -12,6 +12,7 @@ from cfabric import Fabric as ContextFabric
 from tf.fabric import Fabric
 
 from epub_to_tf import ConversionError, convert
+from epub_to_tf.reading import normalize_slots
 
 ROOT = Path(__file__).resolve().parents[3]
 CHECKER = ROOT / "target/debug/corpora-epub-check"
@@ -204,17 +205,19 @@ def test_note_has_separate_slots_and_link_in_both_loaders(tmp_path: Path) -> Non
     assert (output / "notes/0001.txt").read_text() == "Note beta"
     assert manifest["notes"] == ["OEBPS/chapter.xhtml#n1"]
     assert manifest["note_references"][0]["label"] == "1"
+    assert [link["kind"] for link in manifest["links"]] == ["note"]
     doc_node = manifest["graph"]["node_ids"]["document:chapter"]
     note_node = manifest["graph"]["node_ids"]["note:OEBPS/chapter.xhtml#n1"]
     anchor_key = manifest["note_references"][0]["anchor_key"]
     anchor_node = manifest["graph"]["node_ids"]["document:chapter:" + anchor_key]
     assert {path.name for path in (output / "tf").iterdir() if path.is_dir()} == {"assets"}
     tf = Fabric(locations=str(output / "tf"), silent="deep").load(
-        "text document noteref note_kind", silent="deep"
+        "text document noteref note_kind link_kind", silent="deep"
     )
     assert tf.T.text(doc_node) == "Alpha1 omega!"
     assert tf.T.text(note_node) == "Note beta"
     assert tf.E.noteref.f(anchor_node) == (note_node,)
+    assert tf.F.link_kind.v(anchor_node) == "note"
     cf = ContextFabric(locations=str(output / "tf")).loadAll()
     assert cf.T.text(doc_node) == "Alpha1 omega!"
     assert cf.T.text(note_node) == "Note beta"
@@ -468,7 +471,7 @@ def test_dark_qa_browser_compares_original_and_bundle(tmp_path: Path) -> None:
     page = (site / "index.html").read_text()
     assert ":root{color-scheme:dark}" in page
     assert 'iframe id="source" class="source-view" sandbox=""' in page
-    assert '"source": "Áβcafé & 東京"' in page
+    assert '"source_matches": true' in page
     assert '"tf": "Áβcafé & 東京"' in page
 
 
@@ -595,3 +598,141 @@ def test_checker_explicit_slot_bound(tmp_path: Path) -> None:
         for d in item["report"]["diagnostics"]
     )
     assert convert(source, tmp_path / "out", CHECKER, max_slots=100)["max_slots"] == 100
+
+
+def test_semantic_features_toc_links_and_reading_whitespace(tmp_path: Path) -> None:
+    source = tmp_path / "semantic.epub"
+    chapter = (
+        '<html xmlns="http://www.w3.org/1999/xhtml" '
+        'xmlns:epub="http://www.idpf.org/2007/ops"><body>'
+        '<h1>Title</h1>  \n  <h2 class="chapter-subtitle">Sub</h2>'
+        '<nav epub:type="toc"><a href="#v">Jump</a></nav>'
+        '<p><sup class="v" id="v">1</sup> Alpha   β\n\n  Gamma '
+        '<a href="https://example.org">Source</a> '
+        '<a href="#v">Compare</a></p><pre> X   Y\n  Z</pre>'
+        "</body></html>"
+    ).encode()
+    nav = (
+        b'<html xmlns="http://www.w3.org/1999/xhtml" '
+        b'xmlns:epub="http://www.idpf.org/2007/ops"><body>'
+        b'<nav epub:type="toc"><div><ol><li><a href="chapter.xhtml">Chapter</a>'
+        b'<ol><li><a href="chapter.xhtml#v">Verse 1</a></li></ol>'
+        b"</li></ol></div></nav></body></html>"
+    )
+    fixture(source, chapter=chapter, extra={"OEBPS/nav.xhtml": nav})
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER)
+    assert manifest["format"] == "corpora-epub-to-tf/2"
+    assert [(entry["label"], entry["level"], entry["parent"]) for entry in manifest["toc"]] == [
+        ("Chapter", 1, None),
+        ("Verse 1", 2, 0),
+    ]
+    assert [link["kind"] for link in manifest["links"]] == [
+        "navigation",
+        "reference",
+        "reference",
+    ]
+    doc = json.loads((output / "documents/0001.json").read_text())
+    raw = "Title  \n  SubJump1 Alpha   β\n\n  Gamma Source Compare X   Y\n  Z"
+    reading = "Title\nSubJump1 Alpha β\nGamma Source Compare X   Y\n  Z"
+    assert doc["text"] == raw
+    assert doc["reading_text"] == reading
+    assert (output / "documents/0001.txt").read_text() == raw
+    assert (output / "documents/0001.reading.txt").read_text() == reading
+    types = [
+        (e["semantic_kind"], e.get("semantic_label"), e.get("verse_number"))
+        for e in doc["elements"]
+        if "semantic_kind" in e
+    ]
+    assert ("heading", "Title", None) in types
+    assert ("subtitle", "Sub", None) in types
+    assert ("verse_number", None, "1") in types
+    verse = next(e for e in doc["elements"] if e.get("semantic_kind") == "verse_number")
+    assert chapter[verse["source_byte"] :].startswith(b"<sup")
+    assert reading[verse["reading_start"] : verse["reading_end"]] == "1"
+    node = manifest["graph"]["node_ids"]["document:chapter"]
+    tf = Fabric(locations=str(output / "tf"), silent="deep").load(
+        "reading text document semantic_kind heading_level verse_number link_kind toc_entries",
+        silent="deep",
+    )
+    assert tf.T.text(node) == reading
+    assert tf.T.text(node, fmt="text-source-full") == raw
+    assert len(json.loads(tf.F.toc_entries.v(node))) == 2
+    nav_link = next(e for e in doc["elements"] if e.get("link_kind") == "navigation")
+    ref_link = next(e for e in doc["elements"] if e.get("link_kind") == "reference")
+    assert chapter[nav_link["source_byte"] :].startswith(b"<a")
+    assert chapter[ref_link["source_byte"] :].startswith(b"<a")
+    assert (
+        tf.F.link_kind.v(manifest["graph"]["node_ids"][f"document:chapter:{nav_link['key']}"])
+        == "navigation"
+    )
+    assert (
+        tf.F.link_kind.v(manifest["graph"]["node_ids"][f"document:chapter:{ref_link['key']}"])
+        == "reference"
+    )
+    for feature in ("link_fragment", "link_target_member"):
+        data = (output / "tf" / f"{feature}.tf").read_text().split("\n\n", 1)[1]
+        assert all(data.splitlines())
+    assert ContextFabric(locations=str(output / "tf")).loadAll().T.text(node) == reading
+
+
+def test_reading_view_removes_zero_width_layout_and_keeps_preformatted_text() -> None:
+    source = " \n A  B\u200bC \r\n  D \n "
+    values, offsets = normalize_slots(source, [])
+    assert "".join(values) == "A BC\nD"
+    assert offsets[-1] == len("A BC\nD")
+    assert "".join(normalize_slots("A \u200b B", [])[0]) == "A B"
+    assert "".join(normalize_slots("A\u200bB", [])[0]) == "AB"
+    pre = " X   Y\n  Z"
+    values, _ = normalize_slots(
+        pre,
+        [{"tag": "pre", "start": 0, "end": len(pre), "attributes": {}}],
+    )
+    assert "".join(values) == pre
+
+
+@pytest.mark.parametrize("href", ["missing.xhtml", "chapter.xhtml#missing"])
+def test_broken_toc_target_blocks(tmp_path: Path, href: str) -> None:
+    source = tmp_path / "broken-toc.epub"
+    nav = (
+        '<html xmlns="http://www.w3.org/1999/xhtml" '
+        'xmlns:epub="http://www.idpf.org/2007/ops"><body>'
+        f'<nav epub:type="toc"><ol><li><a href="{href}">Chapter</a>'
+        "</li></ol></nav></body></html>"
+    ).encode()
+    fixture(source, extra={"OEBPS/nav.xhtml": nav})
+    with pytest.raises(ConversionError, match="TOC target is missing|TOC fragment is missing"):
+        convert(source, tmp_path / "out", CHECKER)
+    assert not (tmp_path / "out").exists()
+
+
+def test_whitespace_only_spine_keeps_source_and_empty_reading_view(tmp_path: Path) -> None:
+    source = tmp_path / "blank.epub"
+    fixture(
+        source,
+        chapter=b'<html xmlns="http://www.w3.org/1999/xhtml"><body>  \n </body></html>',
+    )
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER)
+    node = manifest["graph"]["node_ids"]["document:chapter"]
+    tf = Fabric(locations=str(output / "tf"), silent="deep").load(
+        "reading text document", silent="deep"
+    )
+    assert tf.T.text(node) == ""
+    assert tf.T.text(node, fmt="text-source-full") == "  \n "
+    assert (output / "tf/reading.tf").read_text().endswith("\n1\t\n")
+
+
+def test_ncx_toc_fallback(tmp_path: Path) -> None:
+    source = tmp_path / "ncx.epub"
+    opf = OPF.replace(
+        b'<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+        b'<item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+    ).replace(b"<spine>", b'<spine toc="toc">')
+    ncx = b"""<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"><navMap><navPoint id="n1"><navLabel><text>Chapter</text></navLabel><content src="chapter.xhtml"/></navPoint></navMap></ncx>"""
+    fixture(source, opf=opf, extra={"OEBPS/toc.ncx": ncx})
+    manifest = convert(source, tmp_path / "out", CHECKER)
+    assert manifest["navigation"] == ["OEBPS/toc.ncx"]
+    assert [(entry["label"], entry["target_member"]) for entry in manifest["toc"]] == [
+        ("Chapter", "OEBPS/chapter.xhtml")
+    ]
