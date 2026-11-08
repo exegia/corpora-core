@@ -2,6 +2,52 @@
 
 ## Rust structural adapter — 2026-11-08
 
+### Full pinned collection and native browser acceptance
+
+Fresh run: `target/qa-core-adapter-release-20261108-001542`. Its
+`acceptance-summary.json` records implementation/binary SHA-256 fingerprints, source
+revision, original hash checks, native rechecks, failed sources and diagnostic totals.
+All 163 cached inputs matched their inventory SHA-256 at pinned revision
+`71fb49a3738a4533913327beffb39fd90633b0f1`; all 163 retained originals matched too.
+
+The offline quality run used the optimized `corpora-text-check`, the installed
+dictionaries, explicit `fr-FR`, original spelling, lemma readings and separate notes.
+No hosted AI or manual correction map was used. All 163 remained quality-blocked.
+Final findings: 4,805 score-90, 371 score-60, 3,832 score-20 and 13 unscored structural
+or validation diagnostics. These are policy/dictionary findings, not confirmed typos.
+English metadata checked under the explicit French locale accounts for visible false
+positives such as `and`, `the` and `edition`; general language/acceptance accuracy is
+not established by this run.
+
+One validated lexical repair changed `</respSTMT>` to `</respStmt>` in
+`FDM-000-000-019-098.xml`, preserving the original bytes. The comparison rebuilt from
+the quality receipts verified **156 / 163 documents and 247,871 character slots**;
+seven remained rejected. Every accepted comparison source passed an additional
+fresh Rust structural check. Exact text/spans and TF/CF cold/warm checks passed.
+The raw static validator retained one TF064 whitespace error and one TF065 separator
+notice, with the documented exact-scalar exception adjudication; no unconditional
+static-validator or schema-validation pass is claimed.
+
+With `CORPORA_TEXT_CHECK`, `CSPELL_DICTIONARIES`, `TF_VALIDATOR`,
+`BAUDELAIRE_SOURCE` and `BAUDELAIRE_INVENTORY` configured,
+`make -C packages/tei-to-tf check build` passed **109 tests with zero skips**, lint,
+format, strict mypy and wheel/sdist builds. This includes the full unmodified-source
+regression (155 / 163, 247,063 characters) alongside the corrected comparison above.
+
+Safari opened the fresh offline `comparison/browser/index.html`. Both reading panes
+and diagnostic layout were visually inspected in the existing dark appearance.
+Filename/title filtering, next/previous navigation, a rejected source with no fabricated
+TF view, remaining/applied pass selection and blocking-only filtering were exercised.
+LA RANÇON showed 808 characters / 16 verses in both corrected panes, the exact
+closing-tag edit and its native line/offset evidence. The browser remains on that
+document. No browser security or appearance settings were changed.
+
+An initial debug-engine run was interrupted for speed; its failed/partial receipt is
+retained under `target/qa-core-adapter-20261108-001321`. It is not acceptance evidence.
+No live hosted-AI evaluation, full TEI schema validation or CFR acceptance was run.
+
+### Initial adapter checks
+
 Python quality conversion and explicit collection repair previews now consume the
 core's version-1 structural reports through `corpora-text-check`. Python's former
 parser-message/regex diagnosis has been removed. Source acquisition, projection,
@@ -32,9 +78,9 @@ XML failure; previews attempt at most 32 lexical edits and roll back partial fai
 The native quality path requires UTF-8 XML and a rebuilt bridge. Plain conversion and
 existing quality-report consumption keep their previous dependency boundary.
 
-The full pinned 163-source regressions, live hosted AI, and visual browser inspection
-were not rerun for this adapter change. Earlier collection/visual receipts below are
-historical evidence, not fresh acceptance of this revision.
+The full pinned collection and visual checks were still pending at this initial
+adapter check; they are now recorded in the fresh acceptance section above. Live
+hosted AI remains untested for this change. Older receipts below remain historical.
 
 ## Executed
 

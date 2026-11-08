@@ -25,6 +25,75 @@ fn process_document() -> Result<()> {
 ## Features
 
 - `serde` - Enable serialization support for core types
+- `spellcheck` - Enable the Matchum spelling engine and JSON-lines bridge (dictionary data installed separately)
+
+## Shared structural and spelling diagnostics
+
+Rust callers can check XML directly without Python, dictionaries, or the `spellcheck`
+feature. `structural::check_xml` uses a strict namespace-aware parser with no recovery,
+DTD loading, external entity resolution or network access:
+
+```rust
+use corpora_core::structural::check_xml;
+
+let source = "<root><title>Example</Title></root>";
+let report = check_xml("edition.xml", source)?;
+assert!(!report.passed());
+let proposal = &report.diagnostics[0].suggestions[0].edits[0];
+assert!(proposal.matches_source(&report, source));
+assert_eq!(proposal.after, "</title>");
+# Ok::<(), corpora_core::Error>(())
+```
+
+With `spellcheck`, use
+`SpellEngine::check_diagnostics(source_id, text, role, locale_hint)` for the same
+`diagnostic::DiagnosticReport` type. `SpellEngine::check` and its existing JSON shape
+remain unchanged. Spelling coordinates refer to the exact supplied **decoded text
+segment**, not to raw XML; callers must retain the segment-to-document mapping.
+
+The version-1 shared contract includes caller-supplied source identity, a SHA-256 of
+the exact UTF-8 input, issue code/category, explanation, certainty, severity,
+blocking status, optional policy score, locations and suggestions. Locations contain
+zero-based UTF-8 byte and Unicode scalar offsets and one-based line/scalar columns.
+Ranges are half-open; LF starts a new line and CRLF is retained in offsets. Multiple
+locations support related findings such as duplicate IDs. Empty locations explicitly
+mean the parser cannot supply an exact location; no synthetic line 1 is advertised.
+
+Suggestions include an explanation, `automatic` or `review` applicability, and zero
+or more exact before/after edits. Empty edits mean guidance rather than a defensible
+replacement. `automatic` permits an automated **attempt under caller policy**, not
+unconditional approval. Dictionary misses remain possible issues, even when policy
+scores them 90; scores are never confidence percentages. Structural parser/policy
+failures are certain findings, but their proposed remedies can still require review.
+
+The core never applies these edits. The API layer checks `TextEdit::matches_source`,
+rejects overlapping/conflicting edits, applies a chosen candidate to a separate copy,
+then reruns all required validation. Recheck after every batch: every edit in a report
+uses the unchanged source snapshot. Retain originals and record decisions, including
+legitimate names/spellings accepted by contextual review. Corpus spelling candidates
+always require contextual assessment; no corpus rewrite is automatically approved.
+
+`check_xml_with_options` sets byte/node limits (defaults 64 MiB / one million nodes).
+Set `StructuralOptions { tei: true, ..Default::default() }` to additionally check TEI
+root/namespace, duplicate `xml:id`, XInclude, `copyOf`/`spanTo`, and selected unsupported
+transcription/stand-off adapter boundaries. Namespace-free TEI needs explicit opt-in.
+These are bounded adapter checks, **not full TEI P5/RNG/XSD validation**, editorial
+reading selection, or conversion parity with the Python package. Clean structural
+reports do not imply that conversion, schema checks or spelling will pass.
+
+The XML parser reports the first syntax error; repair and revalidation can reveal
+further errors. Case-only closing-tag mismatches expose an exact candidate correction;
+ambiguous mismatches and undefined entities provide guidance. Malformed ampersands
+offer a review candidate because a broken entity reference may need a different fix.
+Comments, CDATA, processing instructions and valid references are parsed as such.
+Inputs must already be decoded to UTF-8; hashes cover those bytes, not an earlier
+file encoding. Original-source acquisition, projection, schema validation and repair
+orchestration still live in Python and can migrate independently.
+
+```sh
+cargo test --locked -p corpora-core --no-default-features
+cargo test --locked -p corpora-core --all-features
+```
 
 ## License
 
@@ -61,12 +130,24 @@ full cspell CLI/config or weighted-suggestion parity. Only the 15 requested
 resources are allowed; Canadian config references outside that list are not loaded.
 
 The JSON-lines executable accepts one request per line on stdin and writes one
-response per line. Without a dictionary directory argument it detects only.
+response per line. Default requests without a dictionary directory detect only.
 With the directory argument it lazily loads the selected language dictionary:
 
 ```json
 {"text":"hello world","locale":"en-US","role":"corpus"}
 ```
+
+Structural requests use the shared version-1 report and need no dictionaries:
+
+```json
+{"operation":"structure","source_id":"edition.xml","text":"<title>Example</Title>"}
+```
+
+The structural operation works with or without a dictionary directory. Requests
+without `operation` retain the existing detection/spelling response shapes. Python's
+quality/preview adapter consumes these Rust reports, verifies their source hashes
+and coordinates, and rechecks each repaired candidate through core. It fails closed
+with an older executable that lacks the versioned structural operation.
 
 `role` is `corpus`, `metadata`, `frontmatter`, `footnote`, or `additional`.
 `detect_only: true` requests just the language payload even with dictionaries
