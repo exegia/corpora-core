@@ -75,13 +75,17 @@ def test_english_metadata_and_short_fields_use_metadata_only_context():
     assert detection["dictionary"] == "fr_FR"
 
 
-def test_metadata_override_is_separate_and_preserves_reform_dictionary_for_repairs():
-    tree = document('<author xml:lang="en">helllo</author>')
+@pytest.mark.parametrize("override", [True, False])
+def test_metadata_selection_preserves_reform_dictionary_for_repairs(override):
+    hint = "en" if override else "fr-FR-1990"
+    tree = document(f'<author xml:lang="{hint}">helllo</author>')
     checker = LanguageChecker()
-    issues, _ = inspect_tree(tree, checker, "fr-FR", {"helllo": "hello"}, "fr-FR-1990")
+    issues, _ = inspect_tree(
+        tree, checker, "fr-FR", {"helllo": "hello"}, "fr-FR-1990" if override else None
+    )
     issue = issues[0]
     assert issue["language"]["dictionary"] == "fr_FR_90"
-    assert issue["language_basis"] == "metadata_override"
+    assert issue["language_basis"] == ("metadata_override" if override else "xml_lang")
     assert issue["locale_hint"] == "fr-FR-1990"
     suggest_spelling(tree, issues, checker, AI())
     assert issue["replacement"] == "hello"

@@ -193,6 +193,42 @@ sources at revision `71fb49a3738a4533913327beffb39fd90633b0f1`.
 
 ## Three-pass quality conversion
 
+### Independent metadata language
+
+`--locale` keeps the reading/corpus language policy. Header/title-page metadata selects
+its language independently: an explicit `--metadata-locale` override, otherwise the
+nearest `xml:lang` within the metadata scope, otherwise supported reliable detection
+of the text segment. A short undetermined segment can use a supported reliable
+metadata-only context from its own header/title page. Root/reading `xml:lang` and the
+corpus locale do not become metadata hints. An empty `xml:lang=""` resets an inherited
+metadata hint; it does not silently select English. Contexts never cross TEI members.
+
+For known English metadata around French reading text, an intentional override is:
+
+```sh
+uv run --project packages/tei-to-tf tei-to-tf source.xml --output /new/quality-output \
+  --quality-engine target/release/corpora-text-check \
+  --dictionaries target/cspell-dictionaries --locale fr-FR --metadata-locale en-US
+```
+
+Leave the override unset for mixed metadata and mark local languages in the source
+when known. Unknown or confidently unsupported languages produce blocking
+`language_unresolved` findings instead of spelling corrections in a guessed language.
+Findings sharing a metadata scope, unresolved locale and selection basis are grouped;
+`occurrence_count` and `affected_segments` retain every original field/range and its
+language evidence. Grouping reduces duplicate prompts, not the underlying uncertainty.
+The spelling AI and correction maps cannot clear missing-language blockers.
+
+Reports retain `language_policy`, the corpus detection, and `language.metadata_segments`
+with each selection's basis, effective hint and source fields. Spelling findings retain
+their own language selection. Explicit orthography such as `fr-FR-1990` survives
+correction-map checks, AI candidate validation and the final pass. Metadata groups
+split at inline language transitions; English fields on opposite sides of French
+content are not joined into an invented word. Reading groups retain their previous
+behavior, including words spanning separately checked notes.
+
+### Native structure and repair
+
 Structural diagnosis in quality mode now comes from the Rust core through
 `corpora-text-check`'s `operation: "structure"` request. Rebuild the executable after
 updating the crate; an old executable fails closed instead of falling back to Python
