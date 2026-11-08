@@ -24,7 +24,7 @@ jobs:
       - run: npm run check --prefix packages/quality-ai
       - run: npm test --prefix packages/quality-ai
       - run: cargo build --locked -p corpora-core --features spellcheck --bin corpora-text-check
-      - run: python3 crates/corpora-core/tools/install_dictionaries.py --dictionary en_US --output target/cspell-dictionaries
+      - run: python3 crates/corpora-core/tools/install_dictionaries.py --dictionary en_US --dictionary fr_FR --output target/cspell-dictionaries
       - run: make -C packages/tei-to-tf check build
         env:
           CORPORA_TEXT_CHECK: ${{ github.workspace }}/target/debug/corpora-text-check

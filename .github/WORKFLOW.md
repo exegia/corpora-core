@@ -134,8 +134,9 @@ pinned dictionary data with `crates/corpora-core/tools/install_dictionaries.py`.
 The TEI converter's `--quality-engine` / `--dictionaries` options run audited
 validate, repair, and revalidate passes, preserving originals and blocking unresolved
 errors. Corpus wording is never automatically changed. The TEI workflow builds the
-Rust bridge and runs its real dictionary integration test; see the core and converter
-READMEs for the policy, setup, and diagnostic contracts.
+Rust bridge, installs pinned `en_US` and `fr_FR` dictionaries, and runs the real
+dictionary integration tests, including English metadata under a French corpus policy.
+See the core and converter READMEs for the policy, setup, and diagnostic contracts.
 
 Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
