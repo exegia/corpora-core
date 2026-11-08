@@ -1,6 +1,7 @@
 //! JSON-lines bridge for callers outside Rust; one response per request.
 use corpora_core::{
     language::detect_language,
+    purpose::validate_tei_metadata,
     spellcheck::{SpellEngine, TextRole},
     structural::check_xml,
 };
@@ -14,12 +15,16 @@ use std::{
 #[serde(rename_all = "snake_case")]
 enum Operation {
     Structure,
+    Purpose,
 }
 
 #[derive(Deserialize)]
 struct Request {
     operation: Option<Operation>,
     source_id: Option<String>,
+    expected_document_id: Option<String>,
+    #[serde(default)]
+    allow_no_namespace: bool,
     text: String,
     locale: Option<String>,
     role: Option<TextRole>,
@@ -39,6 +44,14 @@ fn main() {
                 return Ok(serde_json::to_value(check_xml(
                     request.source_id.as_deref().unwrap_or("<input>"),
                     &request.text,
+                )?)?);
+            }
+            if matches!(request.operation, Some(Operation::Purpose)) {
+                return Ok(serde_json::to_value(validate_tei_metadata(
+                    request.source_id.as_deref().unwrap_or("<input>"),
+                    &request.text,
+                    request.expected_document_id.as_deref(),
+                    request.allow_no_namespace,
                 )?)?);
             }
             Ok(

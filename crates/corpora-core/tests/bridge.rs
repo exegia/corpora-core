@@ -17,6 +17,7 @@ fn structural_operation_bypasses_dictionary_loading_and_preserves_legacy_detecti
     let requests = [
         serde_json::json!({"operation":"structure", "source_id":"doc.xml", "text":"<a></A>"}),
         serde_json::json!({"text":"hello world", "locale":"en-US", "detect_only":true}),
+        serde_json::json!({"operation":"purpose", "source_id":"doc.xml", "text":"<TEI xmlns='http://www.tei-c.org/ns/1.0'><teiHeader><date>2014</date></teiHeader></TEI>"}),
         serde_json::json!({"operation":"unknown", "text":"<a/>"}),
     ];
     let mut stdin = child.stdin.take().unwrap();
@@ -36,5 +37,6 @@ fn structural_operation_bypasses_dictionary_loading_and_preserves_legacy_detecti
     assert_eq!(rows[0]["diagnostics"][0]["code"], "xml_tag_case");
     assert_eq!(rows[1]["dictionary"], "en_US");
     assert!(rows[1].get("schema_version").is_none());
-    assert!(rows[2].get("error").is_some());
+    assert_eq!(rows[2]["fields"][0]["status"], "validated");
+    assert!(rows[3].get("error").is_some());
 }

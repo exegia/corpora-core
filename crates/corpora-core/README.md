@@ -102,6 +102,58 @@ MIT OR Apache-2.0
 
 ## Language and spelling
 
+### Purpose-aware TEI dates and identifiers
+
+`purpose::validate_tei_metadata(source_id, xml, expected_document_id, allow_no_namespace)`
+works without dictionaries or the `spellcheck` feature. It returns the shared,
+source-hashed diagnostics plus `PurposeField` receipts for recognized metadata fields:
+
+```rust
+use corpora_core::purpose::validate_tei_metadata;
+
+let xml = "<TEI xmlns='http://www.tei-c.org/ns/1.0'><teiHeader><date>2014</date></teiHeader></TEI>";
+let result = validate_tei_metadata("edition.xml", xml, None, false)?;
+assert!(result.report.passed());
+assert_eq!(result.fields.len(), 1);
+# Ok::<(), corpora_core::Error>(())
+```
+
+Only qualified TEI `date`/`idno` elements within metadata scopes are routed this way;
+reading-text and foreign-namespace fields are left to their existing checks.
+Namespace-free TEI requires explicit opt-in. Nested child markup is blocked rather
+than flattened into a structured value. Original XML ranges (UTF-8 bytes, scalars,
+line/column), decoded values, zero-based element-child locators and validation status
+are retained. `policy_version`, `expected_document_id` and `allow_no_namespace` bind
+the receipt to the caller's policy as well as its source snapshot.
+
+The bounded date policy accepts nonzero four-digit years, ordered numeric year ranges
+(`1868-1873` or an en dash), `YYYY-MM` and valid `YYYY-MM-DD` Gregorian dates. It checks
+`when`, `from`, `to`, `notBefore` and `notAfter` for valid forms and a consistent
+interval, including consistency with text at its stated precision. Missing values,
+invalid leap days, reversed/conflicting bounds, unsupported text, explicit calendar/
+dating-system attributes and ISO/custom dating extensions remain blocked. A bounded
+numeric date check is not full TEI schema validation or historical fact verification.
+
+Identifier expectations are supplied by the caller; core never derives one from a
+filename. An expectation applies only to an untyped primary
+`TEI/teiHeader/fileDesc/publicationStmt/idno` in a single root TEI document. Values are
+trimmed for comparison, must be nonempty and have no internal whitespace. Typed IDs
+(including ISBN), other scopes and collection-member IDs need a dedicated policy and
+remain blocked. A mismatch is evidence of inconsistency with the caller's expectation,
+not proof that the source is wrong. Suggestions require review of the expectation and
+references and contain **no automatic identifier edits**.
+
+The JSON-lines bridge supports this operation without loading dictionaries:
+
+```json
+{"operation":"purpose","source_id":"edition.xml","expected_document_id":"edition","text":"<TEI xmlns='http://www.tei-c.org/ns/1.0'><teiHeader><date>2014</date></teiHeader></TEI>"}
+```
+
+Rebuild `corpora-text-check` before using the Python adapter with the new operation.
+The adapter checks complete field coverage, policy/source bindings and all coordinates
+before excluding typed fields from language/spelling. Every final candidate is checked
+again; failed purpose findings cannot be cleared by spelling AI or correction maps.
+
 `language::detect_language(text, locale_hint)` returns the selected locale,
 confidence, detection method, allowed cspell dictionary directory, alternatives,
 and whether the region is a default. Unknown/short or unsupported text does not
