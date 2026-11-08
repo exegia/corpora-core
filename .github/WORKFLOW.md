@@ -110,3 +110,36 @@ make cleanup-local              # prune local branches whose remote is gone
 `make selftest` runs `tests/template/` (stack detection, SemVer, versions, PR guard, secrets, changelog, agent
 assets). Keep it green when you change `scripts/`. Lint workflows with `actionlint` and scripts with
 `shellcheck -S warning -x scripts/*.sh .github/scripts/*.sh` (both also run as pre-commit hooks).
+
+## Domain agent bundles
+
+Text-Fabric work uses `.github/skills/text-fabric-expert/SKILL.md` and
+`agent/text-fabric-expert/SYSTEM.md`. Its source map, MCP configuration generator
+and verification instructions live in `agent/text-fabric-expert/README.md`.
+
+## TEI conversion package
+
+`packages/tei-to-tf` provides the TEI acquisition/conversion CLI. Run
+`make -C packages/tei-to-tf check build` for its locked Python lint, type, test
+and package checks; root stack detection does not discover nested Python projects.
+`.github/workflows/tei-converter.yml` runs these checks on relevant PR changes.
+See the package README for reading policies, metadata separation and supported boundaries.
+
+
+### Language and spelling QA
+
+`crates/corpora-core` provides language/dictionary selection and the optional
+Matchum-backed `spellcheck` feature (Rust 1.91). Build `corpora-text-check` and install
+pinned dictionary data with `crates/corpora-core/tools/install_dictionaries.py`.
+The TEI converter's `--quality-engine` / `--dictionaries` options run audited
+validate, repair, and revalidate passes, preserving originals and blocking unresolved
+errors. Corpus wording is never automatically changed. The TEI workflow builds the
+Rust bridge and runs its real dictionary integration test; see the core and converter
+READMEs for the policy, setup, and diagnostic contracts.
+
+Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
+Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
+and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.
+Use `--ai-bridge packages/quality-ai/bridge.mjs` with `AI_GATEWAY_API_KEY` in the
+process environment. Never put credentials in reports or browser assets. See
+`packages/quality-ai/README.md` for model selection, request budgets and limitations.
