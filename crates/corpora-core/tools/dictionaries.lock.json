@@ -1,0 +1,313 @@
+[
+  {
+    "id": "grc_GR",
+    "file": "dict/grc.trie",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": false,
+    "license": "GPL-3.0",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-grc",
+    "version": "1.0.9",
+    "url": "https://registry.npmjs.org/@cspell/dict-grc/-/dict-grc-1.0.9.tgz",
+    "integrity": "sha512-gmr+c8dcoxOeukNCK6/6+Jz2sPsAEfY9OYs/gqfYuOoRByLu1/2vjIFj1G7XzVknlvEQFvIY2WeDNNLg/0Ei5w=="
+  },
+  {
+    "id": "ca",
+    "file": "ca.trie.gz",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": true,
+    "license": "MIT",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-ca",
+    "version": "3.1.3",
+    "url": "https://registry.npmjs.org/@cspell/dict-ca/-/dict-ca-3.1.3.tgz",
+    "integrity": "sha512-qB5JDmhAti5iR0MtdPp5Fs9sKOdz1+tfnRzbyld2lWKrdZMteZVE/UjSY+XcRP1HNpgJN6EMmjlxE5AkXRy6zg=="
+  },
+  {
+    "id": "en_US",
+    "file": "en_US.trie.gz",
+    "case_sensitive": false,
+    "rep_map": [
+      [
+        "'|`|’",
+        "'"
+      ]
+    ],
+    "ignore_forbidden_words": true,
+    "license": "MIT",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-en_us",
+    "version": "4.4.43",
+    "url": "https://registry.npmjs.org/@cspell/dict-en_us/-/dict-en_us-4.4.43.tgz",
+    "integrity": "sha512-RK0zfFXSPi0G/zmV9YgUhS2xw9eTV/8DtQ+ouLIiRZ8ejWRt2zhAonu5di+qmIhzhQ62fg7d3tMz3WwRy82yJA=="
+  },
+  {
+    "id": "en_GB",
+    "file": "en_GB.trie.gz",
+    "case_sensitive": false,
+    "rep_map": [
+      [
+        "'|`|’",
+        "'"
+      ]
+    ],
+    "ignore_forbidden_words": true,
+    "license": "LGPL-3.0",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-en-gb",
+    "version": "5.0.38",
+    "url": "https://registry.npmjs.org/@cspell/dict-en-gb/-/dict-en-gb-5.0.38.tgz",
+    "integrity": "sha512-xLuoDSM5tzEF2fpQWNE4QXxZCNdjkZbdRQ7xTjrjqJGHwOjNlSLvZoh/GYQsQ1ROLe/jXPENbQn5M5DhjrSaDg=="
+  },
+  {
+    "id": "en_CA",
+    "file": "en_CA.trie",
+    "case_sensitive": false,
+    "rep_map": [
+      [
+        "'|`|’",
+        "'"
+      ]
+    ],
+    "ignore_forbidden_words": true,
+    "license": "LGPL-3.0",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-en-ca",
+    "version": "1.0.69",
+    "url": "https://registry.npmjs.org/@cspell/dict-en-ca/-/dict-en-ca-1.0.69.tgz",
+    "integrity": "sha512-vFcDrYfpBGyUd8hm8+dbZtRQJT46zHHj+xRrnweId29RnZj+pguZ2WTIS/glfw4EzdesMjLLjpt5/wny1Auyrw=="
+  },
+  {
+    "id": "en_shared",
+    "file": "dict/shared-additional-words.txt",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": false,
+    "license": "MIT",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "url": "https://raw.githubusercontent.com/streetsidesoftware/cspell-dicts/35657f4fed4219dcd03426c433cfe6cde3de54e1/dictionaries/en_shared/dict/shared-additional-words.txt",
+    "sha256": "ee1807a1e15608c8806a7598c7748c3203bf8a7e754d6b1ef244b6ddeee4accf"
+  },
+  {
+    "id": "fr_FR_90",
+    "file": "fr-reforme1990.trie.gz",
+    "case_sensitive": true,
+    "rep_map": [
+      [
+        "'",
+        "’"
+      ],
+      [
+        "ﬃ",
+        "ffi"
+      ],
+      [
+        "ﬄ",
+        "ffl"
+      ],
+      [
+        "ﬀ",
+        "ff"
+      ],
+      [
+        "ﬅ",
+        "ft"
+      ],
+      [
+        "ﬁ",
+        "fi"
+      ],
+      [
+        "ﬂ",
+        "fl"
+      ],
+      [
+        "ﬆ",
+        "st"
+      ],
+      [
+        "ſ",
+        "s"
+      ]
+    ],
+    "ignore_forbidden_words": true,
+    "license": "MIT",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-fr-reforme",
+    "version": "2.3.2",
+    "url": "https://registry.npmjs.org/@cspell/dict-fr-reforme/-/dict-fr-reforme-2.3.2.tgz",
+    "integrity": "sha512-jUzSDjpNdTcxy40LheZ0QxCqBY7DqUOTq6YYx2GKZtnu2hLjdbwtbGZh9SD2kC11tlXkI2T4YVJTL7xpw2hG3A=="
+  },
+  {
+    "id": "fr_FR",
+    "file": "fr-fr.trie.gz",
+    "case_sensitive": true,
+    "rep_map": [
+      [
+        "'",
+        "’"
+      ],
+      [
+        "ﬃ",
+        "ffi"
+      ],
+      [
+        "ﬄ",
+        "ffl"
+      ],
+      [
+        "ﬀ",
+        "ff"
+      ],
+      [
+        "ﬅ",
+        "ft"
+      ],
+      [
+        "ﬁ",
+        "fi"
+      ],
+      [
+        "ﬂ",
+        "fl"
+      ],
+      [
+        "ﬆ",
+        "st"
+      ],
+      [
+        "ſ",
+        "s"
+      ]
+    ],
+    "ignore_forbidden_words": true,
+    "license": "MIT",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-fr-fr",
+    "version": "2.3.2",
+    "url": "https://registry.npmjs.org/@cspell/dict-fr-fr/-/dict-fr-fr-2.3.2.tgz",
+    "integrity": "sha512-cPNjlavSiMfH/bB/Zl5GEF+94s6C77mdvghvVsclco1Ly0VWN3EpH5L9EE3bDGLDpE7m9EnYfRs8TOfZugGrUg=="
+  },
+  {
+    "id": "de_DE",
+    "file": "de_DE.trie.gz",
+    "case_sensitive": true,
+    "rep_map": [
+      [
+        "ae",
+        "ä"
+      ],
+      [
+        "oe",
+        "ö"
+      ],
+      [
+        "ue",
+        "ü"
+      ],
+      [
+        "Ae|AE",
+        "Ä"
+      ],
+      [
+        "Oe|OE",
+        "Ö"
+      ],
+      [
+        "Ue|UE",
+        "Ü"
+      ],
+      [
+        "ss",
+        "ß"
+      ]
+    ],
+    "ignore_forbidden_words": true,
+    "license": "LGPL-3.0",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-de-de",
+    "version": "4.1.3",
+    "url": "https://registry.npmjs.org/@cspell/dict-de-de/-/dict-de-de-4.1.3.tgz",
+    "integrity": "sha512-Csk7pGkU7DoZGWSi69WywVJm/StAltwIKE8CmooDLcSHFP7NAQPyfQrZLiq/nGd0+Y29rMoiZ0NjuyobHgFCAA=="
+  },
+  {
+    "id": "el",
+    "file": "el_GR.trie.gz",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": false,
+    "license": "GPL-3.0+",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-el",
+    "version": "3.1.10",
+    "url": "https://registry.npmjs.org/@cspell/dict-el/-/dict-el-3.1.10.tgz",
+    "integrity": "sha512-vvBAVzpLTvJtbafwyfjh0gmxf5KE/0OmHHaEIiHJd3dVmrMhgPrQuYvcWPkaFro7FGtt3Jx1UeirfX/gyUo+fw=="
+  },
+  {
+    "id": "he",
+    "file": "he.trie.gz",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": false,
+    "license": "AGPLv3",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-he",
+    "version": "4.0.6",
+    "url": "https://registry.npmjs.org/@cspell/dict-he/-/dict-he-4.0.6.tgz",
+    "integrity": "sha512-TC7jn6pjoiexyZMyo4KcYh3WhDfli0StQ4ao0TSmwLTY0y+uxuf7M9YtkAxq0sv5g9D8JXhC7Bcycj/Z7pRI/A=="
+  },
+  {
+    "id": "it_IT",
+    "file": "dict/it-it.trie",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": false,
+    "license": "GPL-3.0-or-later",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-it-it",
+    "version": "3.1.7",
+    "url": "https://registry.npmjs.org/@cspell/dict-it-it/-/dict-it-it-3.1.7.tgz",
+    "integrity": "sha512-GquBAhKh/399WTFPH2aY2oRElKJX/XX3vF+zxRx34dCiG0z2/BDKiMzkFavl9u9Lmjx3FP2Vqf5Kxs5AuhSEeA=="
+  },
+  {
+    "id": "la",
+    "file": "la.trie.gz",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": true,
+    "license": "GPL-3.0+",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-la",
+    "version": "1.1.4",
+    "url": "https://registry.npmjs.org/@cspell/dict-la/-/dict-la-1.1.4.tgz",
+    "integrity": "sha512-8ex2eZ4bnhtSiZ7DlBOr+MxqQKQE5IUwVZKbruoe8gh22+54MpvwsWb5XR1FiOhzOSe19OtazLKCi7zMkCnqkg=="
+  },
+  {
+    "id": "fa_IR",
+    "file": "fa-IR.trie.gz",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": false,
+    "license": "Apache-2.0",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-fa-ir",
+    "version": "4.0.6",
+    "url": "https://registry.npmjs.org/@cspell/dict-fa-ir/-/dict-fa-ir-4.0.6.tgz",
+    "integrity": "sha512-SrvL5S7t6/qUT77GEeGxTfZUw3X6dZeuytkXbbX11FgEWGTAforNK0F6TBmr1aGdfJ9n4/C+sJLRa39shMHwVA=="
+  },
+  {
+    "id": "public-licenses",
+    "file": "public-licenses.txt.gz",
+    "case_sensitive": false,
+    "rep_map": [],
+    "ignore_forbidden_words": false,
+    "license": "MIT",
+    "repository_revision": "35657f4fed4219dcd03426c433cfe6cde3de54e1",
+    "package": "@cspell/dict-public-licenses",
+    "version": "2.0.17",
+    "url": "https://registry.npmjs.org/@cspell/dict-public-licenses/-/dict-public-licenses-2.0.17.tgz",
+    "integrity": "sha512-Asdumgg3oZ4ki//b2a+beiVIsNZA5thim4t4v3lTDLY/6a8VAPmTjzC3Y2t0x7ywC/bzAhi1KW/fg8JlwHDgig=="
+  }
+]
