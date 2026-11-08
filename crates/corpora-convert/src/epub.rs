@@ -15,7 +15,10 @@ const MAX_MEMBERS: usize = 1024;
 const MAX_ARCHIVE_BYTES: usize = 80 * 1024 * 1024;
 const MAX_MEMBER_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_EXPANDED_BYTES: u64 = 64 * 1024 * 1024;
-const MAX_SLOTS: usize = 1_000_000;
+/// Default character-slot bound for normal EPUB validation.
+pub const DEFAULT_MAX_SLOTS: usize = 1_000_000;
+/// Hard character-slot ceiling for explicitly requested large conversions.
+pub const HARD_MAX_SLOTS: usize = 8_000_000;
 
 /// One archive member and the hash of its exact expanded bytes.
 #[derive(Debug, Serialize)]
@@ -327,8 +330,13 @@ fn xml<'a>(
                 .split_inclusive('\n')
                 .take(line.saturating_sub(1))
                 .map(str::len)
-                .sum::<usize>()
-                + column.saturating_sub(1);
+                .sum::<usize>();
+            let offset = offset
+                + source[offset..]
+                    .chars()
+                    .take(column.saturating_sub(1))
+                    .map(char::len_utf8)
+                    .sum::<usize>();
             report.finding(
                 member,
                 source,
@@ -611,11 +619,17 @@ fn resolve_note_href(member: &str, href: &str) -> Option<String> {
 /// No archive member is extracted to disk. Limits are checked before expansion.
 /// Only UTF-8 XML, unencrypted reflowable XHTML and linear spine content are supported.
 /// Referenced footnotes/endnotes use separate text slots; non-linear spine items block.
+pub fn validate_epub(bytes: &[u8]) -> EpubReport {
+    validate_epub_with_slot_limit(bytes, DEFAULT_MAX_SLOTS)
+}
+
+/// Validate with an explicit character-slot bound, capped by `HARD_MAX_SLOTS`.
 #[expect(
     clippy::too_many_lines,
     reason = "single pass keeps archive and XML lifetime-bound sources together"
 )]
-pub fn validate_epub(bytes: &[u8]) -> EpubReport {
+pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubReport {
+    let max_slots = max_slots.min(HARD_MAX_SLOTS);
     let mut result = EpubReport {
         archive_sha256: hash(bytes),
         members: vec![],
@@ -1338,12 +1352,12 @@ pub fn validate_epub(bytes: &[u8]) -> EpubReport {
             .iter()
             .map(|note| note.text.chars().count())
             .sum::<usize>();
-    if total_slots > MAX_SLOTS {
+    if total_slots > max_slots {
         result.finding(
             "<archive>",
             "",
             "EPUB_LIMIT",
-            "Reading and note projection exceeds one million character slots",
+            &format!("Reading and note projection exceeds {max_slots} character slots"),
             None,
             true,
         );

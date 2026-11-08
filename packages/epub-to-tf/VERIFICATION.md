@@ -104,3 +104,78 @@ Active or externally linked SVG and responsive `srcset` remain blocking.
 The browser generator is tracked at `packages/epub-to-tf/tools/qa_browser.py`;
 generated pages remain under ignored `target/`. Neither bundle nor source was
 committed or pushed by the agent.
+
+## The 2001 Translation source trial
+
+The local EPUB at `~/Library/Mobile Documents/com~apple~CloudDocs/Library/The-2001-Translation.epub`
+was first hydrated from iCloud through Finder. Its original archive SHA-256 is
+`7908e6cf2fbf4ec572109e1fe849843128a37b20e926cc3dba602e419a0f5067`.
+The OPF has 73 spine references. Validation read 179 archive members and
+projected 63 XHTML documents, 3,718,539 characters and 93 image references,
+but blocked full export with 20 findings:
+
+- `EPUB_XML` × 10: malformed XHTML, including mismatched closing tags and
+  `ezra-alpha.xhtml`'s invalid attribute names.
+- `EPUB_NOTE_ID` × 9: duplicate verse fragment IDs in Daniel, 1 Enoch and
+  1 Maccabees. These are source identity ambiguities and remain blocking.
+- `EPUB_LIMIT` × 1: the partial reading projection already exceeds the
+  one-million-character safety bound.
+
+`target/debug/corpora-epub-check SOURCE > target/qa-2001-check.json` exited 1.
+The `epub-to-tf SOURCE target/qa-2001-bundle --checker
+target/debug/corpora-epub-check` attempt exited 2, and no output directory
+was created. There was therefore no TF or Context-Fabric bundle to load.
+The dark source-review page at `http://127.0.0.1:8770/index.html` lists each
+finding and opens its original XHTML member; the Aside screenshot is
+`/Users/emmanuel/.aside/u/0/sessions/2026-11-08_lkr6GcukLwQg608g/artifacts/2001-translation-blockers.png`.
+The browser itself displayed an XML parse error for `numbers.xhtml`.
+
+This trial exposed a diagnostic coordinate bug: roxmltree reports columns in
+Unicode scalars, while the validator had added them as byte counts. The narrow
+fix now maps scalar columns back to UTF-8 byte offsets. A Unicode malformed-XML
+fixture passed, and all ten XML findings now have member-source locations.
+The original archive was not modified; no source repair was applied.
+
+After the coordinate fix, `make fmt` and `make ci` passed. EPUB Ruff, format,
+mypy and `uv build` passed; `uv run --group dev pytest -q` reported 32 passed.
+`make -C packages/tei-to-tf check build` passed with 138 tests and 11 skips.
+
+## The 2001 Translation repaired full conversion
+
+An explicit repair phase now converts this same original archive without
+altering it. The Rust checker first reports ten malformed XHTML members and
+nine duplicate IDs. HTML recovery is accepted only when an independent
+lexical parse finds identical decoded body text, no lost explicit start tags,
+and no lost attributes. XML recovery was rejected during the probe because it
+lost most of `numbers.xhtml`. The parser's chosen nesting and any invalid
+attribute mappings are in `sources/repair-ledger.json`. Sixteen later duplicate
+IDs across four members received deterministic suffixes after a scan confirmed
+no inbound XHTML references to those ambiguous fragments. Seven of those
+duplicates became visible only after malformed chapters were recovered.
+
+The repaired archive SHA-256 is
+`56ecf885717f09c833d03e64e25642770fae194f9f1a3976ee9957b48498ef6d`.
+The unchanged original remains at `target/qa-2001-bundle/sources/original.epub`;
+the separately validated candidate is at `sources/repaired.epub` in that bundle.
+Final Rust validation reported zero findings. The bundle contains 73 spine
+documents, 5,229,951 character slots, 5,394,552 TF nodes, 118 referenced
+assets, 10 XHTML recovery records and four ID repair records.
+
+| Command | Result |
+| --- | --- |
+| `cargo build -p corpora-convert --bin corpora-epub-check` | Passed. |
+| `uv lock --project packages/epub-to-tf` | Added pinned lxml 6.1.3. |
+| `uv run --project packages/epub-to-tf epub-to-tf SOURCE target/qa-2001-bundle --checker target/debug/corpora-epub-check --repair --max-slots 8000000` | Passed; final checker report has zero findings and the exporter loaded the generated TF. `SOURCE` is the iCloud path above. |
+| `uv run --project packages/epub-to-tf --group dev python target/qa-2001-verify.py` | Passed; independent lexical body parse of all 73 original XHTML members matched each generated document and Context-Fabric `T.text()`, all 263 bundle checksums matched. |
+| `python3 /Users/emmanuel/.codex/skills/text-fabric-validator/scripts/tf_validate.py target/qa-2001-bundle/tf --json target/qa-2001-tf-validation.json --report target/qa-2001-tf-validation.md --quiet` | Passed with zero errors; TF064 warns about sampled whitespace character slots and TF065 records the deliberate absence of inserted separators. |
+| `uv run --group dev python tools/qa_browser.py ../../target/qa-2001-bundle ../../target/qa-2001-browser` | Passed; Aside Browser at `http://127.0.0.1:8771/index.html` showed 73 chapters, an exact match for the repaired Numbers chapter, a rendered validated XHTML frame, and a working original/validated toggle. |
+| `make doctor`, `make fmt`, `make ci`, `cargo clippy -p corpora-convert --all-targets --all-features -- -D warnings` | Passed. |
+| EPUB Ruff, Ruff format check, mypy, pytest, `uv build` | Passed; 36 tests, including guarded repair, lost-attribute and ambiguous-link rejection, deterministic repaired output and real loaders. |
+| `make -C packages/tei-to-tf check build` | Passed; 138 tests, 11 skipped. |
+
+The external Context-Fabric check created a derived `.cfm` cache; it was
+removed afterward. `tf/assets/` is the only directory under the final `tf/`.
+The browser page is a local QA aid. The repaired XHTML hierarchy is a parser
+interpretation where the original markup was misnested, so this receipt proves
+text, retained explicit tags/attributes, identifiers and loader behavior, not
+that an invalid source had a unique intended tree.

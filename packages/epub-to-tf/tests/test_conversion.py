@@ -174,6 +174,26 @@ def test_member_location_distinguishes_bytes_and_scalars(tmp_path: Path) -> None
     assert modified[position["byte"] :].startswith(b"<itemref")
 
 
+def test_xml_error_location_after_unicode_uses_member_bytes(tmp_path: Path) -> None:
+    source = tmp_path / "malformed.epub"
+    chapter = (
+        b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>'
+        + "É 東京".encode()
+        + b"<span>bad</em></p></body></html>"
+    )
+    fixture(source, chapter=chapter)
+    report = check(source)
+    diagnostic = next(
+        diagnostic
+        for finding in report["findings"]
+        for diagnostic in finding["report"]["diagnostics"]
+        if diagnostic["code"] == "EPUB_XML"
+    )
+    position = diagnostic["locations"][0]["start"]
+    assert position["byte"] > position["scalar"]
+    assert chapter[position["byte"] :].startswith(b"</em>")
+
+
 def test_note_has_separate_slots_and_link_in_both_loaders(tmp_path: Path) -> None:
     source = tmp_path / "notes.epub"
     chapter = b"""<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops"><body><p>Alpha<a epub:type="noteref" href="#n1">1</a> omega<aside epub:type="footnote" id="n1"><p>Note beta</p></aside>!</p></body></html>"""
@@ -483,3 +503,95 @@ def test_note_image_and_inline_math_keep_scope_and_offsets(tmp_path: Path) -> No
     for api in (tf, cf):
         assert api.T.text(note_node) == "Note body"
         assert json.loads(api.F.asset_refs.v(note_node)) == [image]
+
+
+def test_guarded_xhtml_repair_and_final_loader(tmp_path: Path) -> None:
+    source = tmp_path / "malformed.epub"
+    chapter = b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p id="v">caf\xc3\xa9 <em>\xce\xb2</p><p id="v">\xe6\x9d\xb1\xe4\xba\xac</p></body></html>'
+    fixture(source, chapter=chapter)
+    assert "EPUB_XML" in [
+        d["code"] for f in check(source)["findings"] for d in f["report"]["diagnostics"]
+    ]
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER, repair=True)
+    assert (output / "sources/original.epub").read_bytes() == source.read_bytes()
+    assert (output / "sources/repaired.epub").is_file()
+    assert manifest["source"]["sha256"] == hashlib.sha256(source.read_bytes()).hexdigest()
+    assert manifest["source"]["sha256"] != manifest["validated_source"]["sha256"]
+    assert [row["action"] for row in manifest["repair_ledger"]] == [
+        "recover_xhtml",
+        "disambiguate_unreferenced_ids",
+    ]
+    assert (output / "documents/0001.txt").read_text() == "café β東京"
+    node = manifest["graph"]["node_ids"]["document:chapter"]
+    assert (
+        Fabric(locations=str(output / "tf"), silent="deep").load("text", silent="deep").T.text(node)
+        == "café β東京"
+    )
+    assert ContextFabric(locations=str(output / "tf")).loadAll().T.text(node) == "café β東京"
+    with ZipFile(output / "sources/repaired.epub") as archive:
+        repaired = archive.read("OEBPS/chapter.xhtml")
+    assert b"--tf-recovered-2" in repaired
+    final = json.loads((output / "sources/validation.json").read_text())
+    assert final["final_findings"] == []
+    second = tmp_path / "second"
+    convert(source, second, CHECKER, repair=True)
+    assert (output / "sources/repaired.epub").read_bytes() == (
+        second / "sources/repaired.epub"
+    ).read_bytes()
+    assert {
+        path.name: path.read_bytes() for path in (output / "tf").glob("*.tf") if path.is_file()
+    } == {path.name: path.read_bytes() for path in (second / "tf").glob("*.tf") if path.is_file()}
+    site = tmp_path / "site"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "packages/epub-to-tf/tools/qa_browser.py"),
+            str(output),
+            str(site),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert (site / "source/OEBPS/chapter.xhtml").read_bytes() == chapter
+    assert (site / "validated/OEBPS/chapter.xhtml").read_bytes() == repaired
+    assert "Show original XHTML" in (site / "index.html").read_text()
+
+
+def test_repair_rejects_ambiguous_duplicate_id_link(tmp_path: Path) -> None:
+    source = tmp_path / "ambiguous.epub"
+    chapter = b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p id="v">One</p><p id="v">Two</p><a href="#v">ref</a></body></html>'
+    fixture(source, chapter=chapter)
+    with pytest.raises(ConversionError, match="duplicate ID has an inbound reference"):
+        convert(source, tmp_path / "out", CHECKER, repair=True)
+    assert not (tmp_path / "out").exists()
+
+
+def test_repair_rejects_lost_source_attribute(tmp_path: Path) -> None:
+    source = tmp_path / "duplicate-attribute.epub"
+    chapter = (
+        b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p id="a" id="b">Text</p></body></html>'
+    )
+    fixture(source, chapter=chapter)
+    with pytest.raises(ConversionError, match="lost source attributes"):
+        convert(source, tmp_path / "out", CHECKER, repair=True)
+    assert not (tmp_path / "out").exists()
+
+
+def test_checker_explicit_slot_bound(tmp_path: Path) -> None:
+    source = tmp_path / "limit.epub"
+    fixture(source)
+    limited = subprocess.run(
+        [str(CHECKER), str(source), "--max-slots", "3"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert limited.returncode == 1
+    assert any(
+        d["code"] == "EPUB_LIMIT"
+        for item in json.loads(limited.stdout)["findings"]
+        for d in item["report"]["diagnostics"]
+    )
+    assert convert(source, tmp_path / "out", CHECKER, max_slots=100)["max_slots"] == 100

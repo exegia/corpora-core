@@ -15,6 +15,8 @@ from zipfile import ZipFile
 
 from tf.fabric import Fabric
 
+from .repair import RepairRejected, repair_archive
+
 
 class ConversionError(ValueError):
     """Input or projected graph cannot be exported faithfully."""
@@ -202,22 +204,51 @@ def _write_graph(
     return {"max_slot": slot, "max_node": len(node["otype"]), "node_ids": lookup}
 
 
-def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
+def _check(source: Path, checker: Path, max_slots: int | None) -> tuple[int, dict[str, Any]]:
+    command = [str(checker), str(source)]
+    if max_slots is not None:
+        command.extend(["--max-slots", str(max_slots)])
+    checked = subprocess.run(command, capture_output=True, text=True, check=False)
+    if checked.returncode not in {0, 1}:
+        raise ConversionError(checked.stderr.strip() or "EPUB checker failed")
+    report: dict[str, Any] = json.loads(checked.stdout)
+    return checked.returncode, report
+
+
+def convert(
+    source: Path,
+    output: Path,
+    checker: Path,
+    *,
+    repair: bool = False,
+    max_slots: int | None = None,
+) -> dict[str, Any]:
     """Validate and export one local EPUB; existing destinations are never overwritten."""
     source = source.absolute()
     output = output.absolute()
     if output.exists() or output.is_symlink():
         raise ConversionError(f"Output already exists: {output}")
     original = source.read_bytes()
-    checked = subprocess.run(
-        [str(checker), str(source)], capture_output=True, text=True, check=False
-    )
-    if checked.returncode not in {0, 1}:
-        raise ConversionError(checked.stderr.strip() or "EPUB checker failed")
-    report: dict[str, Any] = json.loads(checked.stdout)
+    if max_slots is not None and not 1 <= max_slots <= 8_000_000:
+        raise ConversionError("--max-slots must be between 1 and 8000000")
+    status, report = _check(source, checker, max_slots)
     if report["archive_sha256"] != hashlib.sha256(original).hexdigest():
         raise ConversionError("EPUB changed between validation and export")
-    if checked.returncode or not report["documents"]:
+    initial_findings = report["findings"]
+    candidate_bytes = original
+    repair_ledger: list[dict[str, Any]] = []
+    if status and repair:
+        try:
+            candidate_bytes, repair_ledger = repair_archive(original, report)
+        except RepairRejected as error:
+            raise ConversionError(f"EPUB repair blocked: {error}") from error
+        with tempfile.TemporaryDirectory(prefix="epub-repair-") as temp:
+            candidate_path = Path(temp) / "candidate.epub"
+            candidate_path.write_bytes(candidate_bytes)
+            status, report = _check(candidate_path, checker, max_slots)
+            if report["archive_sha256"] != hashlib.sha256(candidate_bytes).hexdigest():
+                raise ConversionError("Repaired EPUB changed during final validation")
+    if status or not report["documents"]:
         findings = [
             f"{item['member']}: {diagnostic['code']}: {diagnostic['message']}"
             for item in report["findings"]
@@ -231,6 +262,13 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
     try:
         (stage / "sources").mkdir()
         (stage / "sources" / "original.epub").write_bytes(original)
+        if repair_ledger:
+            (stage / "sources" / "repaired.epub").write_bytes(candidate_bytes)
+            _json(stage / "sources" / "repair-ledger.json", repair_ledger)
+            _json(
+                stage / "sources" / "validation.json",
+                {"initial_findings": initial_findings, "final_findings": report["findings"]},
+            )
         (stage / "documents").mkdir()
         for index, document in enumerate(report["documents"], 1):
             _json(stage / "documents" / f"{index:04}.json", document)
@@ -240,7 +278,7 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
             _json(stage / "notes" / f"{index:04}.json", note)
             (stage / "notes" / f"{index:04}.txt").write_text(note["text"], encoding="utf-8")
         (stage / "tf" / "assets").mkdir(parents=True)
-        with ZipFile(BytesIO(original)) as archive:
+        with ZipFile(BytesIO(candidate_bytes)) as archive:
             for asset in report["assets"]:
                 data = archive.read(asset["target_member"])
                 if asset["source_end"] is not None:
@@ -329,7 +367,16 @@ def convert(source: Path, output: Path, checker: Path) -> dict[str, Any]:
                 shutil.rmtree(path)
         manifest = {
             "format": "corpora-epub-to-tf/1",
-            "source": {"sha256": report["archive_sha256"], "file": "sources/original.epub"},
+            "source": {
+                "sha256": hashlib.sha256(original).hexdigest(),
+                "file": "sources/original.epub",
+            },
+            "validated_source": {
+                "sha256": report["archive_sha256"],
+                "file": "sources/repaired.epub" if repair_ledger else "sources/original.epub",
+            },
+            "repair_ledger": repair_ledger,
+            "max_slots": max_slots or 1_000_000,
             "members": report["members"],
             "identifier": report["identifier"],
             "metadata": report["metadata"],
@@ -364,9 +411,17 @@ def main() -> None:
     parser.add_argument("source", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--checker", type=Path, default=Path("target/debug/corpora-epub-check"))
+    parser.add_argument(
+        "--repair", action="store_true", help="Audit and repair bounded XHTML syntax"
+    )
+    parser.add_argument(
+        "--max-slots", type=int, help="Explicit character-slot limit (up to 8000000)"
+    )
     args = parser.parse_args()
     try:
-        manifest = convert(args.source, args.output, args.checker)
+        manifest = convert(
+            args.source, args.output, args.checker, repair=args.repair, max_slots=args.max_slots
+        )
     except ConversionError as error:
         parser.error(str(error))
     print(json.dumps({"output": str(args.output), "identifier": manifest["identifier"]}))

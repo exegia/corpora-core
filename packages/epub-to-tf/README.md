@@ -8,6 +8,14 @@ uv run --project packages/epub-to-tf epub-to-tf book.epub output/bundle \
   --checker target/debug/corpora-epub-check
 ```
 
+For a large book with repairable malformed XHTML, opt into the audited repair
+phase and an explicit larger character bound:
+
+```sh
+uv run --project packages/epub-to-tf epub-to-tf book.epub output/repaired-bundle \
+  --checker target/debug/corpora-epub-check --repair --max-slots 8000000
+```
+
 The Rust `corpora_convert::epub::validate_epub(&[u8])` API returns an archive hash,
 expanded member hashes, OPF identifier/metadata, a linear spine reading projection,
 and shared `corpora-core` diagnostics. The CLI emits this as JSON and exits 1 on
@@ -17,6 +25,10 @@ it keeps the original EPUB under `sources/`, per-item JSON and exact main text u
 under `tf/assets/`, and deterministic `.tf` files under `tf/`. Its internal Text-Fabric
 round trip is verified before publication. Runtime caches are removed from the
 bundle.
+With `--repair`, it keeps `sources/original.epub`, writes the separate
+`sources/repaired.epub`, `sources/repair-ledger.json`, and initial/final Rust
+diagnostics, then requires the repaired archive to pass the same validator.
+The manifest distinguishes original `source` from `validated_source` hashes.
 
 ## Supported policy
 
@@ -58,11 +70,22 @@ bundle.
   guarantee playback in a particular reader.
 - Non-linear spine items remain unsupported. Missing manifest/spine targets,
   unsupported media or layout, scripts/iframes, responsive `srcset`, active or
-  externally linked SVG, encryption and malformed XML block export. No
-  spelling or AI step can clear these structural findings. Fix the source and
-  rerun validation; this package does not repair it.
+  externally linked SVG, and encryption block export. Malformed XHTML blocks
+  by default. With `--repair`, the API may create a strict XHTML candidate
+  using a network-disabled HTML recovery parser. It compares decoded body
+  text, explicit start tags and attributes against an independent lexical
+  parse, records parser findings and member hashes, and runs final Rust
+  validation. Misnested source tags have no unique original hierarchy; the
+  resulting tree is the documented recovery interpretation. Unexpected
+  elements, lost text/tags/attributes and unsupported blockers still fail.
+  Spelling or AI never clears structural findings.
+- Duplicate XHTML fragment IDs stay blocking by default. With `--repair`,
+  later duplicate IDs receive deterministic suffixes only if no local XHTML
+  reference targets that ambiguous fragment. Each edit is in the ledger.
+  An inbound reference requires manual source correction.
 - Maximum 80 MiB original archive, 1024 members, 16 MiB expanded per member, 64 MiB expanded total, and
-  one million character slots. Unsafe archive paths, duplicate members and
+  one million character slots by default; `--max-slots` can explicitly raise
+  this to at most eight million. Unsafe archive paths, duplicate members and
   ZIP extraction to disk are forbidden. Plain HTML and the exact XHTML 1.1
   external doctype are accepted in XHTML members. Internal DTD subsets and other
   doctypes are rejected; the XML parser does not fetch network resources or
@@ -95,9 +118,10 @@ uv run --project packages/epub-to-tf python packages/epub-to-tf/tools/qa_browser
 python3 -m http.server 8769 --directory target/epub-qa
 ```
 
-Open `http://127.0.0.1:8769/index.html`. The original XHTML is shown in a
-sandboxed iframe with its EPUB styling, while the TF text and asset inventory
-use dark mode. The text status independently parses each original XHTML body
-using the same documented note and inline-asset exclusion policy. This page is
+Open `http://127.0.0.1:8769/index.html`. The validated XHTML is shown in a
+sandboxed iframe with its EPUB styling, with a link to the original archive
+member when a repair was needed. The TF text and asset inventory use dark mode.
+The text status independently parses each validated XHTML body using the
+documented note and inline-asset exclusion policy. This page is
 a visual QA aid; the package tests and actual TF/Context-Fabric loads remain the
 conversion acceptance checks.
