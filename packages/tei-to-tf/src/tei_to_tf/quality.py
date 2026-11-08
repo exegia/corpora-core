@@ -20,6 +20,23 @@ from .structural import structural_preview as structural_preview
 XML_LANG = "{http://www.w3.org/XML/1998/namespace}lang"
 
 
+def metadata_scope(owner: Any) -> Any:
+    """Metadata context never inherits the reading language from TEI/text containers."""
+    chain = [owner, *owner.iterancestors()]
+    for node in chain:
+        if isinstance(node.tag, str) and etree.QName(node).localname in {"teiHeader", "titlePage"}:
+            return node
+    return next(
+        (
+            n
+            for n in chain
+            if isinstance(n.tag, str)
+            and etree.QName(n).localname in {"docTitle", "docAuthor", "docImprint"}
+        ),
+        owner,
+    )
+
+
 class SpellProcess:
     """One JSON-lines Matchum process, caching dictionaries across segments."""
 
@@ -93,6 +110,10 @@ def text_segments(tree: etree._ElementTree) -> list[tuple[Any, str, str, str | N
             for n in chain
         ):
             role = "additional"
+        if role == "metadata":
+            scope = metadata_scope(owner)
+            metadata_chain = chain[: chain.index(scope) + 1]
+            locale = next((n.get(XML_LANG) for n in metadata_chain if XML_LANG in n.attrib), None)
         return role, locale
 
     def visit(node: Any) -> None:
@@ -110,7 +131,11 @@ def text_segments(tree: etree._ElementTree) -> list[tuple[Any, str, str, str | N
 
 
 def inspect_tree(
-    tree: etree._ElementTree, checker: Any, locale: str | None, corrections: dict[str, str]
+    tree: etree._ElementTree,
+    checker: Any,
+    locale: str | None,
+    corrections: dict[str, str],
+    metadata_locale: str | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     segments = text_segments(tree)
     # Prefer declared document language; otherwise infer from the body rather than publishers.
@@ -147,7 +172,9 @@ def inspect_tree(
         "idno",
         "resp",
     }
-    groups: dict[tuple[str, str, str | None], list[tuple[Any, str]]] = {}
+    groups: list[tuple[tuple[str, str, str | None], list[tuple[Any, str]]]] = []
+    metadata_contexts: dict[tuple[str, str | None], list[str]] = {}
+    metadata_selections: list[dict[str, Any]] = []
     for node, field, role, hint in segments:
         owner = node if field == "text" else node.getparent()
         block = next(
@@ -158,8 +185,16 @@ def inspect_tree(
             ),
             owner,
         )
-        groups.setdefault((tree.getpath(block), role, hint), []).append((node, field))
-    for (path, role, hint), fields in groups.items():
+        key = (tree.getpath(block), role, hint)
+        if groups and groups[-1][0] == key:
+            groups[-1][1].append((node, field))
+        else:
+            groups.append((key, [(node, field)]))
+        if role == "metadata":
+            scope_path = tree.getpath(metadata_scope(owner))
+            metadata_contexts.setdefault((scope_path, hint), []).append(getattr(node, field))
+    context_detections: dict[tuple[str, str | None], dict[str, Any]] = {}
+    for (path, role, hint), fields in groups:
         text = "".join(getattr(node, field) for node, field in fields)
         if not text.strip():
             continue
@@ -168,18 +203,86 @@ def inspect_tree(
             isinstance(n.tag, str) and etree.QName(n).localname in {"head", "title", "docTitle"}
             for n in [block_node, *block_node.iterancestors()]
         )
-        report = checker.check(text, "heading" if heading else role, locale or hint or fallback)
+        selected_hint = locale or hint or fallback
+        selection: dict[str, Any] | None = None
+        if role == "metadata":
+            requested = metadata_locale or hint or None
+            selection = checker.detect(text, requested)
+            basis = "metadata_override" if metadata_locale else "xml_lang" if hint else "segment"
+            if (
+                not requested
+                and not selection.get("dictionary")
+                and selection.get("locale") == "und"
+            ):
+                owner = fields[0][0] if fields[0][1] == "text" else fields[0][0].getparent()
+                context_key = (tree.getpath(metadata_scope(owner)), hint)
+                if context_key not in context_detections:
+                    context_detections[context_key] = checker.detect(
+                        " ".join(metadata_contexts[context_key]), None
+                    )
+                selection = context_detections[context_key]
+                basis = "metadata_context"
+            selected_hint = requested or (
+                "fr-FR-1990"
+                if selection.get("dictionary") == "fr_FR_90"
+                else selection.get("locale")
+            )
+            metadata_selections.append(
+                dict(path=path, language=selection, basis=basis, locale_hint=selected_hint)
+            )
+        report: dict[str, Any]
+        if selection is not None and not selection.get("dictionary"):
+            report = dict(
+                language=selection,
+                diagnostics=[
+                    dict(
+                        code="language_unresolved",
+                        text=text,
+                        start=0,
+                        end=len(text),
+                        score=90,
+                        blocking=True,
+                        review_optional=False,
+                        suggestions=[],
+                        replacement=None,
+                        reason="Metadata language is unresolved or unsupported; "
+                        "supply local xml:lang or --metadata-locale",
+                    )
+                ],
+            )
+        else:
+            report = checker.check(text, "heading" if heading else role, selected_hint)
         for finding in report["diagnostics"]:
             issue = dict(
-                finding, path=path, field="mixed_content", role=role, language=report["language"]
+                finding,
+                path=path,
+                field="mixed_content",
+                role=role,
+                language=report["language"],
+                locale_hint=selected_hint,
             )
-            score = 20 if heading or issue["text"][:1].isupper() else 60 if role == "corpus" else 90
+            if selection is not None:
+                issue["language_selection"] = selection
+                issue["language_basis"] = basis
+            score = (
+                90
+                if issue["code"] == "language_unresolved"
+                else 20
+                if heading or issue["text"][:1].isupper()
+                else 60
+                if role == "corpus"
+                else 90
+            )
             issue.update(score=score, blocking=score == 90, review_optional=score < 90)
             if score < 90:
                 issue["replacement"] = None
-            replacement = corrections.get(issue["text"]) if score == 90 else None
+            replacement = (
+                corrections.get(issue["text"])
+                if score == 90 and issue["code"] != "language_unresolved"
+                else None
+            )
             if replacement:
-                verification = checker.check(replacement, role, locale or hint or fallback)
+                verification = checker.check(replacement, role, selected_hint)
                 if verification["passed"]:
                     issue["replacement"] = replacement
                     issue["reason"] = issue.get("reason", "") + "; explicit correction map"
@@ -204,6 +307,7 @@ def inspect_tree(
                 )
             issue["repairable"] = issue.get("replacement") is not None
             diagnostics.append(issue)
+    detection["metadata_segments"] = metadata_selections
     return diagnostics, detection
 
 
@@ -257,6 +361,7 @@ def quality_convert(
     limits: Limits | None = None,
     ai: Any = None,
     max_cycles: int = 3,
+    metadata_locale: str | None = None,
 ) -> dict[str, Any]:
     """Retain all three pass receipts, repaired copies and originals, even when blocked."""
     if not 1 <= max_cycles <= 10:
@@ -269,6 +374,11 @@ def quality_convert(
     (output / "originals").mkdir()
     (output / "repaired").mkdir()
     report: dict[str, Any] = {"status": "running", "documents": [], "offset_unit": "Unicode scalar"}
+    report["language_policy"] = dict(
+        corpus_locale=locale,
+        metadata_locale=metadata_locale,
+        metadata_context="independent of corpus locale",
+    )
     accepted = []
     try:
         for index, source in enumerate(acquired):
@@ -325,7 +435,9 @@ def quality_convert(
                         break
                     if schema:
                         validate_schema(prepared, schema)
-                    diagnostics, detection = inspect_tree(tree, checker, locale, corrections or {})
+                    diagnostics, detection = inspect_tree(
+                        tree, checker, locale, corrections or {}, metadata_locale
+                    )
                     suggest_spelling(tree, diagnostics, checker, ai)
                     row["language"] = detection
                     cycle["pass_1"].extend(diagnostics)
@@ -351,9 +463,10 @@ def quality_convert(
                     )
                     if corpus_before != corpus_after:
                         raise ConversionError("Repair changed primary corpus text")
-                    cycle["pass_3"], _ = inspect_tree(
-                        final_tree, checker, locale, corrections or {}
+                    cycle["pass_3"], final_detection = inspect_tree(
+                        final_tree, checker, locale, corrections or {}, metadata_locale
                     )
+                    row["language"] = final_detection
                     suggest_spelling(final_tree, cycle["pass_3"], checker, ai)
                     parse(prepared, policy)
                     if schema:

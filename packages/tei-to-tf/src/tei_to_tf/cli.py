@@ -42,8 +42,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--dictionaries", type=Path, help="Installed cspell dictionary directory")
     parser.add_argument(
-        "--locale", help="Explicit language/orthography hint, e.g. grc or fr-FR-1990"
+        "--locale",
+        help="Corpus language/orthography hint, e.g. grc or fr-FR-1990; "
+        "metadata is selected independently",
     )
+    parser.add_argument("--metadata-locale", help="Explicit metadata language/orthography override")
     parser.add_argument(
         "--corrections", type=Path, help="JSON word-to-replacement map for non-corpus text"
     )
@@ -88,6 +91,7 @@ def main(argv: list[str] | None = None) -> int:
                     if args.ai_bridge
                     else None,
                     max_cycles=args.repair_cycles,
+                    metadata_locale=args.metadata_locale,
                 )
                 print(
                     json.dumps(
@@ -102,7 +106,13 @@ def main(argv: list[str] | None = None) -> int:
                 return 0 if result["status"] == "passed" else 1
             finally:
                 checker.close()
-        if args.dictionaries or args.locale or args.corrections or args.ai_bridge:
+        if (
+            args.dictionaries
+            or args.locale
+            or args.metadata_locale
+            or args.corrections
+            or args.ai_bridge
+        ):
             raise ConversionError("Quality options require --quality-engine")
         result = convert(
             args.sources,

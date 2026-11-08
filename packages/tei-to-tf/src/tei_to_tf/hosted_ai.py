@@ -122,6 +122,9 @@ def suggest_spelling(tree: Any, issues: list[dict[str, Any]], checker: Any, ai: 
     nodes = {tree.getpath(n): n for n in tree.iter()}
     groups: dict[tuple[str, str], list[dict[str, Any]]] = {}
     for issue in issues:
+        if issue["code"] == "language_unresolved":
+            issue["ai_status"] = "language_unresolved"
+            continue
         if issue["score"] == 20:
             continue
         issue["ai_status"] = "not_configured" if ai is None else "pending"
@@ -175,7 +178,11 @@ def suggest_spelling(tree: Any, issues: list[dict[str, Any]], checker: Any, ai: 
                 issue["ai_suggestion"] = after
                 issue["ai_reason"] = edit["reason"]
                 # Capitalization cannot be used to evade a dictionary failure.
-                check = checker.check(after.lower(), "metadata", issue["language"]["locale"])
+                check = checker.check(
+                    after.lower(),
+                    "metadata",
+                    issue.get("locale_hint") or issue["language"]["locale"],
+                )
                 if issue["score"] == 90 and issue["role"] != "corpus" and not check["diagnostics"]:
                     issue["replacement"] = after
                     issue["repairable"] = True
