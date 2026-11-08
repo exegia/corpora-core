@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<TEI xmlns="http://www.tei-c.org/ns/1.0" xml:id="edition" xml:lang="en">
+  <teiHeader><fileDesc><titleStmt><title>Letters</title><author>Ada Writer</author></titleStmt><publicationStmt><publisher>Example Press</publisher><date>2026</date></publicationStmt><sourceDesc><p>A synthetic test edition.</p></sourceDesc></fileDesc></teiHeader>
+  <text><front><titlePage><docTitle>Letters, published by Example Press</docTitle></titlePage><div type="toc"><head>Contents</head><list><item><ref target="#letter">First letter</ref></item></list></div><div type="preface"><head>Preface</head><p>For the reader.</p></div></front><body><div xml:id="letter" type="letter" n="1"><head>First letter</head><p xml:id="p1">Dear <persName ref="https://example.org/people/ada">Ada</persName>, é😀.<lb/> A<hi rend="italic">small</hi> note<note place="foot">Editorial commentary.</note> remains.</p><p>See <ref target="#p1">above</ref>.</p></div></body><back><div type="appendix"><head>Appendix</head><p>Additional text.</p></div></back></text>
+</TEI>
