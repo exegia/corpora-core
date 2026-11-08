@@ -1,5 +1,16 @@
 # Verification — 2026-11-06
 
+## Alternative comment and processing-instruction tails — 2026-11-08
+
+The PR #10 review identified substantive tails on comments/processing instructions
+inside `choice` or `app` being silently excluded from the ambiguity check. Eight
+regressions reproduced the loss across original/edited and lemma/witness policies.
+The parser now checks every child tail before filtering element alternatives;
+four additional cases retain support for whitespace-only tails and surrounding text.
+With the existing native bridge, dictionaries, TF validator and pinned corpus caches,
+`make -C packages/tei-to-tf check build` passed **149 tests, zero skips**, lint,
+format, mypy and wheel/sdist builds. `make fmt` and `make ci` also passed.
+
 ## Purpose-aware TEI dates and identifiers — 2026-11-08
 
 Final acceptance: `target/qa-purpose-final-20261108-011818/acceptance-summary.json`.

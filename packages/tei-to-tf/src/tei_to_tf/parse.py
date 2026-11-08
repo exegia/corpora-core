@@ -228,9 +228,9 @@ def project(document: Document, text: etree._Element, namespace: str, policy: Po
         document.elements.append(record)
         selected: list[etree._Element] | None = None
         if ns == namespace and tag in {"choice", "app"}:
-            children = [x for x in node if isinstance(x.tag, str)]
-            if (node.text or "").strip() or any((x.tail or "").strip() for x in children):
+            if (node.text or "").strip() or any((x.tail or "").strip() for x in node):
                 raise ConversionError(f"Ambiguous text between {tag} alternatives at {path}")
+            children = [x for x in node if isinstance(x.tag, str)]
             if tag == "choice":
                 if policy.choice == "reject":
                     raise ConversionError(f"choice needs --choice original|edited at {path}")
