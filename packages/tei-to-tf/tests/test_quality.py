@@ -191,6 +191,7 @@ def test_real_matchum_repair_and_revalidation(tmp_path):
             checker,
             ai=AI(),
             sources=[Source("a.xml", "file:///a.xml", xml("helllo", "hello world"))],
+            metadata_locale="en-US",
         )
         assert report["status"] == "passed"
         assert report["documents"][0]["pass_2"][0]["after"] == "hello"
