@@ -9,7 +9,15 @@
 //! - Data sources
 //! - AI skills and agentic workflows
 
+#[cfg(feature = "spellcheck")]
+mod compact_trie;
+pub mod diagnostic;
 mod error;
+pub mod language;
+pub mod purpose;
+#[cfg(feature = "spellcheck")]
+pub mod spellcheck;
+pub mod structural;
 
 pub use error::Error;
 
