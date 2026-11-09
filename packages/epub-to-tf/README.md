@@ -1,4 +1,10 @@
-# EPUB to Text-Fabric (first boundary)
+# EPUB to Text-Fabric
+
+An EPUB is a box of XHTML chapters, metadata and pictures. This package checks
+the box with Rust, then writes a Text-Fabric (TF) bundle that keeps reading
+text, semantic labels, notes, links, the original EPUB and copied assets.
+The source text remains available even when the display reading removes layout
+spaces. A blocked finding stops export so a partial book is not called success.
 
 Build the reusable Rust validator, then run the local exporter:
 
@@ -7,6 +13,39 @@ cargo build -p corpora-convert --bin corpora-epub-check
 uv run --project packages/epub-to-tf epub-to-tf book.epub output/bundle \
   --checker target/debug/corpora-epub-check
 ```
+
+| Command input | Purpose |
+| --- | --- |
+| `book.epub` | One local, unencrypted EPUB archive. |
+| `output/bundle` | New directory for the exported bundle; existing output is refused. |
+| `--checker PATH` | Built `corpora-epub-check` Rust executable. |
+| `--repair` | Try only the documented, audited XHTML/duplicate-ID repairs, then revalidate. Off by default. |
+| `--max-slots N` | Explicit character-slot limit, from 1 to 8,000,000; default checker limit is 1,000,000. |
+
+The same operation is available to Python callers:
+
+```python
+from pathlib import Path
+from epub_to_tf import ConversionError, convert
+
+try:
+    manifest = convert(
+        Path("book.epub"),
+        Path("output/bundle"),
+        Path("target/debug/corpora-epub-check"),
+        repair=False,
+        max_slots=None,
+    )
+    print(manifest["format"])
+except ConversionError as error:
+    print(f"Conversion blocked: {error}")
+```
+
+`source`, `output`, and `checker` are required `Path` arguments. `repair` and
+`max_slots` are keyword-only. `convert` returns the manifest on success and
+raises `ConversionError` on a blocked or invalid input. The Rust
+[`validate_epub`](../../crates/corpora-convert/README.md#rust-api) function is
+available if you only need to inspect a book without writing a bundle.
 
 For a large book with repairable malformed XHTML, opt into the audited repair
 phase and an explicit larger character bound:
@@ -33,6 +72,25 @@ With `--repair`, it keeps `sources/original.epub`, writes the separate
 `sources/repaired.epub`, `sources/repair-ledger.json`, and initial/final Rust
 diagnostics, then requires the repaired archive to pass the same validator.
 The manifest distinguishes original `source` from `validated_source` hashes.
+
+Read a generated bundle with Text-Fabric:
+
+```python
+from tf.fabric import Fabric
+
+api = Fabric(locations="output/bundle/tf").load("otype text reading source_member asset_refs")
+for document in api.F.otype.s("document"):
+    print(api.F.source_member.v(document))
+    print(api.T.text(document))  # display reading
+    print(api.T.text(document, fmt="text-source-full"))  # exact source text
+    print(api.F.asset_refs.v(document))  # JSON asset locations and paths
+```
+
+`document` nodes contain main reading text, `note` nodes contain separate note
+bodies, and `element` nodes retain XHTML hierarchy and semantic marks. The
+`noteref` edge connects a marker element to its note. `manifest.json` holds
+ordered TOC entries and provenance. Read the full policy below before treating
+display text as an exact copy of XHTML whitespace.
 
 ## Supported policy
 

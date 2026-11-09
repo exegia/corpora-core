@@ -1,5 +1,10 @@
 # Corpora schema
 
+The schema is the project's shared drawing of its data. For example, it says
+what a `Project` contains once, and the generator makes matching types for
+Rust, TypeScript and Swift plus SQL tables. Edit this JSON first when the
+shared model changes; generated files are copies of the drawing.
+
 This directory is the **single source of truth** for the shared data model:
 
 - `model.json` — version, config, scalars, enums and unions

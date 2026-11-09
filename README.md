@@ -1,139 +1,159 @@
 # corpora-core
 
-Core services and crates to support the Corpora apps suite including conversion runners, text-fabric builder, model typings generations, data sources, AI skills and agentic workflows.
+This repository helps turn source documents into a Text-Fabric (TF) corpus that
+other programs can inspect. Think of TF as the book's text plus labeled pointers
+to its chapters, headings, notes, links, and other parts. The original TEI or
+EPUB stays available so a reader can check what the conversion did.
 
-## Workspace Structure
+**Choose a starting point:**
+
+| I have… | Use… | What it does |
+| --- | --- | --- |
+| TEI XML | [TEI converter](packages/tei-to-tf/README.md) | Gets local or supported public repository TEI, selects a reading, and exports TF. |
+| A local EPUB | [EPUB converter](packages/epub-to-tf/README.md) | Checks the archive, follows its reading order, and exports TF plus assets. |
+| XML text to check in Rust | [corpora-core](crates/corpora-core/README.md) | Reports structural, metadata, language, and optional spelling findings. |
+| EPUB bytes to check in Rust | [corpora-convert](crates/corpora-convert/README.md) | Returns source-bound EPUB findings and a reading projection. |
+| TF text to review with AI | [TF AI resolver](packages/tf-ai-resolver/README.md) | Pins a selection, asks the expert for a proposal, and applies an approved derived reading. |
+| A shared model in another language | [type generator](crates/corpora-typegen/README.md) | Generates Rust, TypeScript, Swift, and SQL from one schema. |
+
+The optional [quality AI bridge](packages/quality-ai/README.md) helps the TEI
+quality pipeline review bounded findings. The [Text-Fabric expert bundle](agent/text-fabric-expert/README.md)
+contains the agent instructions and evaluation setup.
+
+## How the pieces fit
 
 ```text
-crates/
-├── corpora-core/       # Core types and traits shared across the suite
-├── (planned) corpora-convert/    # Conversion runners for various formats
-├── (planned) corpora-fabric/     # Text-Fabric builder and utilities
-├── (planned) corpora-typegen/    # Model typings generation
-├── (planned) corpora-source/     # Data source abstractions
-└── (planned) corpora-agent/      # AI skills and agentic workflow support
+TEI XML ──> Python acquisition and reading policy ──> Text-Fabric .tf files
+                   │       │
+                   │       └── Rust structural, purpose, and spelling checks
+                   └── original source and repair record
+
+EPUB ──> Rust archive/OPF/XHTML check ──> Python export ──> .tf + assets
+  └────────────────────── original archive ────────────────────────┘
+
+.tf bundle ──> Text-Fabric / Context-Fabric loader ──> QA HTML
+                                                   └── optional AI proposal
+                                                       and reviewed derived text
 ```
 
-## Quick Start
+Rust decides whether checked source structures are valid under a stated policy.
+Python acquires sources and writes conversion bundles. TF stores the text and its
+annotations. Context-Fabric loads TF for runtime use; its caches are runtime
+data, not part of an exported bundle. AI suggestions cannot approve inconsistent
+IDs or silently rewrite the archived wording.
 
-```bash
-make doctor     # check required tools
-make setup      # install deps, hooks, .env
-make ci         # run full CI locally
+## Get started
+
+Use Rust **1.91 or newer** for the full workspace, Python **3.13 or newer** for
+the converter packages, Node **22 or newer** for the optional hosted quality
+bridge, and Swift **5.9 or newer** for the generated Swift package. `make doctor`
+reports missing local tools. `make setup` installs project dependencies, hooks,
+and local configuration; hosted AI credentials are optional for offline work.
+
+```sh
+make doctor
+make setup
+make ci
 ```
 
-## Development
+Convert one local EPUB from the repository root:
 
-```bash
-make fmt        # format all crates
-make lint-check # clippy with strict lints
-make test       # run all tests
-make build      # build all crates
+```sh
+cargo build -p corpora-convert --bin corpora-epub-check
+uv run --project packages/epub-to-tf epub-to-tf book.epub output/book \
+  --checker target/debug/corpora-epub-check
 ```
 
-## Adding a New Crate
+Convert one TEI file:
 
-```bash
-cargo new crates/corpora-mycrate --lib
+```sh
+uv run --project packages/tei-to-tf tei-to-tf book.xml --output output/tei-book
 ```
 
-Then add to the new crate's `Cargo.toml`:
+Both commands require a **new** output directory. The package READMEs explain
+each flag, the supported inputs, the exported files, and how to load the result.
 
-```toml
-[package]
-name = "corpora-mycrate"
-version.workspace = true
-edition.workspace = true
-# ... inherit other workspace fields
+## Project map
 
-[lints]
-workspace = true
+| Path | What is ready today |
+| --- | --- |
+| [`crates/corpora-core`](crates/corpora-core/README.md) | Shared diagnostics, XML/TEI checks, language selection, and optional spelling. |
+| [`crates/corpora-convert`](crates/corpora-convert/README.md) | Reusable EPUB validator and `corpora-epub-check` JSON CLI. |
+| [`crates/corpora-typegen`](crates/corpora-typegen/README.md) | Schema reader and Rust/TypeScript/Swift/SQL emitters. |
+| [`crates/corpora-fabric`](crates/corpora-fabric/README.md), [`crates/corpora-source`](crates/corpora-source/README.md), [`crates/corpora-agent`](crates/corpora-agent/README.md) | Reserved Rust crates; their builder, connector, and runtime APIs are not implemented yet. |
+| [`packages/tei-to-tf`](packages/tei-to-tf/README.md) | TEI acquisition, reading policy, TF export, optional quality passes. |
+| [`packages/epub-to-tf`](packages/epub-to-tf/README.md) | EPUB export, semantic TF features, asset copying, visual QA. |
+| [`packages/tf-ai-resolver`](packages/tf-ai-resolver/README.md) | Exact TF selection, expert proposal, reviewed derived reading, loopback browser service. |
+| [`packages/quality-ai`](packages/quality-ai/README.md) | Optional hosted model bridge for TEI quality review. |
+| [`crates/corpora-core/schema`](crates/corpora-core/schema/README.md), [`packages/corpora-types`](packages/corpora-types/README.md), `generated/`, `Package.swift` | Shared schema, generated types, and SwiftPM library. |
+| [`agent/text-fabric-expert`](agent/text-fabric-expert/README.md) | Agent prompt, tools, and evaluation instructions. |
+
+## Public API at a glance
+
+These are the main entry points. Their own READMEs give runnable examples and
+parameter tables.
+
+| API | Simple purpose |
+| --- | --- |
+| `corpora_core::structural::check_xml` / `check_xml_with_options` | Check decoded XML and return exact source locations. |
+| `corpora_core::purpose::validate_tei_metadata` | Check TEI dates and IDs according to an explicit caller policy. |
+| `corpora_core::language::detect_language` | Select a supported language and dictionary hint. |
+| `corpora_core::spellcheck::SpellEngine` | Optionally check spelling with installed, pinned dictionaries. |
+| `corpora_convert::epub::validate_epub` / `validate_epub_with_slot_limit` | Check local EPUB bytes and return a reading projection or blockers. |
+| `tei_to_tf.convert` / `epub_to_tf.convert` | Export a new TF bundle from a supported source. |
+| `tf_ai_resolver.inspect_selection` / `resolve` / `apply_resolution` | Pin TF text, propose a change, and write a reviewed derived reading. |
+| `corpora_typegen::Schema` and target `emit` functions | Read the model schema and generate language-specific types. |
+
+## Development and tests
+
+Work on a `<type>/<slug>` branch and open a Conventional Commit PR into `dev`.
+The release path is `dev → next → release/vX.Y.Z → main`; see the
+[workflow guide](.github/WORKFLOW.md) and
+[branch policy](.github/BRANCH-AND-RELEASE-POLICY.md). Do not edit generated
+versions or changelog entries by hand. Keep source, tests, and the matching
+README in the same change. The code and agent rules are in [AGENTS.md](AGENTS.md).
+
+```sh
+make fmt          # format root Rust and Swift sources
+make ci           # root lint, types, tests, and build
+make agents-check # agent instructions and skills
 ```
+
+Root `make ci` does **not** discover nested Python and Node packages. Run their
+own checks when you change them:
+
+```sh
+make -C packages/tei-to-tf check build
+uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/tests
+uv run --project packages/tf-ai-resolver pytest -q packages/tf-ai-resolver/tests
+npm ci --prefix packages/quality-ai
+npm run check --prefix packages/quality-ai
+npm test --prefix packages/quality-ai
+```
+
+The [TEI package workflow](.github/workflows/tei-converter.yml) and
+[EPUB/resolver workflow](.github/workflows/epub-resolver.yml) run their nested
+checks on relevant PRs. See each package README for its complete locked check
+command and real-loader verification.
+
+## Contributing and license
+
+Start with [AGENTS.md](AGENTS.md), change only the relevant module, and add a
+test when behavior changes. Keep secrets out of code, examples, and commits;
+see the [workflow guide](.github/WORKFLOW.md) for local setup and PR rules.
+The repository is licensed under **MIT OR Apache-2.0**.
+
+For a new Rust crate, run `cargo new crates/corpora-mycrate --lib`, inherit the
+workspace package fields and lints in its `Cargo.toml`, add a focused README,
+and verify it with `make ci`. Reserved crate names in the project map are not
+working APIs until code and tests are added.
 
 ## Publishing
 
-Crates are published to crates.io on tagged releases. Set `PUBLISH_CRATES=true` in repository variables and add `CARGO_REGISTRY_TOKEN` to the `crates` environment.
-
-With `PUBLISH_GITHUB_PACKAGES=true`, `packages.yml` additionally publishes the generated types on each release:
-
-- **npm**: `@exegia/corpora-types` to GitHub Packages (`npm.pkg.github.com`), assembled from `generated/typescript/`
-- **Cargo**: `.crate` files attached to the GitHub Release (GitHub Packages has no Cargo registry)
-- **SwiftPM**: the root `Package.swift` exposes `CorporaTypes` from `generated/swift/`; consume it straight from git with `.package(url: "https://github.com/exegia/corpora-core.git", from: "X.Y.Z")`
-
-## License
-
-MIT OR Apache-2.0
-
-## Text-Fabric expert agent
-
-Invoke `$text-fabric-expert` for corpus inspection, validation, annotation, conversion
-and analysis. See [setup, MCP integrations and capability limits](agent/text-fabric-expert/README.md).
-The bundle reuses Context-Fabric/Agora and existing validators; it does not replace
-the Rust runtime or claim universal lossless document conversion.
-
-## TEI → Text-Fabric
-
-The Rust core also exposes [shared structural and spelling diagnostics](crates/corpora-core/README.md#shared-structural-and-spelling-diagnostics).
-Callers can check XML without Python and receive source-bound locations and candidate
-edits through the same report type as spelling. API callers own repair execution and
-revalidation; the Python converter retains acquisition, projection and schema checks.
-Python quality and repair previews request structural diagnostics through the same
-Rust JSON-lines bridge used for spelling.
-TEI metadata dates and primary document identifiers also use native
-[purpose-aware validation](crates/corpora-core/README.md#purpose-aware-tei-dates-and-identifiers),
-preserving source locations and keeping identity mismatches blocked.
-
-[The converter package](packages/tei-to-tf/README.md) accepts local TEI files or
-GitHub/Hugging Face URLs, separates metadata and explicit TOCs from reading text,
-and preserves source bytes, structure and annotation spans.
-
-```sh
-uv run --project packages/tei-to-tf tei-to-tf source.xml --output /new/output
-make -C packages/tei-to-tf check build
-```
-
-
-### Language and spelling QA
-
-`crates/corpora-core` provides language/dictionary selection and the optional
-Matchum-backed `spellcheck` feature (Rust 1.91). Build `corpora-text-check` and install
-pinned dictionary data with `crates/corpora-core/tools/install_dictionaries.py`.
-The TEI converter's `--quality-engine` / `--dictionaries` options run audited
-validate, repair, and revalidate passes, preserving originals and blocking unresolved
-errors. Corpus wording is never automatically changed. The TEI workflow builds the
-Rust bridge, installs pinned `en_US` and `fr_FR` dictionaries, and runs the real
-dictionary integration tests, including English metadata under a French corpus policy.
-See the core and converter READMEs for the policy, setup, and diagnostic contracts.
-
-### EPUB conversion and visual QA
-
-`packages/epub-to-tf` validates local EPUBs with the Rust `corpora-epub-check`
-binary and exports deterministic Text-Fabric. Build that binary with
-`cargo build -p corpora-convert --bin corpora-epub-check`, then run the package
-tests with `uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/tests`.
-`packages/epub-to-tf/tools/qa_browser.py BUNDLE SITE` builds a dark-mode view
-of semantic TF HTML alongside the archived XHTML. The package README documents
-its supported input, asset, repair, and QA boundaries.
-
-`packages/tf-ai-resolver` adds a loopback selection UI to the QA site. It runs
-the Text-Fabric expert on a pinned span and requires a separate review action
-before writing corrected text to a derived TF node feature. The original slots
-and default `T.text()` reading stay source-faithful. See the resolver README.
-The EPUB and resolver package checks run in `.github/workflows/epub-resolver.yml`.
-
-Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
-Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
-and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.
-Use `--ai-bridge packages/quality-ai/bridge.mjs` with `AI_GATEWAY_API_KEY` in the
-process environment. Never put credentials in reports or browser assets. See
-`packages/quality-ai/README.md` for model selection, request budgets and limitations.
-
-### ShellCheck hook installation
-
-The ShellCheck pre-commit hook installs pinned `shellcheck-py==0.11.0.1` from
-PyPI, using its prebuilt wheel on supported platforms instead of rebuilding the
-Git checkout and downloading a binary from GitHub. The hook still checks shell
-scripts with `-S warning -x`; CI runs it as part of `hygiene`.
-The secret-scan workflow retries the pinned gitleaks release download, then builds
-the same pinned version through the Go module proxy if the release CDN is unavailable.
-Both installation paths run the same required, redacted scan.
+Release automation handles versions and tags. `PUBLISH_CRATES=true` opts the
+tagged release into crates.io publishing when `CARGO_REGISTRY_TOKEN` is
+configured in the `crates` environment. `PUBLISH_GITHUB_PACKAGES=true` opts
+into generated TypeScript package publishing; the release also carries Cargo
+artifacts, and the root `Package.swift` exposes generated Swift types. Follow
+the [branch and release policy](.github/BRANCH-AND-RELEASE-POLICY.md) before
+changing publishing settings.
