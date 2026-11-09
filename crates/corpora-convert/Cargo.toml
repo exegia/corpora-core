@@ -20,7 +20,7 @@ roxmltree = "=0.21.1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 sha2 = "0.10"
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [[bin]]
 name = "corpora-epub-check"

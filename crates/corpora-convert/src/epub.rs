@@ -684,9 +684,28 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
     let mut sources = BTreeMap::<String, Vec<u8>>::new();
     for index in 0..archive.len() {
         let Ok(file) = archive.by_index(index) else {
-            continue;
+            result.finding(
+                "<archive>",
+                "",
+                "EPUB_ZIP",
+                "Archive member cannot be opened",
+                None,
+                true,
+            );
+            return result;
         };
-        let name = file.name().to_owned();
+        let Ok(name) = file.name() else {
+            result.finding(
+                "<archive>",
+                "",
+                "EPUB_PATH",
+                "Archive member name cannot be decoded",
+                None,
+                true,
+            );
+            return result;
+        };
+        let name = name.into_owned();
         if file.is_dir() {
             if !safe_path(name.trim_end_matches('/')) {
                 result.finding(
