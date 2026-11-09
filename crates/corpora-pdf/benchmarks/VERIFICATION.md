@@ -70,3 +70,123 @@ were used. No transcript was changed to improve a score.
 
 This increment corrects grouping/order, not recognition. Multilingual OCR and
 broader human-verified reference coverage remain necessary before quality gates.
+
+## Multilingual model selection prerequisite — 2026-11-09
+
+The engine and benchmark now accept an explicit traineddata directory. The
+benchmark records each requested model's SHA-256. The engine checks requested
+languages and rejects Tesseract's otherwise successful fallback when a companion
+model fails to load. A native text page retains its text but receives no visual
+score and a finding when OCR is unavailable; a scanned page fails extraction.
+
+Executed: 16 Rust tests (including isolated model-directory, missing companion
+and corrupt companion cases), 12 benchmark tests, the browser test, `make fmt`,
+`make ci`, and `git diff --check` passed. The synthetic benchmark using the
+explicit installed English model directory has zero CER in both paths and
+retains its model hash under `target/pdf-benchmark/model-provenance-smoke/`.
+
+No Hebrew accuracy result is available for this increment. Only `eng` and `osd`
+were installed, and DNS resolution failed for `github.com`, `api.github.com`, and
+`raw.githubusercontent.com`, preventing the official Hebrew model download.
+The next controlled comparison should hold the English model fixed while adding
+Hebrew, retaining vowel marks in the reference metrics. No models were downloaded
+or machine-wide OCR configuration changed during this increment.
+
+## Controlled multilingual comparison — 2026-11-09
+
+Connectivity recovered. Downloaded official `tessdata_best` English and Hebrew
+models plus their license at revision
+`e12c65a915945e4c28e237a9b52bc4a8f39a0cec` into ignored
+`target/pdf-benchmark/models/tessdata-best-e12c65a91594/`. System OCR models and
+the default engine language were not changed.
+
+| Model | SHA-256 |
+| --- | --- |
+| eng | `8280aed0782fe27257a68ea10fe7ef324ca0f8d85bd2fd145d1c2b560bcb66ba` |
+| heb | `dbaa827aea6bc21215638447f17783a1004987c2d0bf5573d111fee397abdae5` |
+
+Ran `eng`, `eng+heb`, and `heb+eng` against the unchanged three regions on
+Aramaic grammar PDF page 25. Verified identical manifest, benchmark, engine binary
+and English model hashes across all three runs. Evidence directories are
+`best-english/`, `best-english-hebrew/`, and `best-hebrew-english/` beneath
+`target/pdf-benchmark/`; `multilingual-comparison/` links the reports and retains
+the controlled comparison JSON.
+
+Both multilingual orders recover the two sampled Hebrew-script words' consonants
+but omit their vowel marks: each bounded word has 33.33% CER (one missing mark
+out of three reference characters). Both also merge English table regions,
+making that region's text score ambiguous. English-only bounds the English
+region correctly but misrecognizes the Hebrew word and leaves the Aramaic word
+region ambiguous. Only **one three-character Hebrew reference** is spatially
+bounded in all three runs; its CER is 100% for English-only and 33.33% for either
+multilingual order. Different aggregate coverage must not be presented as a
+whole-sample accuracy improvement. All references remain visually transcribed
+by the assistant and unverified by a human.
+
+The raster extraction times in this single run were 2.70s (`eng`), 3.17s
+(`eng+heb`), and 3.27s (`heb+eng`), including subprocess overhead. These are
+observations, not statistically established throughput measurements.
+
+Extracted the pinned Hebrew model's `lstm-unicharset` with `combine_tessdata -e`.
+The NFC/NFD-equivalent output alphabet contains qamats (U+05B8), which the model
+missed here, but does not contain holam (U+05B9). The extracted character-set
+SHA-256 is `196ecddf7ce0cf378fa128d121da5eafce863a4c834bdd10c3e6a9265054a336`.
+The model therefore cannot supply the holam required by the sampled reference.
+
+Conclusion: explicit multilingual model selection works, but this pinned model
+does **not** meet pointed Hebrew/Aramaic transcription requirements. Keep default
+behavior unchanged. The next recognition candidate must support the required
+vowel-mark alphabet and be tested against a larger independently verified sample;
+language-order changes alone did not fix the observed failures.
+
+## Pointed-Hebrew alphabet gate and recognition smoke test — 2026-11-09
+
+Screened alternatives before installing another runtime. The
+[PaddleOCR Hebrew model](https://github.com/RivoksLab/paddleocr-hebrew) explicitly
+excludes niqqud and cantillation from its alphabet. The
+[BGU pointed-Hebrew OCR project](https://www.cs.bgu.ac.il/~elhadad/hocr/) documents
+training visual recognition, but its page provides no downloadable trained
+weights to audit. Its separate automatic vocalization task is not a substitute
+for reading marks from page pixels.
+
+Audited the actual safetensors `kraken_meta` codec of
+[Kraken PP-OCRv6 medium](https://huggingface.co/small-models-for-glam/kraken-ppocrv6-medium),
+revision `f7fd70f3fd22b615f41bada4674ac2462f938339`, before inference. The model
+card describes multilingual Hebrew recognition, not a pointed-Hebrew accuracy
+guarantee. Its 1,622 codec labels contain, after Unicode NFD decomposition:
+
+- All 27 Hebrew letter forms and all 17 niqqud characters: U+05B0–U+05BC,
+  U+05BF, U+05C1, U+05C2 and U+05C7, including holam.
+- Only three of 30 cantillation accents: U+0593, U+0594 and U+059A.
+- Upper dot U+05C4, but not meteg U+05BD, lower dot U+05C5 or masora circle U+05AF.
+
+This passes a vowel-only alphabet gate, not complete Biblical-mark preservation.
+Downloaded weights SHA-256:
+`15313b51ace64cbfa81f8f6ef25ad64f04e5a6fb7f7823e67b107527bc081ac9`.
+The full model header matched the previously fetched metadata header. Alphabet,
+source revision and weight evidence are under ignored
+`target/pdf-benchmark/models/kraken-ppocrv6-medium/`.
+
+Installed Kraken 7.1 in an isolated benchmark virtual environment, then ran CPU
+FP32 recognition on the **two unchanged word regions**, cropped from the existing
+2400px page raster. Used `ocr --no-segmentation --base-dir R --num-line-workers 0`;
+no binarization, dictionary, spellcheck or vowel-restoration postprocessing.
+
+Both outputs contain only the two consonants: the holam and qamats were omitted.
+Each word therefore has one edit in three reference characters (33.33% CER).
+The alphabet's ability to emit a mark did not establish visual recognition of it.
+These are six reference characters in total, with assistant-transcribed references
+still unverified by a human. Cropped recognition bypasses page segmentation and
+must not be presented as a controlled end-to-end improvement over Tesseract.
+
+Exact command, input crop coordinates/hashes, model audit, runtime package list,
+outputs and dark comparison HTML are retained in ignored
+`target/pdf-benchmark/kraken-pointed-smoke/`. Both inference jobs completed
+successfully; their transcription result fails the pointed-word smoke test.
+No production engine, default OCR language or system model directory changed.
+
+A user-supplied font is unnecessary for evaluating existing scanned pages.
+For subsequent synthetic training, a font matching the source's letterforms and
+mark positioning would help, provided its license permits that use. Synthetic
+examples must remain separate from held-out real-page evaluation. This candidate
+needs pointed-text fine-tuning or replacement before a larger acceptance run.

@@ -70,6 +70,7 @@ fn inspect(path: &std::path::Path) -> Result<(), corpora_pdf::PdfError> {
 | `max_elements_per_page` | 20,000 | Bound text/image and OCR element output. |
 | `ocr_max_edge_px` | 2,400 | Longest rasterized page edge sent to OCR. |
 | `ocr_languages` | `eng` | Installed Tesseract language codes. |
+| `tessdata_dir` | `None` | Optional directory of `.traineddata` models; otherwise Tesseract uses its environment/default lookup. |
 | `verify_text_layer_with_ocr` | `true` | OCR rendered pages to compare visible text with PDF text objects. |
 
 `PdfExtraction.pages` are source ordered. `Page.elements` contain `kind`,
@@ -116,6 +117,18 @@ copy because its image extraction can create side files. Encrypted PDFs and
 invalid/over-limit inputs fail explicitly. There is no remote acquisition,
 handwriting recognition, guaranteed reading order, chart transcription,
 complex table reconstruction, or full PDF/UA conformance in this increment.
+
+For multilingual OCR, request all needed models explicitly, for example
+`ocr_languages: "eng+heb".to_owned()` with `tessdata_dir: Some(model_path)`.
+Every requested language must be listed by Tesseract. Missing or unloadable
+models prevent OCR instead of silently falling back to English. On scanned
+pages this is an extraction error; on native text pages it leaves the source
+text intact and reports `visual_check_unavailable` without a visual score.
+Disabling native-page visual verification still avoids OCR entirely.
+Model directories need only the language files; the engine enables TSV output
+directly without relying on a `configs/tsv` file. Models are never downloaded
+by the engine. Adding Hebrew does not establish accurate biblical vowel marks
+or Aramaic recognition; measure those against image-based references.
 
 ## Review a PDF in the browser
 

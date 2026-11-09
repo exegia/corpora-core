@@ -44,6 +44,17 @@ The default is the installed English OCR model. `--languages eng+heb` requires
 those models already installed. A missing model fails the run; the runner never
 downloads models. Preserve baseline language settings when comparing runs.
 
+Use `--tessdata-dir /path/to/models --languages eng+heb` to select an isolated
+model set without changing the machine-wide installation. The report records
+the actual model directory and SHA-256 of each requested model. It rejects a
+missing requested language before extraction; the Rust bridge also rejects
+Tesseract's partial-success response when one listed model cannot load.
+Compare English-only and English-plus-Hebrew using the same English model file
+to separate language-selection effects from model-family changes.
+Compare CER only over regions that are spatially bounded in every compared run;
+report that common coverage explicitly. A lower score on fewer regions is not
+evidence of an improvement on the whole sample.
+
 ## What the measurements mean
 
 - **CER/WER:** Levenshtein character/word edit counts divided by reference length.
@@ -80,3 +91,9 @@ aligned table cells and retains Tesseract's column block order. All three table
 regions become spatially bounded and Aune's reading-order check passes; Hebrew
 recognition errors remain. See [the verification record](VERIFICATION.md).
 Before tuning thresholds, expand reference coverage and installed OCR languages.
+
+The subsequent pinned `tessdata_best` comparison (`eng`, `eng+heb`, `heb+eng`)
+recovers sampled Hebrew consonants but misses vowel marks and changes table
+grouping. The Hebrew model's output alphabet lacks the required holam mark.
+This is a failed pointed-text acceptance result, not a default-model upgrade;
+see the verification record for exact hashes, coverage and local evidence paths.

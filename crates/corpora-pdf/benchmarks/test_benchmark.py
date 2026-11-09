@@ -108,6 +108,27 @@ class BenchmarkTests(unittest.TestCase):
         self.assertNotIn("<script>", page)
         self.assertIn("&lt;script&gt;", page)
 
+    def test_explicit_model_directory_records_exact_model_hashes(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "eng.traineddata").write_bytes(b"english fixture")
+            (root / "heb.traineddata").write_bytes(b"hebrew fixture")
+            listing = f'List of available languages in "{root}" (2):\neng\nheb\n'.encode()
+            with patch.object(b, "run", return_value=listing) as run:
+                result = b.model_provenance("eng+heb", root)
+                run.assert_called_once_with(["tesseract", "--list-langs", "--tessdata-dir", root])
+            self.assertEqual(result["models"]["heb"]["sha256"], hashlib.sha256(b"hebrew fixture").hexdigest())
+
+    def test_missing_requested_model_is_not_silently_omitted_from_provenance(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "eng.traineddata").write_bytes(b"english fixture")
+            listing = f'List of available languages in "{root}" (1):\neng\n'.encode()
+            with patch.object(b, "run", return_value=listing):
+                with self.assertRaisesRegex(ValueError, "not installed.*heb"):
+                    b.model_provenance("eng+heb", root)
+
 
 if __name__ == "__main__":
     unittest.main()

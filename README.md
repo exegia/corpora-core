@@ -14,7 +14,7 @@ EPUB, or PDF stays available so a reader can check extracted content.
 | XML text to check in Rust | [corpora-core](crates/corpora-core/README.md) | Reports structural, metadata, language, and optional spelling findings. |
 | EPUB bytes to check in Rust | [corpora-convert](crates/corpora-convert/README.md) | Returns source-bound EPUB findings and a reading projection. |
 | A local PDF to inspect | [corpora-pdf](crates/corpora-pdf/README.md) | Reads text or OCR, labels layout candidates, and returns visual evidence scores. |
-| PDF extraction accuracy to measure | [PDF benchmark](crates/corpora-pdf/benchmarks/README.md) | Compares selected regions against image transcriptions, with character/word error rates and reading-order checks. |
+| PDF extraction accuracy to measure | [PDF benchmark](crates/corpora-pdf/benchmarks/README.md) | Compares selected regions against image transcriptions, with character/word error rates, reading-order checks, and model hashes for multilingual runs. |
 | TF text to review with AI | [TF AI resolver](packages/tf-ai-resolver/README.md) | Pins a selection, asks the expert for a proposal, and applies an approved derived reading. |
 | A shared model in another language | [type generator](crates/corpora-typegen/README.md) | Generates Rust, TypeScript, Swift, and SQL from one schema. |
 

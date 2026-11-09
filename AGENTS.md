@@ -149,6 +149,8 @@ Run `python3 -m unittest discover -s crates/corpora-pdf/benchmarks -p 'test_*.py
 root stack detection does not run this Python suite. See the benchmark README for
 the synthetic smoke command and local-only real-PDF manifest. Keep attachments,
 transcriptions and generated reports out of Git; retain reference review status.
+Use `--tessdata-dir` for isolated multilingual models; reports retain model hashes
+and missing requested languages fail rather than silently falling back.
 
 ## EPUB conversion package
 

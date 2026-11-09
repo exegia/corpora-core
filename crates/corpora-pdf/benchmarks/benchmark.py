@@ -204,7 +204,25 @@ def report_html(results):
             f"<nav>{nav}</nav>{''.join(rows)}</html>")
 
 
-def benchmark(manifest_path, output, languages):
+def model_provenance(languages, model_dir=None):
+    args = ["tesseract", "--list-langs"]
+    if model_dir is not None:
+        args.extend(["--tessdata-dir", model_dir])
+    listing = run(args).decode()
+    header = re.search(r'"([^"]+)"', listing.splitlines()[0])
+    if model_dir is None and header is None:
+        raise ValueError("Cannot locate model files; provide --tessdata-dir")
+    directory = Path(model_dir if model_dir is not None else header[1]).resolve()
+    models = {}
+    for language in languages.split('+'):
+        if not language or language not in listing.splitlines()[1:]:
+            raise ValueError(f"Requested OCR language is not installed: {language!r}")
+        path = directory / f"{language}.traineddata"
+        models[language] = {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest()}
+    return {"directory": str(directory), "models": models, "installed_languages": listing}
+
+
+def benchmark(manifest_path, output, languages, model_dir=None):
     manifest = json.loads(manifest_path.read_text())
     validate(manifest)
     # Validate every source before doing expensive work or writing results.
@@ -212,6 +230,7 @@ def benchmark(manifest_path, output, languages):
         path = (manifest_path.parent / sample["path"]).resolve()
         if hashlib.sha256(path.read_bytes()).hexdigest() != sample["sha256"]:
             raise ValueError(f"Source hash mismatch: {sample['id']}")
+    model_data = model_provenance(languages, model_dir)
     output.mkdir(parents=True, exist_ok=False)
     run(["cargo", "build", "--locked", "-p", "corpora-pdf", "--example", "qa_export"])
     results = []
@@ -227,7 +246,10 @@ def benchmark(manifest_path, output, languages):
         for mode in ("native", "raster_ocr"):
             pdf = page_pdf if mode == "native" else folder / "raster.pdf"
             start = time.monotonic()
-            raw = run([ROOT / "target/debug/examples/qa_export", pdf, languages])
+            args = [ROOT / "target/debug/examples/qa_export", pdf, languages]
+            if model_dir is not None:
+                args.append(model_dir)
+            raw = run(args)
             extraction = json.loads(raw)
             (folder / f"{mode}.json").write_bytes(raw)
             page = extraction["pages"][0]
@@ -246,7 +268,8 @@ def benchmark(manifest_path, output, languages):
               "engine_revision": run(["git", "rev-parse", "HEAD"]).decode().strip(),
               "working_tree_status": run(["git", "status", "--porcelain"]).decode(),
               "tesseract": run(["tesseract", "--version"]).decode().splitlines()[0],
-              "installed_languages": run(["tesseract", "--list-langs"]).decode(), "results": results}
+              "installed_languages": model_data["installed_languages"],
+              "ocr_models": model_data, "results": results}
     (output / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
     (output / "index.html").write_text(report_html(results))
     return report
@@ -257,5 +280,7 @@ if __name__ == "__main__":
     parser.add_argument("manifest", type=Path)
     parser.add_argument("output", type=Path, help="New output directory; never overwrites a run")
     parser.add_argument("--languages", default="eng")
+    parser.add_argument("--tessdata-dir", type=Path, help="Directory of local traineddata models")
     args = parser.parse_args()
-    benchmark(args.manifest.resolve(), args.output.resolve(), args.languages)
+    benchmark(args.manifest.resolve(), args.output.resolve(), args.languages,
+              args.tessdata_dir.resolve() if args.tessdata_dir else None)

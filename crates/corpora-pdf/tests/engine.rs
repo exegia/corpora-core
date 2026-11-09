@@ -159,3 +159,76 @@ fn input_limits_and_invalid_header_block_extraction() {
         Err(PdfError::Unsupported(_))
     ));
 }
+
+fn isolated_english_models() -> tempfile::TempDir {
+    let output = std::process::Command::new("tesseract")
+        .arg("--list-langs")
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let listing = String::from_utf8(output.stdout).unwrap();
+    let installed = PathBuf::from(listing.lines().next().unwrap().split('"').nth(1).unwrap());
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::copy(
+        installed.join("eng.traineddata"),
+        dir.path().join("eng.traineddata"),
+    )
+    .unwrap();
+    dir
+}
+
+#[test]
+fn explicit_model_directory_works_without_tsv_config_files() {
+    let dir = isolated_english_models();
+    let options = ExtractOptions {
+        tessdata_dir: Some(dir.path().to_owned()),
+        ..ExtractOptions::default()
+    };
+    let result = extract_pdf(fixture("scanned.pdf"), &options).unwrap();
+    assert_eq!(result.pages[0].method, ExtractionMethod::Ocr);
+    assert!(
+        result.pages[0]
+            .elements
+            .iter()
+            .any(|e| e.text == "Sample Document")
+    );
+}
+
+#[test]
+fn missing_companion_language_cannot_silently_fall_back_to_english() {
+    let dir = isolated_english_models();
+    let mut options = ExtractOptions {
+        ocr_languages: "eng+heb".to_owned(),
+        tessdata_dir: Some(dir.path().to_owned()),
+        ..ExtractOptions::default()
+    };
+    let error = extract_pdf(fixture("scanned.pdf"), &options).unwrap_err();
+    assert!(error.to_string().contains("\"heb\" is not installed"));
+    let native = extract_pdf(fixture("semantic.pdf"), &options).unwrap();
+    assert!(native.pages[0].extraction_score.is_none());
+    assert!(
+        native
+            .findings
+            .iter()
+            .any(|finding| finding.code == "visual_check_unavailable")
+    );
+    options.verify_text_layer_with_ocr = false;
+    let native = extract_pdf(fixture("semantic.pdf"), &options).unwrap();
+    assert!(native.findings.is_empty());
+}
+
+#[test]
+fn corrupt_companion_model_cannot_silently_fall_back_to_english() {
+    let dir = isolated_english_models();
+    std::fs::write(dir.path().join("heb.traineddata"), b"invalid model").unwrap();
+    let options = ExtractOptions {
+        ocr_languages: "eng+heb".to_owned(),
+        tessdata_dir: Some(dir.path().to_owned()),
+        ..ExtractOptions::default()
+    };
+    let error = extract_pdf(fixture("scanned.pdf"), &options).unwrap_err();
+    assert!(
+        error.to_string().contains("Failed loading language"),
+        "{error}"
+    );
+}

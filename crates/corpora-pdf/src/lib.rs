@@ -27,6 +27,9 @@ pub struct ExtractOptions {
     pub ocr_max_edge_px: u32,
     /// Tesseract language code or installed language combination, e.g. `eng+fra`.
     pub ocr_languages: String,
+    /// Explicit directory of installed `.traineddata` files. When absent,
+    /// Tesseract uses its normal environment/default lookup.
+    pub tessdata_dir: Option<PathBuf>,
     /// Run visual OCR even when a PDF text layer exists to estimate agreement.
     pub verify_text_layer_with_ocr: bool,
 }
@@ -39,6 +42,7 @@ impl Default for ExtractOptions {
             max_elements_per_page: 20_000,
             ocr_max_edge_px: 2_400,
             ocr_languages: "eng".to_owned(),
+            tessdata_dir: None,
             verify_text_layer_with_ocr: true,
         }
     }
@@ -745,6 +749,7 @@ fn ocr_page(
     options: &ExtractOptions,
     dir: &Path,
 ) -> Result<Vec<OcrWord>, PdfError> {
+    validate_ocr_languages(options)?;
     let prefix = dir.join(format!("page-{number}"));
     let number_arg = number.to_string();
     let edge_arg = options.ocr_max_edge_px.to_string();
@@ -764,17 +769,43 @@ fn ocr_page(
         ],
     )?;
     let image = prefix.with_extension("png");
-    let tsv = run(
-        "tesseract",
-        &[
-            image.as_os_str(),
-            "stdout".as_ref(),
-            "-l".as_ref(),
-            options.ocr_languages.as_ref(),
-            "tsv".as_ref(),
-        ],
-    )?;
-    let tsv = String::from_utf8_lossy(&tsv);
+    let mut args = vec![
+        image.as_os_str(),
+        "stdout".as_ref(),
+        "-l".as_ref(),
+        options.ocr_languages.as_ref(),
+        "-c".as_ref(),
+        "tessedit_create_tsv=1".as_ref(),
+    ];
+    if let Some(dir) = &options.tessdata_dir {
+        args.extend(["--tessdata-dir".as_ref(), dir.as_os_str()]);
+    }
+    let output = Command::new("tesseract")
+        .args(args)
+        .output()
+        .map_err(|error| PdfError::Tool {
+            program: "tesseract",
+            detail: error.to_string(),
+        })?;
+    let detail = String::from_utf8_lossy(&output.stderr);
+    // Tesseract can exit successfully after failing one model in eng+heb.
+    // A listed but corrupt model must not silently degrade to another language.
+    if !output.status.success()
+        || detail.contains("Failed loading language")
+        || detail.contains("Error opening data file")
+    {
+        return Err(PdfError::Tool {
+            program: "tesseract",
+            detail: detail.trim().to_owned(),
+        });
+    }
+    let tsv = String::from_utf8_lossy(&output.stdout);
+    if !tsv.starts_with("level\tpage_num\t") {
+        return Err(PdfError::Tool {
+            program: "tesseract",
+            detail: "OCR returned no TSV header".to_owned(),
+        });
+    }
     let scale = (options.ocr_max_edge_px as f32 / width.max(height)).max(0.01);
     let mut words = Vec::new();
     for row in tsv.lines().skip(1) {
@@ -807,6 +838,33 @@ fn ocr_page(
         });
     }
     Ok(words)
+}
+
+fn validate_ocr_languages(options: &ExtractOptions) -> Result<(), PdfError> {
+    let mut args = vec!["--list-langs".as_ref()];
+    if let Some(dir) = &options.tessdata_dir {
+        if !dir.is_dir() {
+            return Err(PdfError::Tool {
+                program: "tesseract",
+                detail: format!("model directory does not exist: {}", dir.display()),
+            });
+        }
+        args.extend(["--tessdata-dir".as_ref(), dir.as_os_str()]);
+    }
+    let listing = run("tesseract", &args)?;
+    let listing = String::from_utf8_lossy(&listing);
+    for language in options.ocr_languages.split('+') {
+        if language.is_empty() || !listing.lines().skip(1).any(|line| line.trim() == language) {
+            return Err(PdfError::Tool {
+                program: "tesseract",
+                detail: format!(
+                    "requested OCR language {language:?} is not installed; requested {}",
+                    options.ocr_languages
+                ),
+            });
+        }
+    }
+    Ok(())
 }
 
 fn ocr_elements(words: &[OcrWord]) -> Vec<Element> {
