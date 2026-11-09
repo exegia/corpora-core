@@ -135,6 +135,13 @@ TF HTML with the original archived XHTML in a dark-mode local QA site. The
 package README covers conversion, repair and asset limits; root `make ci` does
 not discover the nested Python package.
 
+For the QA selection resolver, run `uv run --group dev ruff check .`,
+`uv run --group dev mypy src`, `uv run --group dev pytest -q`, and `uv build`
+from `packages/tf-ai-resolver`. Its loopback `serve` command connects semantic
+TF HTML selection to the expert; `apply` creates a reviewed derived reading
+feature without changing original slots. See the resolver README.
+`.github/workflows/epub-resolver.yml` runs both nested suites on PRs.
+
 
 ### Language and spelling QA
 

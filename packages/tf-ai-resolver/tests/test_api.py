@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from tf.fabric import Fabric
 
-from tf_ai_resolver import CodexExpert, ResolveError, inspect_selection, resolve
+from tf_ai_resolver import CodexExpert, ResolveError, apply_resolution, inspect_selection, resolve
 
 
 class FakeExpert:
@@ -65,6 +65,57 @@ def test_staged_resolution_keeps_source_text_and_loads_with_tf_and_cf(tmp_path: 
     assert (output / "tf" / "ai_resolutions.tf").is_file()
     assert {path.name for path in (output / "tf").iterdir() if path.is_dir()} == set()
     assert json.loads((output / "resolution.json").read_text()) == report
+    with pytest.raises(ResolveError, match="does not match"):
+        apply_resolution(output, tmp_path / "wrong", report["resolution"]["id"], "Wrong")
+    applied = tmp_path / "applied"
+    applied_report = apply_resolution(output, applied, report["resolution"]["id"], "B")
+    assert applied_report["resolution"]["status"] == "applied"
+    assert applied_report["derived_text_feature"] == "resolved_reading"
+    repeated_apply = tmp_path / "repeated-apply"
+    assert apply_resolution(output, repeated_apply, report["resolution"]["id"], "B") == (
+        applied_report
+    )
+    for feature in ("ai_resolutions.tf", "resolved_reading.tf"):
+        assert (repeated_apply / "tf" / feature).read_bytes() == (
+            applied / "tf" / feature
+        ).read_bytes()
+    applied_api = Fabric(locations=str(applied / "tf"), silent="deep").load(
+        "text ai_resolutions resolved_reading", silent="deep"
+    )
+    assert applied_api.T.text(4) == "AβC"
+    assert applied_api.F.resolved_reading.v(4) == "ABC"
+    assert json.loads(applied_api.F.ai_resolutions.v(4))[0]["status"] == "applied"
+    second_selection = inspect_selection(applied / "tf", 4, 0, 1, "text")
+    second_expert = FakeExpert(
+        {"action": "replace", "replacement": "Z", "reason": "Second correction"},
+        selected_text="A",
+    )
+    second_proposal = tmp_path / "second-proposal"
+    second_report = resolve(
+        applied / "tf", second_proposal, second_selection, "fix", "Change A to Z", second_expert
+    )
+    combined = tmp_path / "combined"
+    apply_resolution(second_proposal, combined, second_report["resolution"]["id"], "Z")
+    combined_api = Fabric(locations=str(combined / "tf"), silent="deep").load(
+        "text resolved_reading", silent="deep"
+    )
+    assert combined_api.T.text(4) == "AβC"
+    assert combined_api.F.resolved_reading.v(4) == "ZBC"
+    overlap_selection = inspect_selection(applied / "tf", 4, 1, 2, "text")
+    overlap_proposal = tmp_path / "overlap-proposal"
+    overlap_report = resolve(
+        applied / "tf",
+        overlap_proposal,
+        overlap_selection,
+        "fix",
+        "Change beta to D",
+        FakeExpert({"action": "replace", "replacement": "D", "reason": "Overlap"}),
+    )
+    with pytest.raises(ResolveError, match="overlap"):
+        apply_resolution(
+            overlap_proposal, tmp_path / "overlap-output", overlap_report["resolution"]["id"], "D"
+        )
+    assert not (tmp_path / "overlap-output").exists()
     repeated = tmp_path / "repeated"
     assert (
         resolve(source, repeated, selection, "fix", "Replace the selected letter", expert) == report

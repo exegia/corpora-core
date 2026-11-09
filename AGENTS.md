@@ -151,6 +151,12 @@ semantic TF view beside the original XHTML for visual QA. See the package README
 for limits, repair policy, assets, and exact verification commands; root stack
 detection does not discover this nested Python package.
 
+`packages/tf-ai-resolver` runs the Text-Fabric expert on an exact, source-pinned
+selection. Its loopback `serve` command connects the EPUB QA page to proposals;
+explicit `apply` writes a derived `resolved_reading` feature while retaining
+source slots. Run its Ruff, mypy, pytest, and build checks from that package.
+`.github/workflows/epub-resolver.yml` runs both nested package suites on PRs.
+
 
 ### Language and spelling QA
 

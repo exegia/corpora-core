@@ -115,6 +115,12 @@ tests with `uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/t
 of semantic TF HTML alongside the archived XHTML. The package README documents
 its supported input, asset, repair, and QA boundaries.
 
+`packages/tf-ai-resolver` adds a loopback selection UI to the QA site. It runs
+the Text-Fabric expert on a pinned span and requires a separate review action
+before writing corrected text to a derived TF node feature. The original slots
+and default `T.text()` reading stay source-faithful. See the resolver README.
+The EPUB and resolver package checks run in `.github/workflows/epub-resolver.yml`.
+
 Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
 and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.

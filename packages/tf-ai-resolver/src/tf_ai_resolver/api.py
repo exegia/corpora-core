@@ -249,6 +249,16 @@ def _copy_source(tf_dir: Path, destination: Path) -> None:
         shutil.copyfile(path, target)
 
 
+def _strip_writer_timestamp(tf_dir: Path, names: tuple[str, ...]) -> None:
+    for name in names:
+        path = tf_dir / f"{name}.tf"
+        header, data = path.read_text(encoding="utf-8").split("\n\n", 1)
+        header = "\n".join(
+            line for line in header.splitlines() if not line.startswith("@dateWritten=")
+        )
+        path.write_text(header + "\n\n" + data, encoding="utf-8")
+
+
 def resolve(
     tf_dir: Path,
     output: Path,
@@ -354,6 +364,7 @@ def resolve(
             silent="deep",
         ):
             raise ResolveError("Text-Fabric rejected the resolution feature")
+        _strip_writer_timestamp(staged_tf, ("ai_resolutions",))
         with _loaded(staged_tf, [selection.text_feature, "ai_resolutions"]) as (api, location):
             if (
                 _node_text(api, selection) != text
@@ -370,6 +381,7 @@ def resolve(
                 or json.loads(cf.F.ai_resolutions.v(selection.node)) != prior
             ):
                 raise ResolveError("Context-Fabric revalidation failed")
+        report["proposal_revision"] = source_revision(staged_tf)
         (stage / "resolution.json").write_text(
             json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
             encoding="utf-8",
@@ -379,3 +391,138 @@ def resolve(
         shutil.rmtree(stage)
         raise
     return report
+
+
+def _applied_reading(text: str, entries: list[dict[str, Any]]) -> str:
+    edits = [entry for entry in entries if entry.get("status") == "applied"]
+    if any(type(entry.get("start")) is not int for entry in edits):
+        raise ResolveError("Applied resolution has an invalid text offset")
+    edits.sort(key=lambda entry: entry["start"])
+    pieces: list[str] = []
+    cursor = 0
+    for edit in edits:
+        start, end = edit["start"], edit["end"]
+        if (
+            type(start) is not int
+            or type(end) is not int
+            or not cursor <= start < end <= len(text)
+            or text[start:end] != edit["before"]
+            or edit.get("action") != "replace"
+            or not isinstance(edit.get("replacement"), str)
+        ):
+            raise ResolveError("Applied resolutions overlap or no longer match the TF reading")
+        pieces.extend((text[cursor:start], edit["replacement"]))
+        cursor = end
+    pieces.append(text[cursor:])
+    return "".join(pieces)
+
+
+def apply_resolution(
+    proposal_dir: Path,
+    output: Path,
+    resolution_id: str,
+    expected_replacement: str,
+) -> dict[str, Any]:
+    """Accept one exact proposal into a derived reading feature of a new TF bundle."""
+    proposal_dir = proposal_dir.resolve()
+    output = output.resolve()
+    tf_dir = proposal_dir / "tf"
+    if output.exists() or output == proposal_dir or proposal_dir in output.parents:
+        raise ResolveError("Applied output must be a new directory outside the proposal")
+    try:
+        report: dict[str, Any] = json.loads(
+            (proposal_dir / "resolution.json").read_text(encoding="utf-8")
+        )
+        selection = Selection(**report["selection"])
+        entry = report["resolution"]
+    except (OSError, ValueError, TypeError, KeyError) as error:
+        raise ResolveError("Proposal report is missing or malformed") from error
+    if not isinstance(entry, dict):
+        raise ResolveError("Proposal resolution is malformed")
+    revision = source_revision(tf_dir)
+    if report.get("proposal_revision") != revision:
+        raise ResolveError("Proposal TF revision does not match its report")
+    if (
+        not isinstance(resolution_id, str)
+        or entry.get("id") != resolution_id
+        or entry.get("status") != "proposed"
+        or entry.get("action") != "replace"
+        or entry.get("replacement") != expected_replacement
+    ):
+        raise ResolveError("Apply request does not match a proposed replacement")
+    has_resolved = (tf_dir / "resolved_reading.tf").is_file()
+    feature_names = [selection.text_feature, "ai_resolutions"]
+    if has_resolved:
+        feature_names.append("resolved_reading")
+    with _loaded(tf_dir, feature_names) as (api, _):
+        text = _node_text(api, selection)
+        _check_span(selection, text)
+        original_type = api.F.otype.v(selection.node)
+        original_slots = tuple(api.E.oslots.s(selection.node))
+        all_entries = dict(api.F.ai_resolutions.items())
+        resolved = dict(api.F.resolved_reading.items()) if has_resolved else {}
+    try:
+        node_entries = json.loads(all_entries[selection.node])
+    except (KeyError, TypeError, json.JSONDecodeError) as error:
+        raise ResolveError("Proposal TF lacks its audited resolution") from error
+    if not isinstance(node_entries, list) or entry not in node_entries:
+        raise ResolveError("Proposal report and TF feature disagree")
+    updated = [dict(item) for item in node_entries]
+    next_entry = next(item for item in updated if item == entry)
+    next_entry["status"] = "applied"
+    corrected = _applied_reading(text, updated)
+    all_entries[selection.node] = json.dumps(updated, ensure_ascii=False, sort_keys=True)
+    resolved[selection.node] = corrected
+    applied_report = {
+        **report,
+        "proposal_revision": revision,
+        "resolution": next_entry,
+        "preview_text": corrected,
+        "derived_text_feature": "resolved_reading",
+    }
+    output.parent.mkdir(parents=True, exist_ok=True)
+    stage = Path(tempfile.mkdtemp(prefix=f".{output.name}-", dir=output.parent))
+    try:
+        staged_tf = stage / "tf"
+        _copy_source(tf_dir, staged_tf)
+        if source_revision(staged_tf) != revision:
+            raise ResolveError("Proposal TF changed during application")
+        if not Fabric(locations=str(staged_tf), silent="deep").save(
+            nodeFeatures={"ai_resolutions": all_entries, "resolved_reading": resolved},
+            metaData={
+                "ai_resolutions": {"valueType": "str"},
+                "resolved_reading": {"valueType": "str"},
+            },
+            silent="deep",
+        ):
+            raise ResolveError("Text-Fabric rejected the applied feature")
+        _strip_writer_timestamp(staged_tf, ("ai_resolutions", "resolved_reading"))
+        with _loaded(staged_tf, [selection.text_feature, "ai_resolutions", "resolved_reading"]) as (
+            api,
+            location,
+        ):
+            if (
+                _node_text(api, selection) != text
+                or api.F.otype.v(selection.node) != original_type
+                or tuple(api.E.oslots.s(selection.node)) != original_slots
+                or json.loads(api.F.ai_resolutions.v(selection.node)) != updated
+                or api.F.resolved_reading.v(selection.node) != corrected
+            ):
+                raise ResolveError("Applied Text-Fabric revalidation failed")
+            cf = cast(Any, ContextFabric(locations=str(location)).loadAll())
+            if (
+                not cf
+                or cf.T.text(selection.node) != text
+                or cf.F.resolved_reading.v(selection.node) != corrected
+            ):
+                raise ResolveError("Applied Context-Fabric revalidation failed")
+        applied_report["applied_revision"] = source_revision(staged_tf)
+        (stage / "resolution.json").write_text(
+            json.dumps(applied_report, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        os.replace(stage, output)
+    except Exception:
+        shutil.rmtree(stage)
+        raise
+    return applied_report
