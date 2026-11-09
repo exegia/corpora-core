@@ -1,5 +1,14 @@
 # Operating the pipeline
 
+PDF extraction has an additional local benchmark suite outside root stack
+detection: `python3 -m unittest discover -s crates/corpora-pdf/benchmarks -p 'test_*.py'`.
+See `crates/corpora-pdf/benchmarks/README.md` for the synthetic end-to-end command.
+Private PDF manifests and results remain outside Git; no hosted service is used.
+The benchmark accepts `--tessdata-dir` for isolated language models and records
+their hashes. Missing or unloadable requested languages cannot silently fall back.
+When the PDF crate is present, the PR test job installs Poppler and Tesseract
+before `make ci`, then runs the benchmark and PDF review-browser Python suites.
+
 How to set up a repository generated from this template and run the release flow. Rules live in
 [`BRANCH-AND-RELEASE-POLICY.md`](./BRANCH-AND-RELEASE-POLICY.md), stages in [`LIFECYCLE.md`](./LIFECYCLE.md).
 
