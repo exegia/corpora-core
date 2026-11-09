@@ -1,5 +1,10 @@
 # Text-Fabric AI selection resolver
 
+Point to a small piece of TF text, ask for a change, and review the answer.
+The resolver treats the selection like a bookmark pinned to one exact version
+of the corpus. It writes a **new** TF bundle with the proposal; applying a
+reviewed proposal writes another new bundle. The source words stay intact.
+
 This package runs the repository's Text-Fabric expert on one pinned selection and
 exports an audited TF overlay. It also serves the EPUB semantic QA page with a
 local selection and review UI.
@@ -31,6 +36,57 @@ against their original Unicode offsets.
 The output is loaded again with both Text-Fabric and Context-Fabric before it is
 published. The output directory must be new and outside the source. Loader
 caches stay out of `output/tf`.
+
+## Python API
+
+```python
+from pathlib import Path
+from tf_ai_resolver import CodexExpert, inspect_selection, resolve, apply_resolution
+
+tf_dir = Path("output/book/tf")
+selection = inspect_selection(tf_dir, node=123, start=5, end=10, text_feature="text")
+expert = CodexExpert(Path("agent/text-fabric-expert/SYSTEM.md"))
+proposal = resolve(
+    tf_dir,
+    Path("output/proposal"),
+    selection,
+    mode="fix",
+    prompt="Correct this spelling.",
+    expert=expert,
+)
+print(proposal["resolution"])  # review action, replacement, and reason
+```
+
+Use node/offset values obtained from the **actual loaded TF text**; `123` and
+`5..10` above are example values. Inspect the proposal's reason and replacement
+before calling `apply_resolution`. If its `action` is `replace` and you approve
+the exact `replacement`, apply it with:
+
+```python
+resolution = proposal["resolution"]
+reviewed = apply_resolution(
+    Path("output/proposal"),
+    Path("output/applied"),
+    resolution["id"],
+    resolution["replacement"],
+)
+```
+
+A selection has `node`, `start`, `end`,
+`expected_text`, `revision`, `text_feature`, and optional `text_format`.
+
+| Call | Parameters | Purpose |
+| --- | --- | --- |
+| `inspect_selection` | `tf_dir`, positive node, Unicode scalar `start`/`end`, `text_feature`, optional `text_format` | Capture exact text and source revision for one node. |
+| `CodexExpert` | Expert instruction path; optional `command="codex"`, `model=None` | Configure the local Codex expert invocation. |
+| `resolve` | `tf_dir`, new `output`, `Selection`, `mode`, `prompt`, `expert` | Validate a `fix`, `suggest`, or `custom` request and write a proposal bundle. |
+| `apply_resolution` | `proposal_dir`, new `output`, `resolution_id`, `expected_replacement` | Apply one approved exact candidate to `resolved_reading`. |
+
+All paths are `Path` objects. Invalid/stale selections and unsafe destinations
+raise `ResolveError`. Selection length is at most 4,096 Unicode scalars; prompt
+length is 1–2,000 characters. `resolve` and `apply_resolution` return report
+dictionaries. The model can suggest text, but the host checks the proposal and
+owns all TF writes.
 
 ## CLI
 
@@ -72,6 +128,21 @@ candidate and reason before selecting **Apply candidate to derived reading**.
 The service binds only to `127.0.0.1`, checks same-origin JSON requests, and
 accepts application only for proposals issued in that server session. Each
 proposal and application gets a new output directory under `RESOLUTIONS`.
+
+For a custom local UI, the loopback service is
+`tf_ai_resolver.server.create_server(site, tf_dir, output_root, expert, port=0)`.
+It serves the generated QA site and exposes three same-origin JSON requests:
+
+| Route | JSON body | JSON result |
+| --- | --- | --- |
+| `POST /api/inspect` | `node`, `start`, `end`, `expected_text` | Pinned `selection`. |
+| `POST /api/resolve` | `selection`, `mode`, `prompt` | `output`, session `proposal_id`, `report`. |
+| `POST /api/apply` | `proposal_id`, `resolution_id`, `expected_replacement` | `output`, `report`. |
+
+Requests need `Content-Type: application/json`, `X-TF-Resolver: 1`, and the
+matching local `Origin`/`Host`; bodies are capped at 16 KiB. The built-in
+browser sends these fields. A `proposal_id` works only in the server session
+that issued it, and a proposal can be applied once.
 
 The default expert instructions are
 [`agent/text-fabric-expert/SYSTEM.md`](../../agent/text-fabric-expert/SYSTEM.md)
