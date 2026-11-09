@@ -433,6 +433,28 @@ def test_svg_media_and_document_assets_have_tf_locations(tmp_path: Path) -> None
         assert api.T.text(node) == "ABCfallbackDEdownloadF"
         assert json.loads(api.F.asset_refs.v(node)) == manifest["assets"]
         assert json.loads(api.F.image_assets.v(node)) == manifest["images"]
+    site = tmp_path / "site"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "packages/epub-to-tf/tools/qa_browser.py"),
+            str(output),
+            str(site),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = (site / "tf-rendered/0001.html").read_text()
+    assert '<img alt="art" src="../' in rendered
+    assert '<img src="../tf/assets/' in rendered and 'data-source-tag="svg"' in rendered
+    assert '<audio src="../tf/assets/' in rendered
+    assert '<video poster="../tf/assets/' in rendered
+    assert '<source src="../tf/assets/' in rendered
+    assert '<track src="../tf/assets/' in rendered
+    assert '<object data="../tf/assets/' in rendered
+    assert rendered.index('data-source-tag="svg"') < rendered.index("<audio")
+    assert rendered.index("<audio") < rendered.index("<video") < rendered.index("<object")
 
 
 def test_active_external_svg_blocks(tmp_path: Path) -> None:
@@ -477,6 +499,7 @@ def test_dark_qa_browser_compares_original_and_bundle(tmp_path: Path) -> None:
     assert (
         "<h1>Á<em>β</em></h1><p>café &amp; 東京</p>" in (site / "tf-rendered/0001.html").read_text()
     )
+    assert {path.name for path in (bundle / "tf").iterdir() if path.is_dir()} == {"assets"}
 
 
 def test_tf_html_retains_empty_markup_and_copied_image(tmp_path: Path) -> None:
@@ -570,6 +593,8 @@ def test_note_image_and_inline_math_keep_scope_and_offsets(tmp_path: Path) -> No
         text=True,
     )
     rendered = (site / "tf-rendered/0001.html").read_text()
+    assert '<math xmlns="http://www.w3.org/1998/Math/MathML"' in rendered
+    assert "<mi>x</mi>" in rendered
     assert '<aside data-epub-type="footnote" id="n">Note<img src="../' in rendered
     assert image["file"] in rendered
 

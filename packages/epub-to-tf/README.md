@@ -78,9 +78,12 @@ The manifest distinguishes original `source` from `validated_source` hashes.
   normalized TF reading text and a neutral stylesheet; original CSS, head
   metadata, and EPUB reader behavior remain in the archived XHTML view. It is
   a reading-structure reconstruction, not a byte-identical XHTML round trip.
-  Inline SVG and MathML are retained as assets but are not embedded into this
-  semantic page yet; unfamiliar tags are displayed as spans with their source
-  tag name in `data-source-tag`.
+  Inline passive SVG appears as an image at its source position. Inline MathML
+  is rendered from its copied asset at the same position after dropping active
+  attributes; the exact asset bytes remain available. Media `src`, video
+  `poster`, caption `track`, and object `data` paths use their copied assets.
+  The sandbox may prevent playback or PDF embedding. Unfamiliar tags appear as
+  spans with their source tag name in `data-source-tag`.
 - Referenced EPUB `footnote` and `endnote` bodies in linear spine XHTML use
   separate character slots and `note` nodes. Markers remain in main text as
   XHTML `element` nodes. A `noteref` edge points from each marker to its note.

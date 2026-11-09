@@ -234,3 +234,21 @@ claim to reproduce EPUB styling or the archive's complete XHTML head.
 | Independent `html.parser` checks over all `tf-rendered/*.html` | All 73 semantic main regions reproduced the exact normalized reading strings and retained all 188,983 reading elements, including 118 `img` tags. |
 | EPUB Ruff, format check, mypy, pytest, `uv build` | Passed; 43 tests cover nested inline markup, empty elements, copied assets and rendered notes. |
 | `make doctor`, `make fmt`, `make ci`; `make -C packages/tei-to-tf check build` | Passed; TEI: 138 passed, 11 skipped. |
+
+## Inline and media asset placement
+
+The semantic renderer now reads `asset_refs` from the loaded TF document and
+note nodes. It places passive inline SVG as an image and MathML as sanitized
+MathML at their retained zero-length element nodes. It maps video posters,
+media sources, caption tracks and object paths to distinct attributes, so one
+asset on an element cannot overwrite another. Exact copied asset bytes remain
+in `tf/assets/`; the semantic browser page stays sandboxed.
+
+| Command | Result |
+| --- | --- |
+| `uv run --group dev pytest -q` in `packages/epub-to-tf` | 43 passed, including inline SVG/MathML ordering, video poster/source/track, PDF object path, and note asset placement. |
+| `uv run --project packages/epub-to-tf --group dev python packages/epub-to-tf/tools/qa_browser.py target/qa-2001-semantic-v3 target/qa-2001-browser-v4` | Passed; all 73 chapters retained exact TF reading text and all 188,983 reading elements. |
+| Aside Browser at `http://127.0.0.1:8773/index.html?assets=2` | The fixture showed a loaded 40-pixel inline SVG and one MathML element in source order; video `poster`, nested `source`, `track`, and PDF `object` paths pointed to four distinct copied assets. |
+| Aside Browser at `http://127.0.0.1:8774/index.html?assets=4` | The full 2001 Translation comparison still showed matched heading hierarchy and a loaded 1600-pixel cover image. |
+| `make fmt`, `make ci`; EPUB Ruff, format check, mypy, pytest, `uv build`; `make -C packages/tei-to-tf check build` | Passed. TEI: 138 passed, 11 skipped. |
+| QA rebuild to `target/qa-2001-browser-v5` from a cache-free `target/qa-2001-semantic-v3` | Passed; 73 chapter pages generated, and `tf/` still contained only `assets/` afterward. The renderer loads a temporary copy of `.tf` files. |
