@@ -1,6 +1,11 @@
 //! # corpora-convert
 //!
-//! Conversion runners for the Corpora apps suite: turn source formats
-//! (TEI, EPUB, HTML, PDF, plain text) into corpus archives.
-//!
-//! This crate is a placeholder; the conversion runners land in a follow-up.
+//! Source-bound validation and reading projection for bounded local EPUB input.
+
+// zip and the workspace's other dependencies resolve two transitive hash table versions.
+#![expect(
+    clippy::multiple_crate_versions,
+    reason = "transitive zip dependency graph"
+)]
+
+pub mod epub;
