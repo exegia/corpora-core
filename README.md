@@ -24,6 +24,9 @@ contains the agent instructions and evaluation setup.
 
 When the PDF crate is present, PR tests install Poppler and Tesseract before
 `make ci`, then run the PDF benchmark and review-browser Python suites.
+The [PDF OCR skill](crates/corpora-pdf/skills/pdf-ocr/SKILL.md) and
+[proposal](crates/corpora-pdf/agent/PROPOSAL.md) define specialist recognition,
+optional paid fallback and location-linked review findings for historical scripts.
 
 ## How the pieces fit
 
