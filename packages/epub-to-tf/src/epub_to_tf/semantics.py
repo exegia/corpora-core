@@ -222,7 +222,7 @@ def annotate_document(document: dict[str, Any], members: set[str]) -> list[dict[
             if (
                 current["tag"] == "nav"
                 or classes & {"toc", "chaptersMenu", "returnToMenu"}
-                or "toc" in attributes.get("type", "").split()
+                or "toc" in attributes.get("epub:type", "").split()
                 or attributes.get("role") == "doc-toc"
             ):
                 return True
@@ -239,7 +239,7 @@ def annotate_document(document: dict[str, Any], members: set[str]) -> list[dict[
             element["semantic_kind"] = (
                 "subtitle"
                 if (
-                    "subtitle" in attributes.get("type", "").split()
+                    "subtitle" in attributes.get("epub:type", "").split()
                     or "chapter-subtitle" in classes
                     or attributes.get("role") == "doc-subtitle"
                 )
@@ -259,7 +259,7 @@ def annotate_document(document: dict[str, Any], members: set[str]) -> list[dict[
         href = attributes["href"]
         kind = (
             "note"
-            if "noteref" in attributes.get("type", "").split()
+            if "noteref" in attributes.get("epub:type", "").split()
             or attributes.get("role") == "doc-noteref"
             else "navigation"
             if in_navigation(element)

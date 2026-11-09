@@ -105,6 +105,16 @@ Rust bridge, installs pinned `en_US` and `fr_FR` dictionaries, and runs the real
 dictionary integration tests, including English metadata under a French corpus policy.
 See the core and converter READMEs for the policy, setup, and diagnostic contracts.
 
+### EPUB conversion and visual QA
+
+`packages/epub-to-tf` validates local EPUBs with the Rust `corpora-epub-check`
+binary and exports deterministic Text-Fabric. Build that binary with
+`cargo build -p corpora-convert --bin corpora-epub-check`, then run the package
+tests with `uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/tests`.
+`packages/epub-to-tf/tools/qa_browser.py BUNDLE SITE` builds a dark-mode view
+of semantic TF HTML alongside the archived XHTML. The package README documents
+its supported input, asset, repair, and QA boundaries.
+
 Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
 and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.

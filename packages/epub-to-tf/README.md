@@ -72,6 +72,10 @@ The manifest distinguishes original `source` from `validated_source` hashes.
   Text-Fabric nodes require slots; its `start=end` and `reading_start=reading_end`
   are the authoritative positions. Do not use `T.text(empty_element_node)` as
   the element's content.
+- Source attributes retain namespace-qualified keys such as `epub:type` and
+  `xml:lang` alongside ordinary `type` and `lang`. Inline SVG and MathML assets
+  retain the exact source byte slice plus inherited namespace declarations for
+  validation and QA rendering.
 - `tools/qa_browser.py` loads the `.tf` features and emits a sandboxed semantic
   reading page for each spine item. It retains headings, lists, tables, links,
   inline markup, referenced notes, empty elements, and copied image paths. The page uses the
@@ -125,7 +129,7 @@ The manifest distinguishes original `source` from `validated_source` hashes.
   elements, lost text/tags/attributes and unsupported blockers still fail.
   Spelling or AI never clears structural findings.
 - Duplicate XHTML fragment IDs stay blocking by default. With `--repair`,
-  later duplicate IDs receive deterministic suffixes only if no local XHTML
+  later duplicate IDs receive deterministic suffixes only if no XHTML or NCX
   reference targets that ambiguous fragment. Each edit is in the ledger.
   An inbound reference requires manual source correction.
 - Maximum 80 MiB original archive, 1024 members, 16 MiB expanded per member, 64 MiB expanded total, and

@@ -228,7 +228,8 @@ def repair_archive(original: bytes, report: dict[str, Any]) -> tuple[bytes, list
             for name in sorted(names)
             if name.lower().endswith((".xhtml", ".html", ".htm"))
         }
-        references = _references(chapters)
+        ncx = {name: source.read(name) for name in sorted(names) if name.lower().endswith(".ncx")}
+        references = _references({**chapters, **ncx})
         editable = {document["member"] for document in report["documents"]} | {
             member for member, codes in problems.items() if "EPUB_XML" in codes
         }

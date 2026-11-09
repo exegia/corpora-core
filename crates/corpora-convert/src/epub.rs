@@ -4,7 +4,7 @@ use corpora_core::diagnostic::{
     Applicability, Certainty, Diagnostic, DiagnosticCategory, DiagnosticReport, Severity,
     SourceRange, Suggestion,
 };
-use roxmltree::{Document, Node, ParsingOptions};
+use roxmltree::{Attribute, Document, Node, ParsingOptions};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
@@ -15,6 +15,8 @@ const MAX_MEMBERS: usize = 1024;
 const MAX_ARCHIVE_BYTES: usize = 80 * 1024 * 1024;
 const MAX_MEMBER_BYTES: u64 = 16 * 1024 * 1024;
 const MAX_EXPANDED_BYTES: u64 = 64 * 1024 * 1024;
+const EPUB_NS: &str = "http://www.idpf.org/2007/ops";
+const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
 /// Default character-slot bound for normal EPUB validation.
 pub const DEFAULT_MAX_SLOTS: usize = 1_000_000;
 /// Hard character-slot ceiling for explicitly requested large conversions.
@@ -134,6 +136,9 @@ pub struct AssetReference {
     pub source_byte: usize,
     /// Exclusive expanded-member byte end for an inline XML asset.
     pub source_end: Option<usize>,
+    /// Effective namespace declarations needed to parse an inline XML slice.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub namespaces: BTreeMap<String, String>,
 }
 
 /// Member-scoped diagnostics use offsets in expanded UTF-8 member bytes.
@@ -221,15 +226,55 @@ fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-fn passive_svg(bytes: &[u8]) -> bool {
+fn attribute_name(attribute: Attribute<'_, '_>) -> String {
+    match attribute.namespace() {
+        Some(EPUB_NS) => format!("epub:{}", attribute.name()),
+        Some(XML_NS) => format!("xml:{}", attribute.name()),
+        Some(uri) => format!("{{{uri}}}{}", attribute.name()),
+        None => attribute.name().into(),
+    }
+}
+
+fn escaped_xml_attribute(value: &str) -> String {
+    value
+        .replace('&', "&amp;")
+        .replace('"', "&quot;")
+        .replace('<', "&lt;")
+}
+
+fn inline_xml_with_context(bytes: &[u8], namespaces: &BTreeMap<String, String>) -> Option<String> {
     let Ok(source) = std::str::from_utf8(bytes) else {
+        return None;
+    };
+    let mut wrapped = String::from("<_tf_inline");
+    for (prefix, uri) in namespaces {
+        wrapped.push_str(" xmlns");
+        if !prefix.is_empty() {
+            wrapped.push(':');
+            wrapped.push_str(prefix);
+        }
+        wrapped.push_str("=\"");
+        wrapped.push_str(&escaped_xml_attribute(uri));
+        wrapped.push('"');
+    }
+    wrapped.push('>');
+    wrapped.push_str(source);
+    wrapped.push_str("</_tf_inline>");
+    Some(wrapped)
+}
+
+fn passive_svg(bytes: &[u8], namespaces: &BTreeMap<String, String>) -> bool {
+    let Some(wrapped) = inline_xml_with_context(bytes, namespaces) else {
         return false;
     };
-    let Ok(tree) = Document::parse(source) else {
+    let Ok(tree) = Document::parse(&wrapped) else {
         return false;
     };
-    tree.root_element().tag_name().namespace() == Some("http://www.w3.org/2000/svg")
-        && tree.descendants().filter(Node::is_element).all(|element| {
+    let Some(svg) = tree.root_element().first_element_child() else {
+        return false;
+    };
+    svg.tag_name().namespace() == Some("http://www.w3.org/2000/svg")
+        && svg.descendants().filter(Node::is_element).all(|element| {
             !matches!(
                 element.tag_name().name(),
                 "script" | "foreignObject" | "image"
@@ -383,7 +428,7 @@ fn append_text(
         tag: node.tag_name().name().into(),
         attributes: node
             .attributes()
-            .map(|attr| (attr.name().into(), attr.value().into()))
+            .map(|attr| (attribute_name(attr), attr.value().into()))
             .collect(),
         source_byte: node.range().start,
         start,
@@ -460,6 +505,18 @@ fn push_assets(
     };
     let inline_asset = resource.as_ref().is_some_and(|(_, _, end)| end.is_some());
     if let Some((kind, href, source_end)) = resource {
+        let namespaces = if source_end.is_some() {
+            node.namespaces()
+                .map(|namespace| {
+                    (
+                        namespace.name().unwrap_or("").into(),
+                        namespace.uri().into(),
+                    )
+                })
+                .collect()
+        } else {
+            BTreeMap::new()
+        };
         assets.push(AssetReference {
             document_id: owner.document_id.into(),
             scope: owner.scope.into(),
@@ -476,6 +533,7 @@ fn push_assets(
             text_offset,
             source_byte: node.range().start,
             source_end,
+            namespaces,
         });
     }
     if tag == "video" {
@@ -496,6 +554,7 @@ fn push_assets(
                 text_offset,
                 source_byte: node.range().start,
                 source_end: None,
+                namespaces: BTreeMap::new(),
             });
         }
     }
@@ -568,7 +627,7 @@ fn append_reading(
         tag: node.tag_name().name().into(),
         attributes: node
             .attributes()
-            .map(|attr| (attr.name().into(), attr.value().into()))
+            .map(|attr| (attribute_name(attr), attr.value().into()))
             .collect(),
         source_byte: node.range().start,
         start,
@@ -1338,7 +1397,9 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
             })
         };
         match resolved {
-            Some((path, media, data)) if media != "image/svg+xml" || passive_svg(data) => {
+            Some((path, media, data))
+                if media != "image/svg+xml" || passive_svg(data, &asset.namespaces) =>
+            {
                 asset.target_member = path;
                 asset.media_type = media;
                 asset.sha256 = hash(data);

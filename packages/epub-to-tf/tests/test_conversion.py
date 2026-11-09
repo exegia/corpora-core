@@ -662,6 +662,58 @@ def test_repair_rejects_ambiguous_duplicate_id_link(tmp_path: Path) -> None:
     assert not (tmp_path / "out").exists()
 
 
+def test_repair_rejects_ncx_targeting_duplicate_id(tmp_path: Path) -> None:
+    source = tmp_path / "ambiguous-ncx.epub"
+    opf = OPF.replace(
+        b'<item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>',
+        b'<item id="toc" href="toc.ncx" media-type="application/x-dtbncx+xml"/>',
+    ).replace(b"<spine>", b'<spine toc="toc">')
+    chapter = b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p id="v">One</p><p id="v">Two</p></body></html>'
+    ncx = b'<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/"><navMap><navPoint id="p"><navLabel><text>Verse</text></navLabel><content src="chapter.xhtml#v"/></navPoint></navMap></ncx>'
+    fixture(source, opf=opf, chapter=chapter, extra={"OEBPS/toc.ncx": ncx})
+    with pytest.raises(ConversionError, match="duplicate ID has an inbound reference"):
+        convert(source, tmp_path / "out", CHECKER, repair=True)
+    assert not (tmp_path / "out").exists()
+
+
+def test_inherited_inline_namespaces_and_qualified_attributes(tmp_path: Path) -> None:
+    source = tmp_path / "namespaces.epub"
+    chapter = b"""<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xmlns:s="http://www.w3.org/2000/svg" xmlns:m="http://www.w3.org/1998/Math/MathML"><body><p lang="en" xml:lang="fr">A<s:svg width="4" height="4"><s:circle cx="2" cy="2" r="1"/></s:svg><m:math><m:mi>x</m:mi></m:math><a type="ordinary" epub:type="noteref" href="#n">1</a></p><aside epub:type="footnote" id="n">Note</aside></body></html>"""
+    fixture(source, chapter=chapter)
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER)
+    assert (output / "documents/0001.txt").read_text() == "A1"
+    assert [link["kind"] for link in manifest["links"]] == ["note"]
+    document = json.loads((output / "documents/0001.json").read_text())
+    paragraph = next(element for element in document["elements"] if element["tag"] == "p")
+    marker = next(element for element in document["elements"] if element["tag"] == "a")
+    assert paragraph["attributes"]["lang"] == "en"
+    assert paragraph["attributes"]["xml:lang"] == "fr"
+    assert marker["attributes"]["type"] == "ordinary"
+    assert marker["attributes"]["epub:type"] == "noteref"
+    svg, math = manifest["assets"]
+    assert (output / svg["file"]).read_bytes().startswith(b"<s:svg")
+    assert (output / math["file"]).read_bytes().startswith(b"<m:math")
+    assert svg["namespaces"]["s"] == "http://www.w3.org/2000/svg"
+    assert math["namespaces"]["m"] == "http://www.w3.org/1998/Math/MathML"
+    site = tmp_path / "site"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "packages/epub-to-tf/tools/qa_browser.py"),
+            str(output),
+            str(site),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = (site / "tf-rendered/0001.html").read_text()
+    assert 'data-source-tag="svg"' in rendered
+    assert "<math" in rendered and "<mi>x</mi>" in rendered
+    assert 'data-epub-type="noteref"' in rendered
+
+
 def test_repair_rejects_lost_source_attribute(tmp_path: Path) -> None:
     source = tmp_path / "duplicate-attribute.epub"
     chapter = (

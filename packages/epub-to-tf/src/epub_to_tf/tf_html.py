@@ -63,7 +63,14 @@ def _math_markup(bundle: Path, asset: dict[str, Any]) -> str:
     source = (bundle / asset["file"]).read_bytes()
     if b"<!DOCTYPE" in source.upper() or b"<!ENTITY" in source.upper():
         raise ValueError("Inline MathML contains a DTD or entity declaration")
-    root = ET.fromstring(source)
+    declarations = "".join(
+        f' xmlns{":" + prefix if prefix else ""}="{html.escape(uri, quote=True)}"'
+        for prefix, uri in sorted(asset.get("namespaces", {}).items())
+    )
+    wrapper = ET.fromstring(f"<_tf_inline{declarations}>".encode() + source + b"</_tf_inline>")
+    if len(wrapper) != 1:
+        raise ValueError("Inline MathML has no unique root element")
+    root = wrapper[0]
 
     def element(node: ET.Element, root_element: bool = False) -> str:
         if not isinstance(node.tag, str) or not node.tag.startswith("{" + MATH_NS + "}"):
@@ -94,8 +101,10 @@ def _math_markup(bundle: Path, asset: dict[str, Any]) -> str:
 
 def _attributes(tag: str, source: dict[str, str], assets: list[dict[str, Any]]) -> str:
     values = {key: value for key, value in source.items() if key in ATTRS}
-    if "type" in source:
-        values["data-epub-type"] = source["type"]
+    if "epub:type" in source:
+        values["data-epub-type"] = source["epub:type"]
+    if "xml:lang" in source:
+        values["lang"] = source["xml:lang"]
     if tag == "a" and source.get("href", "").startswith("#"):
         values["href"] = source["href"]
     elif tag == "a" and "href" in source:

@@ -55,6 +55,15 @@ and package checks; root stack detection does not discover nested Python project
 `.github/workflows/tei-converter.yml` runs these checks on relevant PR changes.
 See the package README for reading policies, metadata separation and supported boundaries.
 
+## EPUB conversion package
+
+`packages/epub-to-tf` uses the Rust `corpora-epub-check` validator. Build with
+`cargo build -p corpora-convert --bin corpora-epub-check` and verify with
+`uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/tests`.
+For visual QA, run `packages/epub-to-tf/tools/qa_browser.py BUNDLE SITE` to
+compare semantic TF HTML with archived XHTML. The package README specifies
+supported input, repair, and asset boundaries.
+
 
 ### Language and spelling QA
 

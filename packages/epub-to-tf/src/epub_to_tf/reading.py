@@ -19,7 +19,9 @@ def normalize_slots(text: str, elements: list[dict[str, Any]]) -> tuple[list[str
     protected = sorted(
         (element["start"], element["end"])
         for element in elements
-        if element["tag"] in PRESERVE_TAGS or element["attributes"].get("space") == "preserve"
+        if element["tag"] in PRESERVE_TAGS
+        or element["attributes"].get("xml:space") == "preserve"
+        or element["attributes"].get("space") == "preserve"
     )
     merged: list[tuple[int, int]] = []
     for start, end in protected:
