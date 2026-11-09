@@ -21,3 +21,17 @@ duplicate rules here - `make agents-check` fails if the import above is removed.
 1. `make fmt`, then `make ci` (add `make e2e` when behavior visible to users changed).
 2. Update `AGENTS.md`, `README.md` and `.github/copilot-instructions.md` if conventions or automation moved.
 3. Propose a branch name `<type>/<slug>` and a Conventional Commit PR title; say what you validated.
+
+## Domain agent bundles
+
+Text-Fabric work uses `.github/skills/text-fabric-expert/SKILL.md` and
+`agent/text-fabric-expert/SYSTEM.md`. Its source map, MCP configuration generator
+and verification instructions live in `agent/text-fabric-expert/README.md`.
+
+## TEI conversion package
+
+`packages/tei-to-tf` provides the TEI acquisition/conversion CLI. Run
+`make -C packages/tei-to-tf check build` for its locked Python lint, type, test
+and package checks; root stack detection does not discover nested Python projects.
+`.github/workflows/tei-converter.yml` runs these checks on relevant PR changes.
+See the package README for reading policies, metadata separation and supported boundaries.

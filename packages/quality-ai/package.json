@@ -1,0 +1,21 @@
+{
+  "name": "@corpora/quality-ai",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --allowJs --checkJs --noEmit --module nodenext --target es2022 bridge.mjs --types node",
+    "test": "node --test bridge.test.mjs"
+  },
+  "dependencies": {
+    "ai": "7.0.164",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/json-schema": "7.0.15",
+    "@types/node": "26.6.6",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
