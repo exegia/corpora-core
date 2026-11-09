@@ -22,6 +22,9 @@ The optional [quality AI bridge](packages/quality-ai/README.md) helps the TEI
 quality pipeline review bounded findings. The [Text-Fabric expert bundle](agent/text-fabric-expert/README.md)
 contains the agent instructions and evaluation setup.
 
+When the PDF crate is present, PR tests install Poppler and Tesseract before
+`make ci`, then run the PDF benchmark and review-browser Python suites.
+
 ## How the pieces fit
 
 ```text
