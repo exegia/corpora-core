@@ -212,3 +212,25 @@ projection; the original archive and exact member text remain available for
 source-faithful work. The external loader's derived `.cfm` cache was removed;
 `tf/assets/` is the final bundle's only directory under `tf/`, and all 351
 checksums match.
+
+## TF semantic HTML reading view
+
+The QA page now shows semantic HTML reconstructed from loaded TF node features
+and `parent` edges beside the archived XHTML. It retains the 2001 Translation's
+headings, paragraphs, inline links, cover image and verse markup. The plain
+`T.text()` view remains in a collapsible panel. Zero-length XHTML elements such
+as `br` and `img` now have anchored TF nodes with explicit zero-length spans;
+their adjacent slot is an indexing anchor, not element content. Referenced note
+bodies render after the main reading scope from their separate TF note nodes.
+The semantic page uses normalized reading text and neutral CSS; it does not
+claim to reproduce EPUB styling or the archive's complete XHTML head.
+
+| Command | Result |
+| --- | --- |
+| `uv run --project packages/epub-to-tf epub-to-tf target/qa-2001-semantic-v2/sources/original.epub target/qa-2001-semantic-v3 --checker target/debug/corpora-epub-check --repair --max-slots 8000000` | Passed; same original EPUB bytes, 73 documents. |
+| `uv run --project packages/epub-to-tf --group dev python target/qa-2001-semantic-verify.py target/qa-2001-semantic-v3` | Passed: 73 independent XHTML/text checks, real Context-Fabric load, 352 checksums. |
+| `python3 /Users/emmanuel/.codex/skills/text-fabric-validator/scripts/tf_validate.py target/qa-2001-semantic-v3/tf --json target/qa-2001-semantic-v3-validation.json --report target/qa-2001-semantic-v3-validation.md --quiet` | Zero errors; TF064 and TF065 retain the documented whitespace policy. |
+| `uv run --project packages/epub-to-tf --group dev python packages/epub-to-tf/tools/qa_browser.py target/qa-2001-semantic-v3 target/qa-2001-browser-v3` | Passed. Aside Browser at `http://127.0.0.1:8772/index.html?schema=5` showed source and TF semantic frames, heading hierarchy, links and a loaded 1600-pixel cover image; Numbers showed chapter headings, navigation and verses. |
+| Independent `html.parser` checks over all `tf-rendered/*.html` | All 73 semantic main regions reproduced the exact normalized reading strings and retained all 188,983 reading elements, including 118 `img` tags. |
+| EPUB Ruff, format check, mypy, pytest, `uv build` | Passed; 43 tests cover nested inline markup, empty elements, copied assets and rendered notes. |
+| `make doctor`, `make fmt`, `make ci`; `make -C packages/tei-to-tf check build` | Passed; TEI: 138 passed, 11 skipped. |

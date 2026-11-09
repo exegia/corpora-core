@@ -65,6 +65,22 @@ The manifest distinguishes original `source` from `validated_source` hashes.
   NCX is the fallback. Missing/external TOC targets block export. Each target
   document also has a `toc_entries` TF feature; links in a reading TOC page
   remain marked as navigation links.
+- Every reading XHTML element, including zero-length `br` and `img`, has an
+  `element` node with `xhtml_tag`, source attributes, parent edge, source
+  byte location, and raw/reading spans. A zero-length element has
+  `empty_element=1` and is anchored to an adjacent character slot only because
+  Text-Fabric nodes require slots; its `start=end` and `reading_start=reading_end`
+  are the authoritative positions. Do not use `T.text(empty_element_node)` as
+  the element's content.
+- `tools/qa_browser.py` loads the `.tf` features and emits a sandboxed semantic
+  reading page for each spine item. It retains headings, lists, tables, links,
+  inline markup, referenced notes, empty elements, and copied image paths. The page uses the
+  normalized TF reading text and a neutral stylesheet; original CSS, head
+  metadata, and EPUB reader behavior remain in the archived XHTML view. It is
+  a reading-structure reconstruction, not a byte-identical XHTML round trip.
+  Inline SVG and MathML are retained as assets but are not embedded into this
+  semantic page yet; unfamiliar tags are displayed as spans with their source
+  tag name in `data-source-tag`.
 - Referenced EPUB `footnote` and `endnote` bodies in linear spine XHTML use
   separate character slots and `note` nodes. Markers remain in main text as
   XHTML `element` nodes. A `noteref` edge points from each marker to its note.

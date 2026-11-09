@@ -59,7 +59,7 @@ pub struct ReadingDocument {
     pub member: String,
     /// XHTML text in DOM order, without inserted whitespace.
     pub text: String,
-    /// Complete non-empty XHTML hierarchy.
+    /// Complete XHTML hierarchy, including empty elements.
     pub elements: Vec<Element>,
 }
 
@@ -78,7 +78,7 @@ pub struct NoteBody {
     pub kind: String,
     /// Exact decoded XHTML text of the note body.
     pub text: String,
-    /// Nonempty source XHTML hierarchy inside this note.
+    /// Source XHTML hierarchy inside this note, including empty elements.
     pub elements: Vec<Element>,
 }
 

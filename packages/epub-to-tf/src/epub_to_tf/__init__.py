@@ -79,15 +79,15 @@ def _write_graph(
             )
         )
         for element in document["elements"]:
-            if element["end"] == element["start"]:
-                continue
+            empty = element["end"] == element["start"]
             key = doc_key + ":" + element["key"]
             parent = doc_key + ":" + element["parent"] if element["parent"] else doc_key
+            first = start + min(element["start"] + 1, slot - start)
             specs.append(
                 (
                     "element",
                     key,
-                    list(range(start + element["start"] + 1, start + element["end"] + 1)),
+                    [first] if empty else list(range(first, start + element["end"] + 1)),
                     {
                         "xhtml_tag": element["tag"],
                         "attributes": json.dumps(
@@ -99,6 +99,7 @@ def _write_graph(
                         "end": element["end"],
                         "reading_start": element["reading_start"],
                         "reading_end": element["reading_end"],
+                        "empty_element": int(empty),
                         **{
                             name: element[name]
                             for name in (
@@ -151,14 +152,14 @@ def _write_graph(
             )
         )
         for element in note["elements"]:
-            if element["end"] == element["start"]:
-                continue
+            empty = element["end"] == element["start"]
             parent = note_key + ":" + element["parent"] if element["parent"] else note_key
+            first = start + min(element["start"] + 1, slot - start)
             specs.append(
                 (
                     "element",
                     note_key + ":" + element["key"],
-                    list(range(start + element["start"] + 1, start + element["end"] + 1)),
+                    [first] if empty else list(range(first, start + element["end"] + 1)),
                     {
                         "xhtml_tag": element["tag"],
                         "attributes": json.dumps(
@@ -170,6 +171,7 @@ def _write_graph(
                         "end": element["end"],
                         "reading_start": element["reading_start"],
                         "reading_end": element["reading_end"],
+                        "empty_element": int(empty),
                     },
                     parent,
                 )
@@ -217,6 +219,7 @@ def _write_graph(
                 "reading_length",
                 "heading_level",
                 "link_external",
+                "empty_element",
             }
             else "str"
         }

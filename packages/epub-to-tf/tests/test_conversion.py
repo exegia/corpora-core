@@ -471,8 +471,52 @@ def test_dark_qa_browser_compares_original_and_bundle(tmp_path: Path) -> None:
     page = (site / "index.html").read_text()
     assert ":root{color-scheme:dark}" in page
     assert 'iframe id="source" class="source-view" sandbox=""' in page
+    assert 'iframe id="tf-rendered" class="source-view" sandbox=""' in page
     assert '"source_matches": true' in page
     assert '"tf": "Áβcafé & 東京"' in page
+    assert (
+        "<h1>Á<em>β</em></h1><p>café &amp; 東京</p>" in (site / "tf-rendered/0001.html").read_text()
+    )
+
+
+def test_tf_html_retains_empty_markup_and_copied_image(tmp_path: Path) -> None:
+    source = tmp_path / "empty-markup.epub"
+    chapter = (
+        b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>A<br/>B'
+        b'<img src="art.png" alt="Art"/></p></body></html>'
+    )
+    opf = OPF.replace(
+        b'<item id="nav"', b'<item id="art" href="art.png" media-type="image/png"/><item id="nav"'
+    )
+    fixture(source, opf=opf, chapter=chapter, extra={"OEBPS/art.png": b"image bytes"})
+    bundle = tmp_path / "bundle"
+    manifest = convert(source, bundle, CHECKER)
+    site = tmp_path / "site"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "packages/epub-to-tf/tools/qa_browser.py"),
+            str(bundle),
+            str(site),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = (site / "tf-rendered/0001.html").read_text()
+    assert '<p>A<br>B<img alt="Art" src="../' in rendered
+    assert manifest["assets"][0]["file"] in rendered
+    assert (site / manifest["assets"][0]["file"]).read_bytes() == b"image bytes"
+    nodes = manifest["graph"]["node_ids"]
+    api = Fabric(locations=str(bundle / "tf"), silent="deep").load(
+        "empty_element xhtml_tag parent", silent="deep"
+    )
+    empty = [
+        node
+        for key, node in nodes.items()
+        if key.startswith("document:chapter:") and api.F.empty_element.v(node) == 1
+    ]
+    assert {api.F.xhtml_tag.v(node) for node in empty} == {"br", "img"}
 
 
 def test_note_image_and_inline_math_keep_scope_and_offsets(tmp_path: Path) -> None:
@@ -500,12 +544,34 @@ def test_note_image_and_inline_math_keep_scope_and_offsets(tmp_path: Path) -> No
         4,
     )
     assert (output / math["file"]).read_bytes() == chapter[math["source_byte"] : math["source_end"]]
+    image_node = manifest["graph"]["node_ids"]["note:OEBPS/chapter.xhtml#n:" + image["element_key"]]
+    empty_api = Fabric(locations=str(output / "tf"), silent="deep").load(
+        "empty_element xhtml_tag start end", silent="deep"
+    )
+    assert empty_api.F.empty_element.v(image_node) == 1
+    assert empty_api.F.xhtml_tag.v(image_node) == "img"
+    assert empty_api.F.start.v(image_node) == empty_api.F.end.v(image_node)
     note_node = manifest["graph"]["node_ids"]["note:OEBPS/chapter.xhtml#n"]
     tf = Fabric(locations=str(output / "tf"), silent="deep").load("text asset_refs", silent="deep")
     cf = ContextFabric(locations=str(output / "tf")).loadAll()
     for api in (tf, cf):
         assert api.T.text(note_node) == "Note body"
         assert json.loads(api.F.asset_refs.v(note_node)) == [image]
+    site = tmp_path / "site"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "packages/epub-to-tf/tools/qa_browser.py"),
+            str(output),
+            str(site),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = (site / "tf-rendered/0001.html").read_text()
+    assert '<aside data-epub-type="footnote" id="n">Note<img src="../' in rendered
+    assert image["file"] in rendered
 
 
 def test_guarded_xhtml_repair_and_final_loader(tmp_path: Path) -> None:
@@ -670,6 +736,24 @@ def test_semantic_features_toc_links_and_reading_whitespace(tmp_path: Path) -> N
         tf.F.link_kind.v(manifest["graph"]["node_ids"][f"document:chapter:{ref_link['key']}"])
         == "reference"
     )
+    site = tmp_path / "site"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "packages/epub-to-tf/tools/qa_browser.py"),
+            str(output),
+            str(site),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = (site / "tf-rendered/0001.html").read_text()
+    assert "<h1>Title</h1>" in rendered
+    assert '<h2 class="chapter-subtitle">Sub</h2>' in rendered
+    assert '<sup class="v" id="v">1</sup>' in rendered
+    assert '<a data-source-href="https://example.org">Source</a>' in rendered
+    assert "<pre> X   Y\n  Z</pre>" in rendered
     for feature in ("link_fragment", "link_target_member"):
         data = (output / "tf" / f"{feature}.tf").read_text().split("\n\n", 1)[1]
         assert all(data.splitlines())
