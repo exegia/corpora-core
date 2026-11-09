@@ -1,31 +1,64 @@
-# corpora-core
+# corpora-core: reusable text checks
 
-Core types and traits for the Corpora apps suite.
+This Rust crate checks XML/TEI structure, TEI metadata, and language. With an
+optional feature it also checks spelling. Imagine a teacher marking problems
+on a copy of a page: the crate reports **where** and **why**, but never changes
+the page itself. The [TEI converter](../../packages/tei-to-tf/README.md) uses
+these checks while deciding whether a new TF bundle is safe to publish.
 
-## Overview
+## Pick a check
 
-This crate provides shared abstractions used across:
-- Conversion runners
-- Text-Fabric builder  
-- Model typings generation
-- Data sources
-- AI skills and agentic workflows
+| API | Parameters | Returns | Purpose |
+| --- | --- | --- | --- |
+| `structural::check_xml(source_id, text)` | Your source name; decoded UTF-8 XML | `DiagnosticReport` | Check strict XML with default limits. |
+| `structural::check_xml_with_options(source_id, text, options)` | Same inputs plus `StructuralOptions` | `DiagnosticReport` | Set byte/node budgets; optionally check TEI boundaries. |
+| `purpose::validate_tei_metadata(source_id, xml, expected_document_id, allow_no_namespace)` | Source name, TEI XML, optional caller ID, namespace policy | `PurposeReport` | Check metadata dates and primary ID, keeping field receipts. |
+| `language::detect_language(text, hint)` | Text and optional locale hint | `LanguageDetection` | Pick a supported language/dictionary or say why none fits. |
+| `SpellEngine::load(root)` / `load_selected(root, names)` | Installed dictionary directory; optional allowed names | `SpellEngine` | Open dictionary data when `spellcheck` is enabled. |
+| `SpellEngine::check(text, role, hint)` | Decoded text, `TextRole`, optional locale | `SpellReport` | Report language and spelling findings. |
+| `SpellEngine::check_diagnostics(source_id, text, role, hint)` | Same text plus source name | `DiagnosticReport` | Get spelling findings in the shared diagnostic format. |
 
-## Usage
+`source_id` is your label for this exact input. `expected_document_id` is a
+caller-supplied identity expectation, **not** an ID guessed from a filename.
+`hint` may be `Some("en-GB")`, for example, or `None` to detect from text.
+Every function above returns `Result<...>` except the shown report methods.
+
+`StructuralOptions` defaults to 64 MiB of UTF-8 and 1,000,000 parser nodes;
+set `tei: true` for additional TEI checks. `allow_no_namespace` defaults to
+`false`. `TextRole` has `Corpus`, `Metadata`, `Frontmatter`, `Footnote`,
+`Additional`, and `Heading` variants. The spelling feature requires Rust 1.91
+and separately installed dictionaries.
 
 ```rust
-use corpora_core::{Error, Result};
+use corpora_core::structural::{check_xml_with_options, StructuralOptions};
 
-fn process_document() -> Result<()> {
-    // Your processing logic here
+fn main() -> corpora_core::Result<()> {
+    let xml = "<TEI xmlns='http://www.tei-c.org/ns/1.0'/>";
+    let report = check_xml_with_options(
+        "book.xml",
+        xml,
+        StructuralOptions { tei: true, ..Default::default() },
+    )?;
+    println!("safe under these checks: {}", report.passed());
     Ok(())
 }
 ```
 
-## Features
+Enable `serde` to serialize shared types; enable `spellcheck` for the Matchum
+spelling engine and the `corpora-text-check` JSON-lines executable. The basic
+XML, TEI metadata, language, and diagnostic APIs do not require dictionaries.
 
-- `serde` - Enable serialization support for core types
-- `spellcheck` - Enable the Matchum spelling engine and JSON-lines bridge (dictionary data installed separately)
+## Diagnostic helpers
+
+| Method | Purpose |
+| --- | --- |
+| `DiagnosticReport::new(source_id, text, findings)` | Bind findings to the SHA-256 of this exact UTF-8 text. |
+| `DiagnosticReport::passed()` | Check whether any finding is blocking. |
+| `DiagnosticReport::matches_source(text)` | Refuse stale ranges if the text has changed. |
+| `SourceRange::from_bytes(text, start..end)` | Convert a UTF-8 byte span to byte, scalar, line, and column positions. |
+| `TextEdit::matches_source(report, text)` | Check that a suggested edit still matches the report's source and old text. |
+
+The detailed sections below explain the policies and coordinates.
 
 ## Shared structural and spelling diagnostics
 
@@ -36,13 +69,15 @@ DTD loading, external entity resolution or network access:
 ```rust
 use corpora_core::structural::check_xml;
 
-let source = "<root><title>Example</Title></root>";
-let report = check_xml("edition.xml", source)?;
-assert!(!report.passed());
-let proposal = &report.diagnostics[0].suggestions[0].edits[0];
-assert!(proposal.matches_source(&report, source));
-assert_eq!(proposal.after, "</title>");
-# Ok::<(), corpora_core::Error>(())
+fn main() -> corpora_core::Result<()> {
+    let source = "<root><title>Example</Title></root>";
+    let report = check_xml("edition.xml", source)?;
+    assert!(!report.passed());
+    let proposal = &report.diagnostics[0].suggestions[0].edits[0];
+    assert!(proposal.matches_source(&report, source));
+    assert_eq!(proposal.after, "</title>");
+    Ok(())
+}
 ```
 
 With `spellcheck`, use
@@ -111,11 +146,13 @@ source-hashed diagnostics plus `PurposeField` receipts for recognized metadata f
 ```rust
 use corpora_core::purpose::validate_tei_metadata;
 
-let xml = "<TEI xmlns='http://www.tei-c.org/ns/1.0'><teiHeader><date>2014</date></teiHeader></TEI>";
-let result = validate_tei_metadata("edition.xml", xml, None, false)?;
-assert!(result.report.passed());
-assert_eq!(result.fields.len(), 1);
-# Ok::<(), corpora_core::Error>(())
+fn main() -> corpora_core::Result<()> {
+    let xml = "<TEI xmlns='http://www.tei-c.org/ns/1.0'><teiHeader><date>2014</date></teiHeader></TEI>";
+    let result = validate_tei_metadata("edition.xml", xml, None, false)?;
+    assert!(result.report.passed());
+    assert_eq!(result.fields.len(), 1);
+    Ok(())
+}
 ```
 
 Only qualified TEI `date`/`idno` elements within metadata scopes are routed this way;
@@ -167,6 +204,28 @@ The optional `spellcheck` feature exposes `SpellEngine`, backed by the published
 Matchum dictionary crate 0.0.1. This crate requires Rust 1.91. Dictionary data is
 installed separately; it is not embedded or fetched during library calls.
 
+```rust
+use std::path::Path;
+use corpora_core::{language::detect_language, spellcheck::{SpellEngine, TextRole}};
+
+fn main() -> corpora_core::Result<()> {
+    let text = "Bonjour le monde";
+    let language = detect_language(text, Some("fr-FR"))?;
+    println!("selected locale: {}", language.locale);
+
+    let engine = SpellEngine::load(Path::new("target/cspell-dictionaries"))?;
+    let report = engine.check_diagnostics("paragraph-1", text, TextRole::Corpus, Some("fr-FR"))?;
+    println!("blocking spelling findings: {}", !report.passed());
+    Ok(())
+}
+```
+
+Enable `corpora-core`'s `spellcheck` Cargo feature for this example. For only
+language detection, import `detect_language` and omit `SpellEngine`; no
+dictionaries are needed. `load_selected(root, &["en_US"])` loads a named
+subset. Use `check(text, role, hint)` if you need the older `SpellReport`
+shape instead of shared diagnostics.
+
 ```sh
 python3 crates/corpora-core/tools/install_dictionaries.py --output target/cspell-dictionaries
 cargo build --locked -p corpora-core --features spellcheck --bin corpora-text-check
@@ -201,13 +260,14 @@ quality/preview adapter consumes these Rust reports, verifies their source hashe
 and coordinates, and rechecks each repaired candidate through core. It fails closed
 with an older executable that lacks the versioned structural operation.
 
-`role` is `corpus`, `metadata`, `frontmatter`, `footnote`, or `additional`.
+`role` is `corpus`, `metadata`, `frontmatter`, `footnote`, `additional`, or `heading`.
 `detect_only: true` requests just the language payload even with dictionaries
 configured. Errors are JSON objects with `error`; callers must check them.
 Optional `supplements: ["en_shared", "public-licenses"]` loads those resources too;
 shared English words apply only to English. Library callers can select them with
 `SpellEngine::load_selected`.
-All diagnostic offsets are **Unicode scalar offsets within the supplied text**.
+Legacy spelling JSON offsets are **Unicode scalar offsets within the supplied text**;
+the shared diagnostic report also supplies UTF-8 byte and line/column positions.
 Scores are policy severity, not confidence probabilities:
 
 | Finding | Score | Pass | Repair |
