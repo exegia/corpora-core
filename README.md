@@ -2,8 +2,8 @@
 
 This repository helps turn source documents into a Text-Fabric (TF) corpus that
 other programs can inspect. Think of TF as the book's text plus labeled pointers
-to its chapters, headings, notes, links, and other parts. The original TEI or
-EPUB stays available so a reader can check what the conversion did.
+to its chapters, headings, notes, links, and other parts. The original TEI,
+EPUB, or PDF stays available so a reader can check extracted content.
 
 **Choose a starting point:**
 
@@ -13,6 +13,7 @@ EPUB stays available so a reader can check what the conversion did.
 | A local EPUB | [EPUB converter](packages/epub-to-tf/README.md) | Checks the archive, follows its reading order, and exports TF plus assets. |
 | XML text to check in Rust | [corpora-core](crates/corpora-core/README.md) | Reports structural, metadata, language, and optional spelling findings. |
 | EPUB bytes to check in Rust | [corpora-convert](crates/corpora-convert/README.md) | Returns source-bound EPUB findings and a reading projection. |
+| A local PDF to inspect | [corpora-pdf](crates/corpora-pdf/README.md) | Reads text or OCR, labels layout candidates, and returns visual evidence scores. |
 | TF text to review with AI | [TF AI resolver](packages/tf-ai-resolver/README.md) | Pins a selection, asks the expert for a proposal, and applies an approved derived reading. |
 | A shared model in another language | [type generator](crates/corpora-typegen/README.md) | Generates Rust, TypeScript, Swift, and SQL from one schema. |
 
@@ -30,6 +31,8 @@ TEI XML ──> Python acquisition and reading policy ──> Text-Fabric .tf fi
 
 EPUB ──> Rust archive/OPF/XHTML check ──> Python export ──> .tf + assets
   └────────────────────── original archive ────────────────────────┘
+
+PDF ──> Rust extraction + local OCR ──> page elements, scores, and QA site
 
 .tf bundle ──> Text-Fabric / Context-Fabric loader ──> QA HTML
                                                    └── optional AI proposal
@@ -79,6 +82,7 @@ each flag, the supported inputs, the exported files, and how to load the result.
 | --- | --- |
 | [`crates/corpora-core`](crates/corpora-core/README.md) | Shared diagnostics, XML/TEI checks, language selection, and optional spelling. |
 | [`crates/corpora-convert`](crates/corpora-convert/README.md) | Reusable EPUB validator and `corpora-epub-check` JSON CLI. |
+| [`crates/corpora-pdf`](crates/corpora-pdf/README.md) | Reusable local PDF text/OCR and semantic-candidate extraction library. |
 | [`crates/corpora-typegen`](crates/corpora-typegen/README.md) | Schema reader and Rust/TypeScript/Swift/SQL emitters. |
 | [`crates/corpora-fabric`](crates/corpora-fabric/README.md), [`crates/corpora-source`](crates/corpora-source/README.md), [`crates/corpora-agent`](crates/corpora-agent/README.md) | Reserved Rust crates; their builder, connector, and runtime APIs are not implemented yet. |
 | [`packages/tei-to-tf`](packages/tei-to-tf/README.md) | TEI acquisition, reading policy, TF export, optional quality passes. |
@@ -100,6 +104,7 @@ parameter tables.
 | `corpora_core::language::detect_language` | Select a supported language and dictionary hint. |
 | `corpora_core::spellcheck::SpellEngine` | Optionally check spelling with installed, pinned dictionaries. |
 | `corpora_convert::epub::validate_epub` / `validate_epub_with_slot_limit` | Check local EPUB bytes and return a reading projection or blockers. |
+| `corpora_pdf::extract_pdf` | Extract PDF pages, OCR scans, and return positioned elements with evidence scores. |
 | `tei_to_tf.convert` / `epub_to_tf.convert` | Export a new TF bundle from a supported source. |
 | `tf_ai_resolver.inspect_selection` / `resolve` / `apply_resolution` | Pin TF text, propose a change, and write a reviewed derived reading. |
 | `corpora_typegen::Schema` and target `emit` functions | Read the model schema and generate language-specific types. |

@@ -143,6 +143,19 @@ name = "corpora-fabric"
 version = "0.0.0"
 
 [[package]]
+name = "corpora-pdf"
+version = "0.0.0"
+dependencies = [
+ "roxmltree",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tempfile",
+ "thiserror",
+ "whatlang",
+]
+
+[[package]]
 name = "corpora-source"
 version = "0.0.0"
 
