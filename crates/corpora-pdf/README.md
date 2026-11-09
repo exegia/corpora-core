@@ -141,7 +141,7 @@ current output contracts.
 
 ```sh
 python3 tests/browser/build_pdf_review.py path/to/book.pdf /tmp/pdf-review --languages eng
-python3 -m http.server 8771 -d /tmp/pdf-review
+python3 -m http.server 8771 --bind 127.0.0.1 -d /tmp/pdf-review
 # Open http://127.0.0.1:8771/index.html
 ```
 
