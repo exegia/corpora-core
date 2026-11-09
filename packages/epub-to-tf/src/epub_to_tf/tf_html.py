@@ -163,6 +163,7 @@ def _render_scope(
             "<"
             + tag
             + _attributes(tag, attrs, element_assets)
+            + (f' data-tf-node="{root}"' if node == root else "")
             + (' data-source-tag="body"' if source_body else "")
             + (
                 f' data-source-tag="{html.escape(original_tag, quote=True)}"'

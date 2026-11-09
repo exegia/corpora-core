@@ -1,0 +1,10 @@
+{
+  "type": "object",
+  "properties": {
+    "action": { "type": "string", "enum": ["replace", "annotate", "no_change"] },
+    "replacement": { "type": "string" },
+    "reason": { "type": "string" }
+  },
+  "required": ["action", "replacement", "reason"],
+  "additionalProperties": false
+}

@@ -64,6 +64,12 @@ For visual QA, run `packages/epub-to-tf/tools/qa_browser.py BUNDLE SITE` to
 compare semantic TF HTML with archived XHTML. The package README specifies
 supported input, repair, and asset boundaries.
 
+`packages/tf-ai-resolver` serves the QA site on loopback for exact TF text
+selection, expert proposals, and explicit application to a derived reading
+feature. The original slots stay intact. Run its locked Ruff, mypy, pytest,
+and build checks from the package directory; see its README.
+`.github/workflows/epub-resolver.yml` runs both nested suites on PRs.
+
 
 ### Language and spelling QA
 

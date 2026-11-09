@@ -87,7 +87,9 @@ The manifest distinguishes original `source` from `validated_source` hashes.
   attributes; the exact asset bytes remain available. Media `src`, video
   `poster`, caption `track`, and object `data` paths use their copied assets.
   The sandbox may prevent playback or PDF embedding. Unfamiliar tags appear as
-  spans with their source tag name in `data-source-tag`.
+  spans with their source tag name in `data-source-tag`. Scope roots expose
+  `data-tf-node` for exact selection when the separate `tf-ai-resolver` loopback
+  service is used; the static QA page remains read-only.
 - Referenced EPUB `footnote` and `endnote` bodies in linear spine XHTML use
   separate character slots and `note` nodes. Markers remain in main text as
   XHTML `element` nodes. A `noteref` edge points from each marker to its note.
