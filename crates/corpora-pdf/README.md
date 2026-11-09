@@ -78,6 +78,20 @@ optional `table_id`, and an optional score. A PDF may have no text layer; then
 the page uses OCR text. Images remain visual elements and are **not** treated
 as successfully transcribed merely because surrounding text was read.
 
+OCR elements also retain `words`: each word's exact recognized text, rectangle,
+and confidence. The field is omitted for text-layer elements and defaults to an
+empty list when reading older JSON. Rust callers constructing `Element` directly
+must now supply `words` (usually `Vec::new()` for native text).
+
+OCR text keeps Tesseract's block/paragraph/line reading order. The engine does not
+globally sort lines by vertical position, which would interleave columns.
+Within a block, repeated aligned wide gaps in neighboring rows can separate
+short table cells; a single wide space is insufficient. Word order within cells,
+including right-to-left recognition order and combining marks, is preserved.
+Section ancestry is assigned after grouping in the final reading order.
+These layout rules remain heuristic: they do not establish correct reading order
+for every PDF, reconstruct complex tables, or repair an OCR model's script errors.
+
 ### What the labels and score mean
 
 - On text-layer pages, `h1`–`h4` use relative font size plus bold evidence.
@@ -123,6 +137,12 @@ Use a local loopback server because browsers normally block `fetch` of
 review directory; keep that directory private for sensitive documents.
 
 ## Verify
+
+For reference-based character/word error rates and reading-order checks, use the
+[region benchmark](benchmarks/README.md). It compares native extraction with
+OCR of rasterized pages and keeps alignment failures separate from text accuracy.
+Real PDFs and their reports stay outside Git; the checked-in example uses the
+synthetic fixture.
 
 The fixtures have independently specified visible wording: one PDF has a text
 layer, heading styles, lists, link and table-like rows; the second is an

@@ -87,6 +87,25 @@ fn scanned_page_uses_ocr_and_scores_it() {
     );
     assert!(page.extraction_score.as_ref().unwrap().value > 0.5);
     assert!(page.elements.iter().any(|e| e.kind == ElementKind::Image));
+    let title = page
+        .elements
+        .iter()
+        .find(|e| e.text == "Sample Document")
+        .unwrap();
+    assert_eq!(
+        title
+            .words
+            .iter()
+            .map(|word| word.text.as_str())
+            .collect::<Vec<_>>(),
+        ["Sample", "Document"]
+    );
+    assert!(
+        title
+            .words
+            .iter()
+            .all(|word| word.bounds.width > 0.0 && word.bounds.height > 0.0)
+    );
     assert!(
         !fixture("scanned-1_1.png").exists(),
         "Poppler must not write beside the source"

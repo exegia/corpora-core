@@ -141,6 +141,15 @@ and package checks; root stack detection does not discover nested Python project
 `.github/workflows/tei-converter.yml` runs these checks on relevant PR changes.
 See the package README for reading policies, metadata separation and supported boundaries.
 
+## PDF extraction benchmark
+
+`crates/corpora-pdf/benchmarks/benchmark.py` compares source-pinned page regions
+with independent image transcriptions through native extraction and raster OCR.
+Run `python3 -m unittest discover -s crates/corpora-pdf/benchmarks -p 'test_*.py'`;
+root stack detection does not run this Python suite. See the benchmark README for
+the synthetic smoke command and local-only real-PDF manifest. Keep attachments,
+transcriptions and generated reports out of Git; retain reference review status.
+
 ## EPUB conversion package
 
 `packages/epub-to-tf` converts local EPUBs through the Rust `corpora-epub-check`

@@ -120,6 +120,21 @@ pub struct Element {
     pub table_id: Option<usize>,
     /// Element-specific visual estimate when one is available.
     pub extraction_score: Option<ExtractionScore>,
+    /// OCR words in recognition order, retaining individual geometry and confidence.
+    /// Empty for text-layer elements; older serialized results may omit this field.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub words: Vec<Word>,
+}
+
+/// One OCR word and its source-page evidence. Text is never reversed or corrected.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Word {
+    /// Text emitted by the OCR engine, including Unicode combining marks.
+    pub text: String,
+    /// Page-local rectangle in the same units as the enclosing element.
+    pub bounds: Rect,
+    /// OCR word confidence from zero to one, not measured transcription accuracy.
+    pub confidence: f32,
 }
 
 /// Semantic labels. Heuristic labels are never presented as source PDF tags.
@@ -338,7 +353,7 @@ pub fn extract_pdf(
                 options.max_elements_per_page
             )));
         }
-        classify(&mut elements);
+        classify(&mut elements, true);
         let has_text = elements.iter().any(|e| !e.text.trim().is_empty());
         let ocr = if !has_text || options.verify_text_layer_with_ocr {
             match ocr_page(&path, number, width, height, options, scratch.path()) {
@@ -376,7 +391,7 @@ pub fn extract_pdf(
             }
             (ExtractionMethod::TextLayer, score)
         } else if let Some(words) = ocr {
-            let mut text_elements = ocr_elements(&words, width, height, options.ocr_max_edge_px);
+            let mut text_elements = ocr_elements(&words);
             if elements.len() + text_elements.len() > options.max_elements_per_page {
                 return Err(PdfError::Limit(format!(
                     "page {number} has too many OCR elements (max {})",
@@ -391,14 +406,10 @@ pub fn extract_pdf(
                 });
                 (ExtractionMethod::None, None)
             } else {
-                classify(&mut text_elements);
+                // TSV block/paragraph/line order carries Tesseract's column layout.
+                // A global y/x sort interleaves columns and invalidates section paths.
+                classify(&mut text_elements, false);
                 elements.extend(text_elements);
-                elements.sort_by(|a, b| {
-                    a.bounds
-                        .y
-                        .total_cmp(&b.bounds.y)
-                        .then_with(|| a.bounds.x.total_cmp(&b.bounds.x))
-                });
                 let score = mean_ocr_confidence(&words);
                 if let Some(ref value) = score {
                     if value.value < 0.6 {
@@ -551,6 +562,7 @@ fn parse_elements(
                     section_path: Vec::new(),
                     table_id: None,
                     extraction_score: None,
+                    words: Vec::new(),
                 },
                 font_size,
             ));
@@ -569,6 +581,7 @@ fn parse_elements(
                     section_path: Vec::new(),
                     table_id: None,
                     extraction_score: None,
+                    words: Vec::new(),
                 },
                 0.0,
             ));
@@ -602,7 +615,7 @@ fn parse_elements(
     Ok(elements.into_iter().map(|(element, _)| element).collect())
 }
 
-fn classify(elements: &mut [Element]) {
+fn classify(elements: &mut [Element], infer_native_tables: bool) {
     let mut headings: Vec<String> = Vec::new();
     let mut reference_section = false;
     let mut rows: Vec<(f32, Vec<usize>)> = Vec::new();
@@ -618,7 +631,17 @@ fn classify(elements: &mut [Element]) {
             }
         }
     }
-    let table_ids = table_groups(&mut rows, elements);
+    let table_ids = if infer_native_tables {
+        table_groups(&mut rows, elements)
+    } else {
+        // OCR cells already require repeated, aligned gaps within a block.
+        // Aligned prose lines from separate columns are not a table.
+        elements
+            .iter()
+            .enumerate()
+            .filter_map(|(index, element)| element.table_id.map(|id| (index, id)))
+            .collect()
+    };
     let captions: Vec<(String, f32)> = elements
         .iter()
         .filter(|e| !e.text.is_empty())
@@ -786,43 +809,37 @@ fn ocr_page(
     Ok(words)
 }
 
-#[allow(clippy::cast_precision_loss)] // Confidence is an approximate mean.
-fn ocr_elements(words: &[OcrWord], _width: f32, _height: f32, _edge: u32) -> Vec<Element> {
+fn ocr_elements(words: &[OcrWord]) -> Vec<Element> {
     let mut rows: BTreeMap<(i32, i32, i32), Vec<&OcrWord>> = BTreeMap::new();
     for word in words {
         rows.entry(word.line).or_default().push(word);
     }
-    let mut elements: Vec<Element> = rows
-        .into_values()
-        .map(|row| {
-            let x = row.iter().map(|w| w.left).fold(f32::INFINITY, f32::min);
-            let y = row.iter().map(|w| w.top).fold(f32::INFINITY, f32::min);
-            let right = row.iter().map(|w| w.left + w.width).fold(0.0, f32::max);
-            let bottom = row.iter().map(|w| w.top + w.height).fold(0.0, f32::max);
-            let score = row.iter().map(|w| w.confidence).sum::<f32>() / row.len() as f32;
-            Element {
-                kind: ElementKind::Paragraph,
-                text: row
-                    .iter()
-                    .map(|w| w.text.as_str())
-                    .collect::<Vec<_>>()
-                    .join(" "),
-                bounds: Rect {
-                    x,
-                    y,
-                    width: right - x,
-                    height: bottom - y,
-                },
-                marks: Vec::new(),
-                section_path: Vec::new(),
-                table_id: None,
-                extraction_score: Some(ExtractionScore {
-                    value: score,
-                    basis: ScoreBasis::OcrWordConfidence,
-                }),
+    let rows: Vec<_> = rows.into_values().collect();
+    let candidates: Vec<_> = rows.iter().map(|row| split_cells(row)).collect();
+    let mut elements = Vec::new();
+    let mut table_id = 0;
+    let mut previous_is_table = false;
+    for (index, row) in rows.iter().enumerate() {
+        let matches_previous =
+            index > 0 && aligned_cells(&candidates[index - 1], &candidates[index]);
+        let matches_next =
+            index + 1 < rows.len() && aligned_cells(&candidates[index], &candidates[index + 1]);
+        let is_table = matches_previous || matches_next;
+        if is_table {
+            if !previous_is_table || !matches_previous {
+                table_id += 1;
             }
-        })
-        .collect();
+            for cell in &candidates[index] {
+                let mut element = ocr_element(cell);
+                element.kind = ElementKind::TableCell;
+                element.table_id = Some(table_id);
+                elements.push(element);
+            }
+        } else {
+            elements.push(ocr_element(row));
+        }
+        previous_is_table = is_table;
+    }
     let mut heights: Vec<f32> = elements.iter().map(|e| e.bounds.height).collect();
     heights.sort_by(f32::total_cmp);
     let body_height = heights
@@ -831,6 +848,9 @@ fn ocr_elements(words: &[OcrWord], _width: f32, _height: f32, _edge: u32) -> Vec
         .unwrap_or(1.0)
         .max(1.0);
     for element in &mut elements {
+        if element.table_id.is_some() {
+            continue;
+        }
         let short = element.text.split_whitespace().count() <= 8;
         let ratio = element.bounds.height / body_height;
         element.kind = if element.text.eq_ignore_ascii_case("references")
@@ -849,6 +869,124 @@ fn ocr_elements(words: &[OcrWord], _width: f32, _height: f32, _edge: u32) -> Vec
     }
     elements
 }
+
+fn row_height(row: &[&OcrWord]) -> f32 {
+    let mut heights: Vec<_> = row.iter().map(|word| word.height).collect();
+    heights.sort_by(f32::total_cmp);
+    heights
+        .get(heights.len() / 2)
+        .copied()
+        .unwrap_or(1.0)
+        .max(1.0)
+}
+
+fn split_cells<'a>(row: &[&'a OcrWord]) -> Vec<Vec<&'a OcrWord>> {
+    let threshold = row_height(row) * 1.5;
+    let mut cells = Vec::new();
+    let mut cell = Vec::new();
+    let mut previous: Option<&OcrWord> = None;
+    for &word in row {
+        if let Some(prev) = previous {
+            // Handle either spatial direction without changing recognition order.
+            let gap = (word.left - prev.left - prev.width).max(prev.left - word.left - word.width);
+            if gap > threshold {
+                cells.push(std::mem::take(&mut cell));
+            }
+        }
+        cell.push(word);
+        previous = Some(word);
+    }
+    if !cell.is_empty() {
+        cells.push(cell);
+    }
+    cells
+}
+
+fn aligned_cells(first: &[Vec<&OcrWord>], second: &[Vec<&OcrWord>]) -> bool {
+    if first.len() < 2 || first.len() != second.len() {
+        return false;
+    }
+    // Hanging-indent lists also have repeated wide gaps and a short first cell.
+    // Keep their marker attached so semantic classification can recognize it.
+    let list_lead = |cells: &[Vec<&OcrWord>]| {
+        let lead = cells[0][0].text.as_str();
+        is_list_item(lead) || matches!(lead, "•" | "-" | "–")
+    };
+    if list_lead(first) || list_lead(second) {
+        return false;
+    }
+    let a = first[0][0];
+    let b = second[0][0];
+    let height = row_height(&first.iter().flatten().copied().collect::<Vec<_>>());
+    if a.line.0 != b.line.0 || (a.top - b.top).abs() > height * 3.0 {
+        return false;
+    }
+    // A short cell plus repeated alignment is evidence for a table, unlike two
+    // long, justified prose columns. Complex/wrapped cells remain unsupported.
+    let short_cell = |cells: &[Vec<&OcrWord>]| {
+        cells.iter().any(|cell| {
+            let left = cell.iter().map(|w| w.left).fold(f32::INFINITY, f32::min);
+            let right = cell.iter().map(|w| w.left + w.width).fold(0.0, f32::max);
+            right - left <= height * 4.0
+        })
+    };
+    short_cell(first)
+        && short_cell(second)
+        && first.iter().zip(second).all(|(left, right)| {
+            left.len() <= 8
+                && right.len() <= 8
+                && (left.iter().map(|w| w.left).fold(f32::INFINITY, f32::min)
+                    - right.iter().map(|w| w.left).fold(f32::INFINITY, f32::min))
+                .abs()
+                    <= height * 1.5
+        })
+}
+
+#[allow(clippy::cast_precision_loss)] // Confidence is an approximate mean.
+fn ocr_element(row: &[&OcrWord]) -> Element {
+    let x = row.iter().map(|w| w.left).fold(f32::INFINITY, f32::min);
+    let y = row.iter().map(|w| w.top).fold(f32::INFINITY, f32::min);
+    let right = row.iter().map(|w| w.left + w.width).fold(0.0, f32::max);
+    let bottom = row.iter().map(|w| w.top + w.height).fold(0.0, f32::max);
+    let score = row.iter().map(|w| w.confidence).sum::<f32>() / row.len() as f32;
+    Element {
+        kind: ElementKind::Paragraph,
+        text: row
+            .iter()
+            .map(|w| w.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" "),
+        bounds: Rect {
+            x,
+            y,
+            width: right - x,
+            height: bottom - y,
+        },
+        marks: Vec::new(),
+        section_path: Vec::new(),
+        table_id: None,
+        extraction_score: Some(ExtractionScore {
+            value: score,
+            basis: ScoreBasis::OcrWordConfidence,
+        }),
+        words: row
+            .iter()
+            .map(|word| Word {
+                text: word.text.clone(),
+                bounds: Rect {
+                    x: word.left,
+                    y: word.top,
+                    width: word.width,
+                    height: word.height,
+                },
+                confidence: word.confidence,
+            })
+            .collect(),
+    }
+}
+
+#[cfg(test)]
+mod ocr_layout_tests;
 
 #[allow(clippy::cast_precision_loss)] // Confidence is an approximate mean.
 fn mean_ocr_confidence(words: &[OcrWord]) -> Option<ExtractionScore> {
