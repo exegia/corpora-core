@@ -377,7 +377,7 @@ def resolve(
             if not cf:
                 raise ResolveError("Context-Fabric rejected the staged graph")
             if (
-                cf.T.text(selection.node) != text
+                cf.T.text(selection.node, fmt=selection.text_format) != text
                 or json.loads(cf.F.ai_resolutions.v(selection.node)) != prior
             ):
                 raise ResolveError("Context-Fabric revalidation failed")
@@ -512,7 +512,7 @@ def apply_resolution(
             cf = cast(Any, ContextFabric(locations=str(location)).loadAll())
             if (
                 not cf
-                or cf.T.text(selection.node) != text
+                or cf.T.text(selection.node, fmt=selection.text_format) != text
                 or cf.F.resolved_reading.v(selection.node) != corrected
             ):
                 raise ResolveError("Applied Context-Fabric revalidation failed")

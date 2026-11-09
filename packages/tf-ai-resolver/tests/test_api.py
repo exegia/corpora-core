@@ -135,6 +135,37 @@ def test_staged_resolution_keeps_source_text_and_loads_with_tf_and_cf(tmp_path: 
     assert len(json.loads(api.F.ai_resolutions.v(4))) == 2
 
 
+def test_explicit_text_format_survives_both_loader_checks(tmp_path: Path) -> None:
+    source = corpus(tmp_path / "source")
+    assert Fabric(locations=str(source), silent="deep").save(
+        nodeFeatures={"reading": {1: "A", 3: "C"}},
+        metaData={
+            "reading": {"valueType": "str"},
+            "otext": {
+                "fmt:text-orig-full": "{reading}",
+                "fmt:text-source-full": "{text}",
+                "sectionTypes": "document",
+                "sectionFeatures": "document",
+            },
+        },
+        silent="deep",
+    )
+    selection = inspect_selection(source, 4, 1, 2, "text", "text-source-full")
+    assert selection.expected_text == "β"
+    expert = FakeExpert({"action": "replace", "replacement": "B", "reason": "Exact source"})
+    proposal = tmp_path / "proposal"
+    report = resolve(source, proposal, selection, "fix", "Correct source view", expert)
+    assert report["preview_text"] == "ABC"
+    applied = tmp_path / "applied"
+    apply_resolution(proposal, applied, report["resolution"]["id"], "B")
+    api = Fabric(locations=str(applied / "tf"), silent="deep").load(
+        "text reading resolved_reading", silent="deep"
+    )
+    assert api.T.text(4) == "AC"
+    assert api.T.text(4, fmt="text-source-full") == "AβC"
+    assert api.F.resolved_reading.v(4) == "ABC"
+
+
 def test_stale_or_unexpected_response_fails_without_output(tmp_path: Path) -> None:
     source = corpus(tmp_path / "source")
     selection = inspect_selection(source, 4, 1, 2, "text")

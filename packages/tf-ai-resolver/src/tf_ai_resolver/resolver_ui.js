@@ -42,6 +42,17 @@
 
   function scalarLength(value) { return [...value].length; }
 
+  function readingText(range) {
+    const fragment = range.cloneContents();
+    fragment.querySelectorAll('[data-tf-asset]').forEach(asset => asset.remove());
+    return fragment.textContent || '';
+  }
+
+  function insideAsset(node) {
+    const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+    return Boolean(element && element.closest('[data-tf-asset]'));
+  }
+
   async function inspect() {
     const current = ++sequence;
     pinned = null;
@@ -58,12 +69,21 @@
       selectionLabel.textContent = 'Select text within one TF document or note.';
       return;
     }
+    if (insideAsset(range.startContainer) || insideAsset(range.endContainer)) {
+      selectionLabel.textContent = 'Select reading text outside inline assets.';
+      return;
+    }
     const prefix = root.ownerDocument.createRange();
     prefix.selectNodeContents(root);
     prefix.setEnd(range.startContainer, range.startOffset);
-    const start = scalarLength(prefix.toString());
-    const end = start + scalarLength(range.toString());
+    const start = scalarLength(readingText(prefix));
+    const selected = readingText(range);
     const expected_text = range.toString();
+    if (selected !== expected_text) {
+      selectionLabel.textContent = 'Select reading text outside inline assets.';
+      return;
+    }
+    const end = start + scalarLength(selected);
     if (!expected_text || scalarLength(expected_text) > 4096) {
       selectionLabel.textContent = 'Select between 1 and 4,096 characters.';
       return;
