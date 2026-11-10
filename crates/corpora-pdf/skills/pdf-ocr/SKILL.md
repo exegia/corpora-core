@@ -55,7 +55,11 @@ python3 -m unittest discover -s tests/browser -p 'test_pdf_review.py'
 make agents-check
 ```
 
-See `tools/README.md` for the source-pinned region manifest and local/Mistral CLI.
+See `tools/README.md` for the source-pinned region manifest and local/Vercel/Mistral CLI.
+Prefer Vercel with the existing `AI_GATEWAY_API_KEY`, explicit `--provider vercel`
+and a positive request cap. Check authenticated model eligibility before paid
+inference; select an already permitted vision model and preserve team policy.
+Never send reference text as recognition hints.
 Hosted adapter tests do not establish paid-model accuracy; run a separately
 reviewed sample before accepting a script/model combination.
 

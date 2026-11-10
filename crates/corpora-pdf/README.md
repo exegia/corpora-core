@@ -201,4 +201,4 @@ Extraction emits additive `script_review` findings with page/region coordinates,
 script, observed marks and a pinned raw-text revision. Missing accents are unknown
 until verified against source evidence; ordinary unpointed Hebrew is not an error.
 See [the region tool guide](tools/README.md) for bounded local Kraken and optional
-Mistral requests, private caching and mark-aware reference comparison.
+Vercel AI Gateway or direct Mistral requests, private caching and mark-aware reference comparison.

@@ -18,6 +18,8 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
+import gateway_ocr
+
 MODEL = "mistral-ocr-2512"
 SCRIPTS = {
     "hebrew",
@@ -404,6 +406,9 @@ def run(
     render_region: Callable[[Path, dict[str, Any], Path], bytes] = render,
     hosted_recognize: Callable[[bytes], str] = hosted,
     local_recognize: Callable[[bytes, Path | None, Path | None, str], str] = local,
+    gateway_recognize: Callable[[bytes, str], dict[str, Any]] = gateway_ocr.recognize,
+    gateway_model: str = gateway_ocr.MODEL,
+    gateway_check: Callable[[str], dict[str, Any]] = gateway_ocr.check_model,
 ) -> dict[str, Any]:
     if output.resolve() == pdf.resolve() or (
         model is not None and output.resolve() == model.resolve()
@@ -411,7 +416,7 @@ def run(
         raise ValueError("output must not overwrite input PDF or model")
     regions = validate_manifest(pdf, manifest)
     if (
-        provider not in ("local", "mistral")
+        provider not in ("local", "mistral", "vercel")
         or type(max_calls) is not int
         or max_calls < 1
     ):
@@ -433,6 +438,8 @@ def run(
             "model_sha256": digest(model.read_bytes()),
             "kraken_version": command([str(kraken), "--version"]).decode().strip(),
         }
+    elif provider == "vercel":
+        identity = gateway_ocr.identity(gateway_model)
     else:
         identity = {"model": MODEL}
     # Retain version explicitly rather than relying on empty stdout from Poppler.
@@ -449,6 +456,8 @@ def run(
         "calls": 0,
         "regions": [],
     }
+    gateway_preflight: dict[str, Any] | gateway_ocr.GatewayError | None = None
+    report["preflight_requests"] = 0
     for region in regions:
         with tempfile.TemporaryDirectory() as directory:
             image = render_region(pdf, region, Path(directory))
@@ -482,6 +491,7 @@ def run(
             "status": "review_required",
             "message": "Inspect source image; exact missing marks are unknown.",
         }
+        recognition_metadata = {}
         if cache_path.exists():
             cached = json.loads(cache_path.read_text())
             if cached.get("cache_key") != key or not isinstance(
@@ -489,17 +499,32 @@ def run(
             ):
                 raise ValueError("invalid cached candidate")
             candidate, hit = cached["text"], True
+            recognition_metadata = cached.get("recognition_metadata", {})
         elif report["calls"] >= max_calls:
             item.update(status="budget_exhausted", candidate_text=None, cache_hit=False)
             report["regions"].append(item)
             continue
         else:
-            report["calls"] += 1
             try:
-                candidate = (
-                    hosted_recognize(image)
-                    if provider == "mistral"
-                    else local_recognize(
+                if provider == "vercel":
+                    if gateway_preflight is None:
+                        report["preflight_requests"] += 1
+                        try:
+                            gateway_preflight = gateway_check(gateway_model)
+                        except gateway_ocr.GatewayError as preflight_error:
+                            gateway_preflight = preflight_error
+                    if isinstance(gateway_preflight, gateway_ocr.GatewayError):
+                        raise gateway_preflight
+                    report["model_eligibility"] = gateway_preflight
+                report["calls"] += 1
+                if provider == "vercel":
+                    response = gateway_recognize(image, gateway_model)
+                    candidate = response["text"]
+                    recognition_metadata = response["metadata"]
+                elif provider == "mistral":
+                    candidate = hosted_recognize(image)
+                else:
+                    candidate = local_recognize(
                         image,
                         model,
                         kraken,
@@ -508,26 +533,36 @@ def run(
                             "L" if region.get("script") in ("greek", "latin") else "R",
                         ),
                     )
-                )
                 if (
                     not isinstance(candidate, str)
                     or not candidate.strip()
                     or len(candidate) > 10000
                 ):
                     raise ValueError("invalid candidate")
-                private_json(cache_path, {"cache_key": key, "text": candidate})
+                private_json(
+                    cache_path,
+                    {
+                        "cache_key": key,
+                        "text": candidate,
+                        "recognition_metadata": recognition_metadata,
+                    },
+                )
                 hit = False
-            except (OSError, ValueError, subprocess.SubprocessError):
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
                 item.update(
                     status="recognition_failed",
                     candidate_text=None,
                     cache_hit=False,
                     message="Recognition failed; no retry performed. Raw text retained.",
                 )
+                if isinstance(error, gateway_ocr.GatewayError):
+                    item["error_code"] = error.code
+                    item["http_status"] = error.http_status
                 report["regions"].append(item)
                 continue
         item.update(
             candidate_text=candidate,
+            recognition_metadata=recognition_metadata,
             cache_hit=hit,
             output_format="markdown" if provider == "mistral" else "plain_text",
         )
@@ -547,10 +582,17 @@ def main() -> int:
     parser.add_argument("manifest", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--cache", type=Path, required=True)
-    parser.add_argument("--provider", choices=("local", "mistral"), required=True)
+    parser.add_argument(
+        "--provider", choices=("local", "mistral", "vercel"), required=True
+    )
     parser.add_argument("--max-calls", type=int, required=True)
     parser.add_argument("--model", type=Path)
     parser.add_argument("--kraken", type=Path)
+    parser.add_argument(
+        "--gateway-model",
+        default=gateway_ocr.MODEL,
+        help="explicit Gateway model; no model fallback",
+    )
     args = parser.parse_args()
     if args.output.resolve() == args.manifest.resolve():
         parser.exit(2, "output must not overwrite the input manifest\n")
@@ -564,6 +606,7 @@ def main() -> int:
             args.max_calls,
             args.model,
             args.kraken,
+            gateway_model=args.gateway_model,
         )
     except (ValueError, TypeError, OSError, subprocess.SubprocessError):
         parser.exit(

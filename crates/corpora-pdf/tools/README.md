@@ -53,7 +53,41 @@ python crates/corpora-pdf/tools/ocr_review.py source.pdf manifest.json report.js
   --model /path/to/model.safetensors --kraken /path/to/venv/bin/kraken
 ```
 
-The paid route uses Mistral OCR 3 (`mistral-ocr-2512`). Set `MISTRAL_API_KEY` in the
+The preferred paid route uses your existing Vercel AI Gateway key:
+
+```sh
+python crates/corpora-pdf/tools/ocr_review.py source.pdf manifest.json vercel-report.json \
+  --cache target/pdf-benchmark/review-cache --provider vercel --max-calls 2
+```
+
+Set `AI_GATEWAY_API_KEY` in the process environment. The CLI does not automatically
+load `.env`; your launcher must load it without exposing its values. No separate
+Mistral account or key is needed for this route.
+
+The adapter calls the [Gateway Chat Completions API](https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions)
+with `google/gemini-3.6-flash`, a 1,024-token output cap and no client retries.
+Use `--gateway-model provider/model` to explicitly select a different vision model.
+The first uncached region triggers one authenticated, read-only catalog check
+(`include_availability=true`); ineligible models fail before inference. Gateway
+uses the team's permitted providers; this tool does not change team policy. Only the crop and a short transcription prompt
+are sent, never raw OCR or reference transcriptions. The model alias can
+change upstream; its identifier is not an immutable weight revision. Cache provenance
+includes the request/prompt hash. Clear the private cache for a fresh upstream
+model evaluation. A cache hit makes no new paid request.
+
+Gateway candidates retain allowlisted reported token counts in
+`recognition_metadata.usage`; cached counts describe the original recognition,
+not new spend. Missing usage stays unknown. Counts do not constitute an invoice.
+Truncated, refused, tool-call and malformed responses are rejected. Safe error
+codes and HTTP status are reported without provider error bodies or credentials.
+`provider_not_allowed` and `model_not_allowed` identify configured access restrictions;
+`no_providers_available` retains a safe Gateway error type if routing changes after
+preflight. `preflight_requests` counts read-only checks separately from inference.
+Cached candidates do not require a new eligibility check or credential.
+No alternate model is silently substituted. Hosted model-internal routing is
+outside this client's control; results still require image review.
+
+The optional direct route uses Mistral OCR 3 (`mistral-ocr-2512`). Set `MISTRAL_API_KEY` in the
 process environment, then explicitly choose it:
 
 ```sh
