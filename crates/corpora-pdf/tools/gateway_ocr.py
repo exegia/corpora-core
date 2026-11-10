@@ -30,12 +30,52 @@ SETTINGS = {
 
 
 class GatewayError(ValueError):
-    """Only allowlisted codes and numerical HTTP status may reach reports."""
+    """Safe error code, HTTP status and sanitized response accounting."""
 
-    def __init__(self, code: str, http_status: int | None = None):
+    def __init__(
+        self,
+        code: str,
+        http_status: int | None = None,
+        *,
+        metadata: dict[str, Any] | None = None,
+    ):
         super().__init__("Gateway OCR failed; no retry performed")
         self.code = code
         self.http_status = http_status
+        self.metadata = metadata or {}
+
+
+def response_metadata(data: dict[str, Any], model: str) -> dict[str, Any]:
+    """Copy only known counters and finish reasons, never generated content."""
+    usage = data.get("usage")
+    safe_usage: dict[str, Any] = {}
+    if isinstance(usage, dict):
+        for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+            if type(usage.get(key)) is int and usage[key] >= 0:
+                safe_usage[key] = usage[key]
+        for group, key in (
+            ("completion_tokens_details", "reasoning_tokens"),
+            ("prompt_tokens_details", "cached_tokens"),
+        ):
+            details = usage.get(group)
+            if (
+                isinstance(details, dict)
+                and type(details.get(key)) is int
+                and details[key] >= 0
+            ):
+                safe_usage[group] = {key: details[key]}
+    metadata: dict[str, Any] = {"requested_model": model, "usage": safe_usage}
+    choices = data.get("choices")
+    if isinstance(choices, list) and len(choices) == 1 and isinstance(choices[0], dict):
+        reason = choices[0].get("finish_reason")
+        metadata["finish_reason"] = (
+            reason
+            if isinstance(reason, str)
+            and reason
+            in ("stop", "length", "tool_calls", "content_filter", "function_call")
+            else "unknown"
+        )
+    return metadata
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -45,12 +85,22 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def identity(model: str = MODEL) -> dict[str, Any]:
+def request_settings(reasoning_effort: str | None = None) -> dict[str, Any]:
+    settings: dict[str, Any] = dict(SETTINGS)
+    if reasoning_effort is not None:
+        if reasoning_effort not in ("low", "high"):
+            raise GatewayError("invalid_reasoning_effort")
+        settings["reasoning"] = {"effort": reasoning_effort}
+    return settings
+
+
+def identity(model: str = MODEL, reasoning_effort: str | None = None) -> dict[str, Any]:
     """Pin the selected model and request settings, not upstream weight revisions."""
     if not re.fullmatch(r"[\w.-]+/[\w.-]+", model):
         raise GatewayError("invalid_model_id")
     config = json.dumps(
-        {"prompt": PROMPT, "model": model, **SETTINGS}, sort_keys=True
+        {"prompt": PROMPT, "model": model, **request_settings(reasoning_effort)},
+        sort_keys=True,
     ).encode()
     return {
         "model": model,
@@ -60,9 +110,9 @@ def identity(model: str = MODEL) -> dict[str, Any]:
     }
 
 
-def check_model(model: str) -> dict[str, Any]:
+def check_model(model: str, reasoning_effort: str | None = None) -> dict[str, Any]:
     """Read account-aware eligibility before the first uncached inference."""
-    identity(model)
+    identity(model, reasoning_effort)
     key = os.environ.get("AI_GATEWAY_API_KEY")
     if not key:
         raise GatewayError("not_configured")
@@ -94,7 +144,23 @@ def check_model(model: str) -> dict[str, Any]:
             "output", []
         ):
             raise GatewayError("model_requires_image_input_and_text_output")
-        return {"model": model, "status": "eligible", "image_input": True}
+        result: dict[str, Any] = {
+            "model": model,
+            "status": "eligible",
+            "image_input": True,
+        }
+        if reasoning_effort is not None:
+            options = selected.get("reasoning_options")
+            if not isinstance(options, list) or not any(
+                isinstance(option, dict)
+                and option.get("type") == "effort"
+                and isinstance(option.get("values"), list)
+                and reasoning_effort in option["values"]
+                for option in options
+            ):
+                raise GatewayError("reasoning_effort_not_supported")
+            result["reasoning_effort"] = reasoning_effort
+        return result
     except GatewayError:
         raise
     except urllib.error.HTTPError as error:
@@ -110,13 +176,15 @@ def check_model(model: str) -> dict[str, Any]:
         raise GatewayError("availability_check_failed") from None
 
 
-def recognize(image: bytes, model: str = MODEL) -> dict[str, Any]:
+def recognize(
+    image: bytes, model: str = MODEL, reasoning_effort: str | None = None
+) -> dict[str, Any]:
     key = os.environ.get("AI_GATEWAY_API_KEY")
     if not key:
         raise GatewayError("not_configured")
-    identity(model)
+    identity(model, reasoning_effort)
     body = {
-        **SETTINGS,
+        **request_settings(reasoning_effort),
         "model": model,
         "messages": [
             {"role": "system", "content": PROMPT},
@@ -142,6 +210,7 @@ def recognize(image: bytes, model: str = MODEL) -> dict[str, Any]:
             "Content-Type": "application/json",
         },
     )
+    metadata: dict[str, Any] = {}
     try:
         with urllib.request.build_opener(NoRedirect).open(
             request, timeout=120
@@ -150,12 +219,15 @@ def recognize(image: bytes, model: str = MODEL) -> dict[str, Any]:
         if len(payload) > 2 * 1024 * 1024:
             raise GatewayError("response_too_large")
         data = json.loads(payload)
+        if not isinstance(data, dict):
+            raise GatewayError("invalid_response")
+        metadata = response_metadata(data, model)
         choices = data["choices"]
         if not isinstance(choices, list) or len(choices) != 1:
-            raise GatewayError("invalid_response")
+            raise GatewayError("invalid_response", metadata=metadata)
         choice = choices[0]
         if choice.get("finish_reason") != "stop":
-            raise GatewayError("incomplete_response")
+            raise GatewayError("incomplete_response", metadata=metadata)
         message = choice["message"]
         candidate = message.get("content")
         if (
@@ -165,22 +237,12 @@ def recognize(image: bytes, model: str = MODEL) -> dict[str, Any]:
             or not candidate.strip()
             or len(candidate) > 10000
         ):
-            raise GatewayError("invalid_response")
-        usage = data.get("usage") or {}
-        if not isinstance(usage, dict):
-            raise GatewayError("invalid_response")
-        safe_usage = {
-            k: usage[k]
-            for k in ("prompt_tokens", "completion_tokens", "total_tokens")
-            if type(usage.get(k)) is int and usage[k] >= 0
-        }
+            raise GatewayError("invalid_response", metadata=metadata)
+        if data.get("usage") is not None and not isinstance(data["usage"], dict):
+            raise GatewayError("invalid_response", metadata=metadata)
         return {
             "text": candidate,
-            "metadata": {
-                "requested_model": model,
-                "usage": safe_usage,
-                "finish_reason": "stop",
-            },
+            "metadata": metadata,
         }
     except GatewayError:
         raise
@@ -210,4 +272,4 @@ def recognize(image: bytes, model: str = MODEL) -> dict[str, Any]:
         AttributeError,
         http.client.HTTPException,
     ):
-        raise GatewayError("invalid_response_or_transport") from None
+        raise GatewayError("invalid_response_or_transport", metadata=metadata) from None

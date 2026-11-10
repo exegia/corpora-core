@@ -1,6 +1,9 @@
 # PDF OCR specialist proposal
 
-Status: first implementation on `feat/pdf-ocr-review-pipeline`, 2026-11-09.
+Status: Phase 1 draft-extraction and review handoff complete, 2026-11-10.
+The final local handoff and internal-browser checks are recorded in
+[VERIFICATION.md](../benchmarks/VERIFICATION.md#phase-1-consumer-handoff-2026-11-10).
+This closes the bounded foundation phase, not multilingual accuracy acceptance.
 Rust script findings and the bounded region CLI are implemented. Local smoke
 validation and mocked hosted tests do not establish specialist model accuracy. Research and verified model/source references are in
 [HISTORICAL-SCRIPTS.md](../benchmarks/HISTORICAL-SCRIPTS.md).
@@ -98,6 +101,28 @@ Run the crate and Python suites, `make agents-check`, `make fmt`, `make ci` and
 `git diff --check`. A live paid benchmark is separate from deterministic adapter
 tests and requires the provider credential. Failures leave originals untouched;
 unrecognized or ambiguous text remains available for downstream review.
+
+## Phase 2: recognition quality and acceptance
+
+Start with one dedicated OCR recognizer on the same frozen Hebrew crop that
+confused qubuts with segol. Inspect its output alphabet or documented output
+capabilities before inference; unsupported marks disqualify that route. Keep
+the source, crop, reference and scoring fixed. Use an explicit small request cap,
+record complete usage/cost when available, and compare with the existing Gemini
+candidate. Do not raise global token limits or repeat requests until one passes.
+
+Then build a larger human-reviewed, held-out line set, stratified by script,
+font, print/scan quality and mark inventory. Report completion failures and
+coverage alongside base-character and mark errors; set acceptance thresholds
+before running it. Keep Arabic, Syriac, Ugaritic, Phoenician and cuneiform marked
+unvalidated until their own evidence exists. Greek and Latin also need broader
+samples; the small Greek success does not certify those scripts.
+
+Track layout separately: the handoff sample exposed prose labeled as table-cell
+candidates. The English-only local visual comparison on this Greek PDF is not
+a Greek accuracy measurement. Validate reading order, headings, tables and notes
+before promoting semantic structure. The later correction API remains separate
+work: preserve raw readings and require source/revision-pinned amendments.
 
 ## Resources and inherited lessons
 

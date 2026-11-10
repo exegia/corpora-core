@@ -138,8 +138,11 @@ or Aramaic recognition; measure those against image-based references.
 ## Review a PDF in the browser
 
 The test-only builder writes a dark, side-by-side site. The left pane shows the
-original PDF page. The right pane shows element types, text, positions, marks,
-scores, and findings. The generic viewer in `tests/browser/` consumes
+original page rendered to PNG at 108 DPI (the extraction coordinate scale), with
+a link to the unchanged PDF. This works without an embedded PDF plugin.
+The right pane shows element types, text, positions, marks,
+scores, and findings. Findings start collapsed; script findings link to their
+numbered extracted element. The generic viewer in `tests/browser/` consumes
 `review.json` units; the PDF builder is a format adapter and also retains the
 raw engine `result.json`. Existing TEI and EPUB QA generators keep their
 current output contracts.

@@ -406,15 +406,18 @@ def run(
     render_region: Callable[[Path, dict[str, Any], Path], bytes] = render,
     hosted_recognize: Callable[[bytes], str] = hosted,
     local_recognize: Callable[[bytes, Path | None, Path | None, str], str] = local,
-    gateway_recognize: Callable[[bytes, str], dict[str, Any]] = gateway_ocr.recognize,
+    gateway_recognize: Callable[..., dict[str, Any]] = gateway_ocr.recognize,
     gateway_model: str = gateway_ocr.MODEL,
-    gateway_check: Callable[[str], dict[str, Any]] = gateway_ocr.check_model,
+    gateway_check: Callable[..., dict[str, Any]] = gateway_ocr.check_model,
+    gateway_reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
     if output.resolve() == pdf.resolve() or (
         model is not None and output.resolve() == model.resolve()
     ):
         raise ValueError("output must not overwrite input PDF or model")
     regions = validate_manifest(pdf, manifest)
+    if gateway_reasoning_effort is not None and provider != "vercel":
+        raise ValueError("Gateway reasoning effort requires the vercel provider")
     if (
         provider not in ("local", "mistral", "vercel")
         or type(max_calls) is not int
@@ -439,7 +442,7 @@ def run(
             "kraken_version": command([str(kraken), "--version"]).decode().strip(),
         }
     elif provider == "vercel":
-        identity = gateway_ocr.identity(gateway_model)
+        identity = gateway_ocr.identity(gateway_model, gateway_reasoning_effort)
     else:
         identity = {"model": MODEL}
     # Retain version explicitly rather than relying on empty stdout from Poppler.
@@ -510,7 +513,13 @@ def run(
                     if gateway_preflight is None:
                         report["preflight_requests"] += 1
                         try:
-                            gateway_preflight = gateway_check(gateway_model)
+                            gateway_preflight = (
+                                gateway_check(gateway_model)
+                                if gateway_reasoning_effort is None
+                                else gateway_check(
+                                    gateway_model, gateway_reasoning_effort
+                                )
+                            )
                         except gateway_ocr.GatewayError as preflight_error:
                             gateway_preflight = preflight_error
                     if isinstance(gateway_preflight, gateway_ocr.GatewayError):
@@ -518,7 +527,13 @@ def run(
                     report["model_eligibility"] = gateway_preflight
                 report["calls"] += 1
                 if provider == "vercel":
-                    response = gateway_recognize(image, gateway_model)
+                    response = (
+                        gateway_recognize(image, gateway_model)
+                        if gateway_reasoning_effort is None
+                        else gateway_recognize(
+                            image, gateway_model, gateway_reasoning_effort
+                        )
+                    )
                     candidate = response["text"]
                     recognition_metadata = response["metadata"]
                 elif provider == "mistral":
@@ -558,6 +573,8 @@ def run(
                 if isinstance(error, gateway_ocr.GatewayError):
                     item["error_code"] = error.code
                     item["http_status"] = error.http_status
+                    if error.metadata:
+                        item["recognition_metadata"] = error.metadata
                 report["regions"].append(item)
                 continue
         item.update(
@@ -593,6 +610,11 @@ def main() -> int:
         default=gateway_ocr.MODEL,
         help="explicit Gateway model; no model fallback",
     )
+    parser.add_argument(
+        "--gateway-reasoning-effort",
+        choices=("low", "high"),
+        help="explicit reasoning effort; must be advertised by the selected Gateway model",
+    )
     args = parser.parse_args()
     if args.output.resolve() == args.manifest.resolve():
         parser.exit(2, "output must not overwrite the input manifest\n")
@@ -607,6 +629,7 @@ def main() -> int:
             args.model,
             args.kraken,
             gateway_model=args.gateway_model,
+            gateway_reasoning_effort=args.gateway_reasoning_effort,
         )
     except (ValueError, TypeError, OSError, subprocess.SubprocessError):
         parser.exit(

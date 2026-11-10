@@ -117,6 +117,11 @@ The secret-scan workflow retries the pinned gitleaks release download, then buil
 the same pinned version through the Go module proxy if the release CDN is unavailable.
 Both installation paths run the same required, redacted scan.
 
+The PDF QA builder renders source pages to PNG at the extraction coordinate scale,
+so the internal browser does not need a PDF plugin. Findings are collapsed by
+default and script findings link to their extracted element. Original PDFs and
+raw JSON remain available; the viewer never applies OCR candidates.
+
 The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
 Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.
 It preserves source text and emits review-required candidates; hosted recognition
@@ -126,3 +131,7 @@ Gateway requests preserve reported token usage, exclude reference text and have 
 client retries; cached candidates remain subject to image review. The first cache
 miss checks authenticated model eligibility before inference. Use `--gateway-model`
 for explicit model selection; the tool respects existing team provider allowlists.
+Rejected JSON responses retain sanitized finish reasons and token usage when supplied,
+including reasoning-token counts; partial text is rejected and is never cached as a candidate.
+`--gateway-reasoning-effort low|high` explicitly selects a catalog-supported effort
+for Vercel and separates its cache; omitting it preserves the existing request defaults.

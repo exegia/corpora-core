@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import struct
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -27,12 +28,13 @@ class PdfReviewTest(unittest.TestCase):
         output = {"pages": pages, "findings": [], "script_review": [finding]}
         with tempfile.TemporaryDirectory() as directory, patch.object(
             MODULE.subprocess, "run", return_value=Mock(stdout=json.dumps(output))
-        ):
+        ), patch.object(MODULE, "render_page", return_value="mock-page.png"):
             site = Path(directory)
             MODULE.build(source, site, "eng")
             review = json.loads((site / "review.json").read_text())
             self.assertEqual(review["units"][0]["findings"], [])
             self.assertEqual(review["units"][1]["findings"], [finding])
+            self.assertIsNone(review["units"][1]["findings"][0]["missing_marks"])
 
     def test_site_contains_source_and_extraction(self) -> None:
         source = ROOT / "crates/corpora-pdf/tests/fixtures/mixed.pdf"
@@ -46,6 +48,13 @@ class PdfReviewTest(unittest.TestCase):
             self.assertEqual(extraction["pages"][0]["elements"][0]["kind"], "h1")
             self.assertEqual(review["units"][0]["source_url"], "source.pdf#page=1&toolbar=0")
             self.assertEqual(review["units"][1]["source_url"], "source.pdf#page=2&toolbar=0")
+            self.assertEqual(len(extraction["pages"]), len(review["units"]))
+            for page, unit in zip(extraction["pages"], review["units"]):
+                png = (site / unit["source_image_url"]).read_bytes()
+                self.assertEqual(png[:8], b"\x89PNG\r\n\x1a\n")
+                width, height = struct.unpack(">II", png[16:24])
+                self.assertAlmostEqual(width, page["width"], delta=1)
+                self.assertAlmostEqual(height, page["height"], delta=1)
             self.assertEqual(extraction["pages"][1]["method"], "ocr")
             self.assertIn("Original source", (site / "index.html").read_text())
             self.assertIn("color-scheme:dark", (site / "review.css").read_text())
