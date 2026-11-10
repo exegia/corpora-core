@@ -183,6 +183,11 @@ The secret-scan workflow retries the pinned gitleaks release download, then buil
 the same pinned version through the Go module proxy if the release CDN is unavailable.
 Both installation paths run the same required, redacted scan.
 
+The PDF QA builder renders source pages to PNG at the extraction coordinate scale,
+so the internal browser does not need a PDF plugin. Findings are collapsed by
+default and script findings link to their extracted element. Original PDFs and
+raw JSON remain available; the viewer never applies OCR candidates.
+
 The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
 Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.
 It preserves source text and emits review-required candidates; hosted recognition

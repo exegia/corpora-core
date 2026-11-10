@@ -462,3 +462,59 @@ viewer includes the new result only for this one tested crop, beside default
 and low-effort 1,024-token attempts. Increasing the global cap is not justified
 as an accuracy fix; next investigate recognition quality rather than continuing
 to buy more reasoning tokens for this crop.
+
+## Phase 1 consumer handoff (2026-11-10)
+
+Phase 1 is complete for source-preserving draft extraction and review handoff.
+This is not acceptance of unattended historical-script transcription or semantic
+layout. The next bounded phase is defined in `agent/PROPOSAL.md`.
+
+The final check used the existing eight-page SBLGNT Galatians PDF, with physical
+page 2 as the representative page. The source SHA-256 remained
+`ee9b75cdc685655e5c87d4f7834b51fba0a864e324b1dd69104e308e331bfde1`.
+The actual Rust extraction ran through `tests/browser/build_pdf_review.py`;
+`result.json` and `review.json` retained identical page elements and correctly
+page-filtered findings. All 2,692 script findings were checked for source and
+raw-text hashes, element/word bounds, scalar ranges, `review_required` status
+and `missing_marks: null`. The copied original PDF remained byte-identical.
+
+The existing two low-effort Greek candidates were replayed from cache, with
+recognition and eligibility callbacks that raise if called: zero inference and
+zero preflight requests. Their source/crop hashes, page numbers, normalized
+coordinates and review statuses were verified. On page 2, the `greek-line-1`
+normalized region maps to extraction elements 81 through 88 at the declared
+108-DPI page scale. Candidate `raw_text` remains the original empty manifest
+value; it is not silently replaced with the later native extraction. Consumers
+join these separate outputs through source hash, physical page and geometry.
+
+The Synara internal browser initially showed a blank embedded PDF and an
+overwhelming expanded findings list. The test-only viewer now renders original
+pages as PNG at the extraction scale, retains a link to the unchanged PDF,
+collapses findings by default and links script findings to numbered elements.
+The image element is created only when a source URL exists; no design-check
+suppression was needed. In the rebuilt browser, page 2 loaded at 594 by 864
+pixels, and clicking `Show element 81` focused the expected Greek word. The
+unknown-marks explanation remained visible in expanded findings. The separate
+candidate browser showed source crops, review-required readings, the provisional
+Aramaic reference and the located Hebrew qubuts/segol discrepancy. No text was
+automatically corrected or accepted. Exact discrepancies remain qualified by
+the supplied image-verified reference; assistant review is not human sign-off.
+
+The local visual comparison used installed `eng` OCR and reported low agreement
+on Greek; this is a handoff test, not a Greek accuracy benchmark. Prose classified
+as table-cell candidates remains a documented layout limitation for Phase 2.
+The generic page viewer and private candidate viewer are separate inspection
+tools; a unified human-editing API is outside Phase 1.
+
+Private evidence is in `target/pdf-benchmark/phase1-handoff/`: source-page PNGs,
+the unchanged PDF, `result.json`, `review.json`, cached `candidates.json` and
+`handoff-receipt.json`. The existing six-line viewer remains under
+`target/pdf-benchmark/line-benchmark/`. Sources, transcripts and reports stay
+outside Git. No new paid inference was performed.
+
+Verification commands: `python3 -m unittest discover -s tests/browser -p
+'test_pdf_review.py'` (2 tests, including real PNG dimensions and source bytes),
+the OCR candidate suite (27 tests), benchmark suite (12 tests),
+`node --check tests/browser/review.js`, `make fmt`, `make ci`, and
+`git diff --check`. Browser navigation, finding-to-element focus, source image
+loading and evidence labels were also exercised in the internal browser.
