@@ -431,3 +431,34 @@ new flag is an experiment control, not an accuracy fix. Before another paid run,
 select a bounded output-budget experiment or alternate recognizer rather than
 automatically raising limits. Validation: 27 OCR tests, Ruff, strict mypy,
 `make fmt`, `make ci` and `git diff --check` passed.
+
+## One-crop 2,048-token experiment (2026-11-10)
+
+After committing the explicit effort control, a separately authorized experiment
+selected only `hebrew-line-18`, which had returned `length` at low effort and a
+1,024-token cap. The runner changed `gateway_ocr.SETTINGS["max_tokens"]` to 2,048
+only inside that Python process. Shipped defaults and source code were unchanged.
+The request hash automatically isolated this configuration from the earlier
+caches. Original manifest and rendered crop hashes were verified before upload;
+the frozen reference, model, prompt and low effort were held fixed.
+
+Exactly one inference request and one eligibility check were made, without retry.
+The response completed with `finish_reason: stop`, but still replaced qubuts
+(`U+05BB`) with segol (`U+05B6`) on bet: one NFD edit over 24 reference codepoints
+(4.17% CER). The increased cap avoided truncation in this attempt; it did not
+correct the vowel recognition error. A single attempt does not establish that
+this cap will reliably avoid truncation on other inputs.
+
+Usage was 1,143 prompt tokens and 1,850 completion tokens (2,993 total), of which
+1,830 were reported as reasoning tokens. At the previously verified catalog
+rates, the list-price estimate is $0.00779475. Reasoning tokens are included in
+completion tokens. The candidate remains review-required and no source was
+modified. A credential-free replay used the successful cache entry with zero
+inference/preflight requests and callbacks that would fail on network access.
+
+Private artifacts are `hebrew-low2048-{manifest,config,report}.json` and
+`hebrew-low2048-cached-report.json` in the line benchmark directory. The dark
+viewer includes the new result only for this one tested crop, beside default
+and low-effort 1,024-token attempts. Increasing the global cap is not justified
+as an accuracy fix; next investigate recognition quality rather than continuing
+to buy more reasoning tokens for this crop.
