@@ -97,3 +97,7 @@ recovers sampled Hebrew consonants but misses vowel marks and changes table
 grouping. The Hebrew model's output alphabet lacks the required holam mark.
 This is a failed pointed-text acceptance result, not a default-model upgrade;
 see the verification record for exact hashes, coverage and local evidence paths.
+
+For the next recognition investigation, see [Historical-script extraction](HISTORICAL-SCRIPTS.md):
+specialist models, verified alphabet prerequisites, cost comparisons, script-specific
+limits and the proposed downstream review API boundary.

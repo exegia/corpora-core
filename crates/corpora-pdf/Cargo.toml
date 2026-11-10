@@ -11,7 +11,7 @@ description = "Local PDF extraction and OCR engine for Corpora"
 readme = "README.md"
 keywords = ["pdf", "ocr", "document", "extraction"]
 categories = ["text-processing"]
-include = ["src/**/*", "Cargo.toml", "README.md"]
+include = ["src/**/*", "Cargo.toml", "README.md", "skills/**/*", "agent/**/*", "benchmarks/*.md"]
 
 [dependencies]
 roxmltree = "=0.21.1"

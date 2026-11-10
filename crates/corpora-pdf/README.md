@@ -6,6 +6,11 @@ hints, visual elements, findings, and an evidence-based extraction score. It
 does not export Text-Fabric or provide a production CLI or web API. Another
 crate can consume its `PdfExtraction` value for those jobs.
 
+The crate includes the [pdf-ocr skill](skills/pdf-ocr/SKILL.md), its
+[specialist prompt](agent/SYSTEM.md), and the [implementation proposal](agent/PROPOSAL.md).
+These distinguish possible mark loss from an exact image-verified discrepancy
+and define optional paid recognition without overwriting source extraction.
+
 ## Install the local engines
 
 This first backend runs [Poppler](https://poppler.freedesktop.org/) for PDF
