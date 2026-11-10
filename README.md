@@ -184,6 +184,9 @@ Gateway requests preserve reported token usage, exclude reference text and have 
 client retries; cached candidates remain subject to image review. The first cache
 miss checks authenticated model eligibility before inference. Use `--gateway-model`
 for explicit model selection; the tool respects existing team provider allowlists.
+Direct Mistral OCR also retains validated `usage_info` page/byte counters and
+the reported OCR model in successful caches and rejected-response reports.
+Missing usage stays unknown; cached counters describe the original request.
 Rejected JSON responses retain sanitized finish reasons and token usage when supplied,
 including reasoning-token counts; partial text is rejected and is never cached as a candidate.
 `--gateway-reasoning-effort low|high` explicitly selects a catalog-supported effort

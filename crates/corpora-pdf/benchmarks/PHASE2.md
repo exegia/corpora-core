@@ -1,7 +1,8 @@
 # Phase 2: recognizer capability gate
 
 Started 2026-11-10 on `feat/pdf-ocr-phase-2`, from Phase 1 merge `2070422`.
-Status: capability/access audit complete; no new recognition request made.
+Status: capability/access audit and direct-Mistral accounting implemented;
+no new recognition request made.
 The scope is a dedicated recognizer comparison before a broader acceptance run.
 
 ## Frozen first comparison
@@ -45,11 +46,13 @@ Sources checked 2026-11-10:
 
 ## Next bounded step
 
-Prepare direct-Mistral response accounting before the paid probe: the existing
-adapter returns Markdown only and currently discards provider usage. Preserve
-validated page usage and reported model identity in the candidate/cache record,
-with credential-free regression tests and compatibility for existing callbacks.
-Do not label missing provider accounting as zero cost.
+Direct-Mistral response accounting is now implemented. The pipeline retains
+validated page/byte usage and reported OCR model identity in successful caches
+and rejected-response reports. Existing string-returning callbacks and metadata-
+free caches remain compatible. Missing provider accounting is not labeled as
+zero cost. Credential-free regression tests cover success/cache replay, rejected
+output and budget enforcement, invalid counters, safe model names, malformed
+responses and transport failures. See `tools/README.md` for the field contract.
 
 Then, with `MISTRAL_API_KEY` configured locally, run only the frozen region with
 `--provider mistral --max-calls 1`, no client retry. Recheck the source and rendered
