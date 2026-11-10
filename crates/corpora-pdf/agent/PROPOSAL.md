@@ -104,6 +104,12 @@ unrecognized or ambiguous text remains available for downstream review.
 
 ## Phase 2: recognition quality and acceptance
 
+Phase 2 started on `feat/pdf-ocr-phase-2`. The dated
+[capability gate](../benchmarks/PHASE2.md) records the frozen first comparison,
+an alphabet-disqualified local model, the Gateway route check and the remaining
+direct-Mistral accounting/credential prerequisites. No new accuracy result is
+claimed by that audit.
+
 Start with one dedicated OCR recognizer on the same frozen Hebrew crop that
 confused qubuts with segol. Inspect its output alphabet or documented output
 capabilities before inference; unsupported marks disqualify that route. Keep
