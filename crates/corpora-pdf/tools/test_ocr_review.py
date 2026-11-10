@@ -154,6 +154,57 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(item["error_code"], "http_error")
         self.assertFalse((self.root / "cache").exists())
 
+    def test_rejected_gateway_response_retains_accounting_without_text_or_cache(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = json.dumps(
+            {
+                "choices": [
+                    {
+                        "finish_reason": "length",
+                        "message": {
+                            "content": "PRIVATE_PARTIAL",
+                            "reasoning": "PRIVATE_THOUGHT",
+                        },
+                    }
+                ],
+                "usage": {
+                    "prompt_tokens": 100,
+                    "completion_tokens": 1024,
+                    "total_tokens": 1124,
+                    "completion_tokens_details": {
+                        "reasoning_tokens": 1000,
+                        "private": "PRIVATE_DETAIL",
+                    },
+                },
+            }
+        ).encode()
+        opener = Mock()
+        opener.open.return_value = response
+        with (
+            patch.dict(os.environ, {"AI_GATEWAY_API_KEY": "REPLACE_ME"}),
+            patch.object(
+                ocr.gateway_ocr.urllib.request, "build_opener", return_value=opener
+            ),
+        ):
+            report = self.run_pipeline(provider="vercel")
+        item = report["regions"][0]
+        self.assertEqual(report["calls"], 1)
+        self.assertEqual(item["status"], "recognition_failed")
+        self.assertEqual(item["error_code"], "incomplete_response")
+        self.assertIsNone(item["candidate_text"])
+        self.assertEqual(item["raw_text"], self.region["raw_text"])
+        self.assertEqual(item["recognition_metadata"]["finish_reason"], "length")
+        self.assertEqual(item["recognition_metadata"]["usage"]["total_tokens"], 1124)
+        self.assertEqual(
+            item["recognition_metadata"]["usage"]["completion_tokens_details"],
+            {"reasoning_tokens": 1000},
+        )
+        self.assertNotIn("PRIVATE", json.dumps(report))
+        self.assertFalse((self.root / "cache").exists())
+        opener.open.assert_called_once()
+
     def test_cache_and_missing_script_hint_keep_source_and_location(self):
         before = self.pdf.read_bytes()
         result = self.run_pipeline()
@@ -303,8 +354,13 @@ class GatewayAdapterTest(unittest.TestCase):
             for failure in ("length", "tool_calls", "content_filter"):
                 data["choices"][0]["finish_reason"] = failure
                 response.read.return_value = json.dumps(data).encode()
-                with self.assertRaises(ocr.gateway_ocr.GatewayError):
+                with self.assertRaises(ocr.gateway_ocr.GatewayError) as rejected:
                     ocr.gateway_ocr.recognize(b"crop")
+                self.assertEqual(rejected.exception.metadata["finish_reason"], failure)
+                self.assertEqual(
+                    rejected.exception.metadata["usage"]["total_tokens"], 103
+                )
+                self.assertNotIn("DO-NOT-KEEP", json.dumps(rejected.exception.metadata))
             before = opener.open.call_count
             opener.open.side_effect = urllib.error.HTTPError(
                 request.full_url, 429, "SECRET BODY", {}, None
@@ -314,6 +370,89 @@ class GatewayAdapterTest(unittest.TestCase):
             self.assertEqual(error.exception.http_status, 429)
             self.assertNotIn("SECRET", str(error.exception))
             self.assertEqual(opener.open.call_count, before + 1)
+
+    def test_rejection_metadata_sanitizes_unknown_reasons_and_invalid_counters(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        opener = Mock()
+        opener.open.return_value = response
+        with (
+            patch.dict(os.environ, {"AI_GATEWAY_API_KEY": "REPLACE_ME"}),
+            patch.object(
+                ocr.gateway_ocr.urllib.request, "build_opener", return_value=opener
+            ),
+        ):
+            for reason in ("PRIVATE_REASON", {"private": "PRIVATE_REASON"}, None):
+                with self.subTest(reason=reason):
+                    response.read.return_value = json.dumps(
+                        {
+                            "choices": [
+                                {
+                                    "finish_reason": reason,
+                                    "message": {"content": "PRIVATE"},
+                                }
+                            ],
+                            "usage": {
+                                "prompt_tokens": True,
+                                "completion_tokens": -1,
+                                "total_tokens": "100",
+                                "secret": "PRIVATE",
+                                "completion_tokens_details": {"reasoning_tokens": 1.5},
+                                "prompt_tokens_details": {
+                                    "cached_tokens": 0,
+                                    "secret": "PRIVATE",
+                                },
+                            },
+                        }
+                    ).encode()
+                    with self.assertRaises(ocr.gateway_ocr.GatewayError) as error:
+                        ocr.gateway_ocr.recognize(b"crop")
+                    self.assertEqual(
+                        error.exception.metadata["finish_reason"], "unknown"
+                    )
+                    self.assertEqual(
+                        error.exception.metadata["usage"],
+                        {"prompt_tokens_details": {"cached_tokens": 0}},
+                    )
+                    self.assertNotIn("PRIVATE", json.dumps(error.exception.metadata))
+
+    def test_malformed_or_refused_response_keeps_safe_usage_without_accepting_it(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        opener = Mock()
+        opener.open.return_value = response
+        cases = [
+            {"choices": []},
+            {"choices": [None]},
+            {},
+            {"choices": [{"finish_reason": "stop", "message": None}]},
+            {
+                "choices": [
+                    {
+                        "finish_reason": "stop",
+                        "message": {"content": "PRIVATE", "refusal": "PRIVATE_REFUSAL"},
+                    }
+                ]
+            },
+        ]
+        with (
+            patch.dict(os.environ, {"AI_GATEWAY_API_KEY": "REPLACE_ME"}),
+            patch.object(
+                ocr.gateway_ocr.urllib.request, "build_opener", return_value=opener
+            ),
+        ):
+            for data in cases:
+                with self.subTest(data=data):
+                    data["usage"] = {"total_tokens": 27}
+                    response.read.return_value = json.dumps(data).encode()
+                    with self.assertRaises(ocr.gateway_ocr.GatewayError) as error:
+                        ocr.gateway_ocr.recognize(b"crop")
+                    self.assertEqual(
+                        error.exception.metadata["usage"], {"total_tokens": 27}
+                    )
+                    self.assertNotIn("PRIVATE", json.dumps(error.exception.metadata))
 
     def test_eligibility_checks_allowlist_and_image_support(self):
         response = Mock()

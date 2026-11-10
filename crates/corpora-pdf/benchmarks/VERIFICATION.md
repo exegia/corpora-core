@@ -291,3 +291,89 @@ Validation: 22 credential-free OCR tests, 12 benchmark tests, two PDF browser
 tests, Ruff and strict mypy on both adapters (using the Pillow-equipped OCR
 environment), `make doctor`, `make fmt` and `make ci` passed. The required CI run
 includes agent validation and Rust/Swift checks.
+
+## Six-line Gemini benchmark (2026-11-10)
+
+The next bounded evaluation used `google/gemini-3.6-flash` on six short line
+crops: two Hebrew lines from physical page 200 of the supplied Hebrew syntax
+PDF, two Aramaic lines from physical page 137 of the supplied Aramaic grammar,
+and two Greek lines from physical page 2 of the publisher's
+[SBLGNT Galatians PDF archive](https://www.sblgnt.com/download/SBLGNTpdf.zip).
+The Greek samples are clean digital print, not evidence of scanned-Greek
+performance. They retain accents, breathings and iota subscripts in the reference.
+SBLGNT is copyright 2010 Society of Biblical Literature and Logos Bible Software;
+the private viewer links the required attribution. Source files remain outside Git.
+
+References were frozen before inference, with source/crop hashes, physical page,
+normalized bounds and reviewer identity. Two assistants independently inspected
+the pixels; this is not human specialist sign-off. Five references are
+`image_verified`. One Aramaic reference remains `unreviewed` because a tiny speck
+inside bet might be scan noise or dagesh. Examples with ambiguous editorial stress
+symbols were excluded before inference; this run does not test cantillation.
+The Hebrew reference deliberately retains the visibly unpointed divine name.
+
+| Script | Complete candidates | Exact matches | NFD comparison |
+| --- | --- | --- | --- |
+| Hebrew | 2/2 | 0/2 | 7 edits / 53 reference codepoints (13.21% CER) |
+| Aramaic | 1/2 | 0/1 returned | 1 edit / 28 codepoints against a provisional reference; other response rejected |
+| Greek | 1/2 | 1/1 returned | 0 edits / 34 codepoints; other response rejected |
+
+The Hebrew candidates substituted holam with qamats and qubuts with segol; one
+also changed consonants in a personal name. The provisional Aramaic comparison
+substituted sheva with hataf patah. The longer Aramaic and Greek requests returned
+`incomplete_response` and were rejected, not cached as successful candidates or
+silently accepted as exact matches. Failed lines have no CER; they remain visible
+in the completion denominator. Of the five image-verified references, only three
+received complete candidates and one matched exactly. Their 7/87 combined
+codepoint edits describe those three returned candidates only.
+
+The run made exactly six inference requests and three read-only eligibility
+checks, without retries. Four complete responses reported 4,538 prompt and 3,991
+completion tokens (8,529 total). At the previously verified $0.75/M input and
+$3.75/M output rates, these four responses alone have a $0.01836975 list-price
+estimate. Usage for the two rejected responses is unavailable in the current
+adapter, so total spend is unknown. Several successful responses reported nearly
+1,024 completion tokens despite short visible transcriptions. This suggests an
+output/reasoning-budget investigation, but the rejected responses' finish reasons
+were not retained, so truncation is not established from these reports.
+
+All four successful cache entries replayed with credentials removed, network
+callbacks forbidden, zero inference requests and zero preflight requests.
+Failed entries were excluded from replay to avoid unauthorized retry spend.
+The offline dark viewer shows source images, frozen references, candidates,
+source coordinates and mark differences, including explicit rejected responses.
+Private artifacts are in `target/pdf-benchmark/line-benchmark/`: per-script
+manifests/reports, `reference-review.json`, `summary.json`, and `index.html`.
+
+This run does not justify automatic acceptance of historical-script extraction.
+Keep the existing review-required policy and Gemini default unchanged; the earlier
+two-word success did not generalize. The next bounded implementation step is to
+retain safe finish-reason/usage metadata on rejected responses, then evaluate an
+explicit reasoning/output budget before buying another accuracy run. Do not
+silently increase the cap or change references to match generated text.
+
+## Rejected-response accounting follow-up (2026-11-10)
+
+The Gateway adapter now extracts allowlisted accounting before it validates a
+candidate. A rejected JSON response can retain its known finish reason, prompt,
+completion and total token counters, plus reasoning/cached-token detail counters.
+Unknown reasons become `unknown`; missing or malformed counters stay absent.
+Rejected content, reasoning text and provider messages are not serialized.
+`recognition_failed`, null candidate text, request-budget consumption and absence
+of successful cache entries remain unchanged. HTTP/transport errors without
+usable accounting cannot supply a cost. The six-line benchmark's discarded data
+has not been reconstructed or overwritten.
+
+Credential-free tests cover truncation accounting through the complete pipeline,
+safe handling of arbitrary finish reasons and malformed counters, malformed or
+refused responses, unchanged retry behavior and successful-response metadata.
+The suite has 25 tests; all passed, along with Ruff, strict mypy against the
+Pillow-equipped OCR environment, `make fmt`, `make ci` and `git diff --check`.
+This follow-up made no paid OCR requests.
+
+Read-only inspection of the public model catalog confirmed that Gemini 3.6 Flash
+supports reasoning effort `low` or `high`, not `minimal`; the documented Gateway
+raw JSON extension is `reasoning.effort`. Request defaults and cache identity are
+unchanged. A separate, explicitly configured `low`-effort experiment is the next
+candidate, not a proven accuracy or cost improvement. See the tool README for
+the official API references and experiment boundaries.

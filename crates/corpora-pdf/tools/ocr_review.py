@@ -558,6 +558,8 @@ def run(
                 if isinstance(error, gateway_ocr.GatewayError):
                     item["error_code"] = error.code
                     item["http_status"] = error.http_status
+                    if error.metadata:
+                        item["recognition_metadata"] = error.metadata
                 report["regions"].append(item)
                 continue
         item.update(

@@ -192,3 +192,5 @@ Gateway requests preserve reported token usage, exclude reference text and have 
 client retries; cached candidates remain subject to image review. The first cache
 miss checks authenticated model eligibility before inference. Use `--gateway-model`
 for explicit model selection; the tool respects existing team provider allowlists.
+Rejected JSON responses retain sanitized finish reasons and token usage when supplied,
+including reasoning-token counts; partial text is rejected and is never cached as a candidate.

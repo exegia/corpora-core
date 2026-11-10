@@ -78,6 +78,15 @@ model evaluation. A cache hit makes no new paid request.
 Gateway candidates retain allowlisted reported token counts in
 `recognition_metadata.usage`; cached counts describe the original recognition,
 not new spend. Missing usage stays unknown. Counts do not constitute an invoice.
+Rejected JSON responses also retain safe accounting under `recognition_metadata`,
+including reported `completion_tokens_details.reasoning_tokens` and
+`prompt_tokens_details.cached_tokens`. Only nonnegative integer counters are kept;
+booleans, strings and invalid counters are omitted. Known finish reasons are kept;
+unrecognized values become `unknown`. Missing usage is an empty object, not zero.
+Partial text, reasoning text and refusal messages are never saved for rejected
+responses, and failures still consume the request budget without creating a
+successful cache entry. HTTP/transport failures without usable accounting remain
+unknown. Earlier reports cannot recover discarded usage retroactively.
 Truncated, refused, tool-call and malformed responses are rejected. Safe error
 codes and HTTP status are reported without provider error bodies or credentials.
 `provider_not_allowed` and `model_not_allowed` identify configured access restrictions;
@@ -86,6 +95,22 @@ preflight. `preflight_requests` counts read-only checks separately from inferenc
 Cached candidates do not require a new eligibility check or credential.
 No alternate model is silently substituted. Hosted model-internal routing is
 outside this client's control; results still require image review.
+
+### Reasoning-budget investigation
+
+On 2026-11-10 the public Gateway catalog advertised `low` and `high` effort for
+`google/gemini-3.6-flash`; it did not advertise `minimal` or a numeric reasoning
+budget. The [Gateway reasoning API](https://vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions/reasoning)
+and [Google mapping](https://vercel.com/docs/ai-gateway/models-and-providers/reasoning/google)
+document the raw Chat Completions body extension `"reasoning": {"effort": "low"}`.
+Hiding reasoning with `exclude` does not disable internal reasoning.
+
+The adapter currently leaves reasoning effort unspecified and retains its
+1,024-token output cap. No budget change has been accepted on accuracy evidence.
+The next experiment should expose an explicit effort option, include it in cache
+identity, validate it against the selected model's capabilities, and compare `low`
+against the frozen line references within a new bounded request cap. Do not infer
+that the previous failures were truncation: their actual finish reasons were lost.
 
 The optional direct route uses Mistral OCR 3 (`mistral-ocr-2512`). Set `MISTRAL_API_KEY` in the
 process environment, then explicitly choose it:
