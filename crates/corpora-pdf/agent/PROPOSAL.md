@@ -1,7 +1,8 @@
 # PDF OCR specialist proposal
 
-Status: proposed implementation, 2026-11-09. The implementation branch will record
-its delivered boundary here. Research and verified model/source references are in
+Status: first implementation on `feat/pdf-ocr-review-pipeline`, 2026-11-09.
+Rust script findings and the bounded region CLI are implemented. Local smoke
+validation and mocked hosted tests do not establish specialist model accuracy. Research and verified model/source references are in
 [HISTORICAL-SCRIPTS.md](../benchmarks/HISTORICAL-SCRIPTS.md).
 
 ## Outcome and scope
@@ -14,7 +15,7 @@ not automatically an error. A region may be exported as a review-required draft.
 
 The first implementation includes deterministic Rust review diagnostics, a
 mark-aware scorer, a bounded region-recognition CLI with local Kraken and optional
-Mistral adapters, cached requests, and JSON output for a later review API. It does
+Vercel/Mistral adapters, cached requests, and JSON output for a later review API. It does
 not train models, promise complete ancient-script support, or implement the later
 human-editing API. Those need independently reviewed data and separate acceptance.
 
@@ -37,6 +38,7 @@ uses specialist models or the OCR endpoint, not a free-form correction prompt.
 | CLLG `ppocr_v6_tau090.safetensors`, Zenodo 22232579, Kraken 7.1 | First Greek specialist to evaluate. Nine key Greek marks passed the header audit. Require an explicit local weight path; compute its SHA-256 and audit required marks before running it. No automatic download or claim of accepted accuracy. |
 | Qoruyo printed Syriac models | Future candidates by script style; inspect actual codecs first. Sophro Mhiro's vowel-free manuscript model cannot satisfy vowel-preserving output. |
 | Pointed Hebrew / Hebrew-script Aramaic | Current generic models fail the smoke test. Retain draft OCR and request review; custom training follows corrected real lines and licensed fonts. No automatic vocalization. |
+| Vercel `google/gemini-3.6-flash` | Preferred paid candidate route using existing `AI_GATEWAY_API_KEY`. Explicit model selection and authenticated eligibility preflight respect team allowlists. Image-only requests, short transcription prompt, 1,024 output-token cap, request limits, no client retries, usage retention and prompt-aware cache. Upstream model aliases are mutable; no accuracy guarantee. After Interfaze access was enabled, a two-crop comparison retained Gemini as default: Interfaze substituted the Aramaic vowel and used more tokens. See the bounded evidence in `benchmarks/VERIFICATION.md`; neither model is generally certified. |
 | Mistral `mistral-ocr-2512` | Optional paid region-image comparator. Use `MISTRAL_API_KEY`, explicit provider selection and a positive call cap. $2/1,000 page/image units was published when checked; retries/crops affect units. Return its output as a candidate requiring review, never as source truth. |
 | Other scripts | Explicit unsupported or review-required findings; do not substitute a convenient modern alphabet. Printed transliteration, printed signs and artifact photographs are different inputs. |
 

@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+pub mod review;
+
 /// Limits and installed OCR language data used by [`extract_pdf`].
 #[derive(Clone, Debug)]
 pub struct ExtractOptions {
@@ -59,6 +61,9 @@ pub struct PdfExtraction {
     pub pages: Vec<Page>,
     /// Nonfatal extraction and interpretation findings.
     pub findings: Vec<Finding>,
+    /// Location-linked script risks; absent in older serialized extractions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub script_review: Vec<review::ScriptReview>,
 }
 
 /// One PDF page in source order.
@@ -461,11 +466,13 @@ pub fn extract_pdf(
             extraction_score: score,
         });
     }
+    let script_review = review::assess(&hash, &pages);
     Ok(PdfExtraction {
         source_path: path,
         source_sha256: hash,
         pages,
         findings,
+        script_review,
     })
 }
 

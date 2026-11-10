@@ -7,7 +7,7 @@ Private PDF manifests and results remain outside Git; no hosted service is used.
 The benchmark accepts `--tessdata-dir` for isolated language models and records
 their hashes. Missing or unloadable requested languages cannot silently fall back.
 When the PDF crate is present, the PR test job installs Poppler and Tesseract
-before `make ci`, then runs the benchmark and PDF review-browser Python suites.
+before `make ci`, then runs the benchmark, PDF review-browser and OCR candidate Python suites.
 PDF OCR guidance is owned by `crates/corpora-pdf/skills/pdf-ocr` and linked into
 `.github/skills/pdf-ocr`; its prompt/proposal are under `crates/corpora-pdf/agent`.
 
@@ -182,3 +182,13 @@ scripts with `-S warning -x`; CI runs it as part of `hygiene`.
 The secret-scan workflow retries the pinned gitleaks release download, then builds
 the same pinned version through the Go module proxy if the release CDN is unavailable.
 Both installation paths run the same required, redacted scan.
+
+The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
+Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.
+It preserves source text and emits review-required candidates; hosted recognition
+requires explicit provider selection and a request cap. Use `--provider vercel`
+with `AI_GATEWAY_API_KEY` (preferred), or `--provider mistral` with `MISTRAL_API_KEY`.
+Gateway requests preserve reported token usage, exclude reference text and have no
+client retries; cached candidates remain subject to image review. The first cache
+miss checks authenticated model eligibility before inference. Use `--gateway-model`
+for explicit model selection; the tool respects existing team provider allowlists.

@@ -190,3 +190,104 @@ For subsequent synthetic training, a font matching the source's letterforms and
 mark positioning would help, provided its license permits that use. Synthetic
 examples must remain separate from held-out real-page evaluation. This candidate
 needs pointed-text fine-tuning or replacement before a larger acceptance run.
+
+## Vercel Gateway adapter and bounded live preflight
+
+The `--provider vercel` adapter requests `interfaze/interfaze-beta` through the
+Gateway Chat Completions endpoint. It sends the selected image plus a transcription
+prompt, without reference text, and limits output to 1,024 tokens. Requests have
+no client retries or alternate-model fallback. Prompt/settings identity separates
+its cache from local and Mistral results; reported usage is retained on success.
+
+The first live run attempted the two existing Hebrew/Aramaic regions with a
+two-request cap. Both returned HTTP 403 and yielded no candidate text or usage.
+A separate read-only credits endpoint request returned HTTP 200 with the same
+credential. This establishes that the read-only endpoint accepted the credential;
+it does not identify why inference was forbidden or establish model accuracy. No
+additional inference requests were made. Inspect Gateway request/access diagnostics
+before another explicitly bounded run.
+
+The private failure report is
+`target/pdf-benchmark/review-pipeline/vercel-report.json`; original PDFs, local
+candidates and unreviewed reference status remain unchanged. No provider error
+body or credential is included in the report. Eighteen credential-free OCR tests,
+Ruff, strict mypy on both adapter files, `make fmt`, `make ci`, and agent validation
+passed. Live hosted accuracy remains unmeasured.
+
+## Gateway routing diagnosis and successful permitted-model smoke
+
+A separately authorized one-crop diagnostic exposed `no_providers_available`: the
+evaluated team's Provider Allowlist excludes Interfaze. The authenticated catalog
+confirmed `no_allowlisted_provider`. Its credits endpoint succeeding did not imply
+permission to use every model. No team access settings were changed.
+
+The adapter now checks authenticated model eligibility before the first uncached
+inference and supports explicit `--gateway-model` selection. The default is
+`google/gemini-3.6-flash`, the newest eligible standard Gemini Flash version in the
+evaluated team's catalog at this run; later Flash versions were not allowlisted.
+Model selection and prompt/settings are part of cache identity. Errors retain
+allowlisted type codes without arbitrary provider messages or credentials.
+
+Two crop calls through this permitted model succeeded. Each returned all three
+reference codepoints, retaining the Hebrew holam and Aramaic qamats that local
+Kraken omitted. Each had zero NFD codepoint edits against its existing reference.
+References remain `unreviewed`; this six-reference-character sample does not
+establish general Hebrew/Aramaic accuracy, Greek accuracy or production acceptance.
+
+Reported usage was 2,336 prompt tokens and 667 completion tokens (3,003 total).
+At the observed catalog rates of $0.75/M input and $3.75/M output, the estimated
+list-price equivalent is $0.00425325, not an invoice. Private successful and cached
+reports are `target/pdf-benchmark/review-pipeline/vercel-gemini-report.json` and
+`vercel-gemini-cached-report.json`. The original failed report is retained.
+
+The credential-free suite now has 22 tests, including ineligible model preflight
+with zero inference calls, selected-model cache separation and safe error types.
+
+## Interfaze comparison after access was enabled (2026-11-10)
+
+After the user enabled Interfaze in the team settings, authenticated eligibility
+reported `eligible`. A separately authorized run selected
+`--provider vercel --gateway-model interfaze/interfaze-beta --max-calls 2` on the
+same two source-pinned crops. It made one eligibility check and two inference
+requests, with no client retries, taking 141.64 seconds including rendering and
+preflight. Both requests returned complete candidates.
+
+Assistant visual inspection of the rendered source crops confirmed holam
+(`U+05B9`) on the Hebrew lamed and qamats (`U+05B8`) on the Aramaic lamed.
+This is assistant image review, not human specialist sign-off. The original
+unreviewed manifest/reports remain intact. A separate private manifest records
+`image_verified` references, with reviewer identity, source/crop hashes, page,
+bounds and observations in `image-review.json`.
+
+| Candidate | Hebrew crop | Aramaic crop | Prompt / completion tokens | Estimated USD |
+| --- | --- | --- | --- | --- |
+| Gemini 3.6 Flash, previous run | Exact match | Exact match | 2,336 / 667 | $0.00425325 |
+| Interfaze beta, this run | Exact match | Qamats replaced by holam | 19,154 / 181 | $0.0293645 |
+
+Interfaze made one NFD codepoint substitution across six reference codepoints
+(16.67% combined CER; 33.33% on the Aramaic crop). Its Aramaic candidate is a
+confirmed discrepancy against the assistant image-verified reference: missing
+`U+05B8`, inserted `U+05B9` at base index zero. This is a two-word smoke test,
+not a general accuracy estimate for any language, script or model.
+
+Costs use the public [Gateway model catalog](https://ai-gateway.vercel.sh/v1/models)
+observed on this date: Interfaze $1.50/M input and $3.50/M output, Gemini $0.75/M
+input and $3.75/M output. They are list-price estimates from reported usage, not
+invoices. No claim is made about why Interfaze reported more input tokens.
+
+Rescoring both models against the inspected references used their existing caches:
+zero inference calls and zero preflight requests, with the credential removed and
+network callbacks set to fail if invoked. Candidates still require review and
+never replace source text. Gemini remains the default; Interfaze remains an
+explicit option. Broader acceptance needs independently reviewed lines with more
+marks and mixed-script layouts.
+
+Private evidence remains under `target/pdf-benchmark/review-pipeline/`:
+`vercel-interfaze-report.json`, `manifest-image-verified.json`, `image-review.json`,
+and `vercel-{interfaze,gemini}-verified-cached-report.json`. Source PDFs, crop
+images, reference transcriptions and cache files are excluded from Git.
+
+Validation: 22 credential-free OCR tests, 12 benchmark tests, two PDF browser
+tests, Ruff and strict mypy on both adapters (using the Pillow-equipped OCR
+environment), `make doctor`, `make fmt` and `make ci` passed. The required CI run
+includes agent validation and Rust/Swift checks.

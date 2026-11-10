@@ -194,3 +194,11 @@ throughput depends heavily on page size and OCR language data. For text-layer
 work where a visual score is unnecessary, set `verify_text_layer_with_ocr` to
 `false` to skip that extra pass. A representative corpus benchmark is still
 needed before choosing a faster production backend.
+
+## Script review and specialist candidates
+
+Extraction emits additive `script_review` findings with page/region coordinates,
+script, observed marks and a pinned raw-text revision. Missing accents are unknown
+until verified against source evidence; ordinary unpointed Hebrew is not an error.
+See [the region tool guide](tools/README.md) for bounded local Kraken and optional
+Vercel AI Gateway or direct Mistral requests, private caching and mark-aware reference comparison.

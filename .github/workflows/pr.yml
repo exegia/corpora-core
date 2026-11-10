@@ -99,6 +99,7 @@ jobs:
         run: |
           python3 -m unittest discover -s crates/corpora-pdf/benchmarks -p 'test_*.py'
           python3 -m unittest discover -s tests/browser -p 'test_pdf_review.py'
+          python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'
 
   check:
     name: check

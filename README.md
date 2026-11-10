@@ -23,7 +23,7 @@ quality pipeline review bounded findings. The [Text-Fabric expert bundle](agent/
 contains the agent instructions and evaluation setup.
 
 When the PDF crate is present, PR tests install Poppler and Tesseract before
-`make ci`, then run the PDF benchmark and review-browser Python suites.
+`make ci`, then run the PDF benchmark, review-browser and OCR candidate Python suites.
 The [PDF OCR skill](crates/corpora-pdf/skills/pdf-ocr/SKILL.md) and
 [proposal](crates/corpora-pdf/agent/PROPOSAL.md) define specialist recognition,
 optional paid fallback and location-linked review findings for historical scripts.
@@ -169,3 +169,13 @@ into generated TypeScript package publishing; the release also carries Cargo
 artifacts, and the root `Package.swift` exposes generated Swift types. Follow
 the [branch and release policy](.github/BRANCH-AND-RELEASE-POLICY.md) before
 changing publishing settings.
+
+The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
+Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.
+It preserves source text and emits review-required candidates; hosted recognition
+requires explicit provider selection and a request cap. Use `--provider vercel`
+with `AI_GATEWAY_API_KEY` (preferred), or `--provider mistral` with `MISTRAL_API_KEY`.
+Gateway requests preserve reported token usage, exclude reference text and have no
+client retries; cached candidates remain subject to image review. The first cache
+miss checks authenticated model eligibility before inference. Use `--gateway-model`
+for explicit model selection; the tool respects existing team provider allowlists.
