@@ -37,7 +37,7 @@ def build(pdf: Path, site: Path, languages: str) -> None:
                 "score": page["extraction_score"],
                 "findings": [
                     finding
-                    for finding in extraction["findings"]
+                    for finding in extraction["findings"] + extraction.get("script_review", [])
                     if finding["page"] in (None, page["number"])
                 ],
                 "elements": page["elements"],
@@ -59,7 +59,7 @@ def main() -> None:
     args = parser.parse_args()
     build(args.pdf, args.site, args.languages)
     print(f"Review site: {args.site / 'index.html'}")
-    print(f"Serve it: python3 -m http.server 8771 -d {args.site}")
+    print(f"Serve it: python3 -m http.server 8771 --bind 127.0.0.1 -d {args.site}")
 
 
 if __name__ == "__main__":

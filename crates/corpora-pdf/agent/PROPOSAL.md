@@ -1,7 +1,8 @@
 # PDF OCR specialist proposal
 
-Status: proposed implementation, 2026-11-09. The implementation branch will record
-its delivered boundary here. Research and verified model/source references are in
+Status: first implementation on `feat/pdf-ocr-review-pipeline`, 2026-11-09.
+Rust script findings and the bounded region CLI are implemented. Local smoke
+validation and mocked hosted tests do not establish specialist model accuracy. Research and verified model/source references are in
 [HISTORICAL-SCRIPTS.md](../benchmarks/HISTORICAL-SCRIPTS.md).
 
 ## Outcome and scope

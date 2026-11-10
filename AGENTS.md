@@ -152,7 +152,7 @@ transcriptions and generated reports out of Git; retain reference review status.
 Use `--tessdata-dir` for isolated multilingual models; reports retain model hashes
 and missing requested languages fail rather than silently falling back.
 The PR test job installs Poppler and Tesseract when the PDF crate is present,
-and runs the benchmark and PDF review-browser Python suites after `make ci`.
+and runs the benchmark, PDF review-browser and OCR candidate Python suites after `make ci`.
 The crate-owned skill is `crates/corpora-pdf/skills/pdf-ocr/SKILL.md`, discovered
 through `.github/skills/pdf-ocr`. Its prompt and proposal are in the crate's
 `agent/` directory. Exact missing marks require image-verified evidence; script
@@ -203,3 +203,8 @@ scripts with `-S warning -x`; CI runs it as part of `hygiene`.
 The secret-scan workflow retries the pinned gitleaks release download, then builds
 the same pinned version through the Go module proxy if the release CDN is unavailable.
 Both installation paths run the same required, redacted scan.
+
+The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
+Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.
+It preserves source text and emits review-required candidates; hosted recognition
+requires explicit provider selection, a request cap and `MISTRAL_API_KEY`.

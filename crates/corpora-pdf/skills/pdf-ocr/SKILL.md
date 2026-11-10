@@ -50,12 +50,14 @@ From the repository root:
 ```sh
 cargo test -p corpora-pdf
 python3 -m unittest discover -s crates/corpora-pdf/benchmarks -p 'test_*.py'
+python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'
 python3 -m unittest discover -s tests/browser -p 'test_pdf_review.py'
 make agents-check
 ```
 
-See the crate README for current executable interfaces. The proposal is not
-evidence that a proposed CLI or provider is already implemented.
+See `tools/README.md` for the source-pinned region manifest and local/Mistral CLI.
+Hosted adapter tests do not establish paid-model accuracy; run a separately
+reviewed sample before accepting a script/model combination.
 
 ## Context and pitfalls
 

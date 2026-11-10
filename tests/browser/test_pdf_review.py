@@ -4,6 +4,7 @@ import importlib.util
 import json
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 from pathlib import Path
 
 
@@ -15,6 +16,24 @@ SPEC.loader.exec_module(MODULE)
 
 
 class PdfReviewTest(unittest.TestCase):
+    def test_script_findings_reach_the_correct_page(self) -> None:
+        source = ROOT / "crates/corpora-pdf/tests/fixtures/mixed.pdf"
+        finding = {"page": 2, "code": "script_marks_review",
+                   "message": "Page 2, element 0: inspect Hebrew pointing",
+                   "missing_marks": None, "scalar_range": [0, 2]}
+        pages = [{"number": n, "method": "ocr", "language": None,
+                  "language_reliable": False, "extraction_score": None, "elements": []}
+                 for n in (1, 2)]
+        output = {"pages": pages, "findings": [], "script_review": [finding]}
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            MODULE.subprocess, "run", return_value=Mock(stdout=json.dumps(output))
+        ):
+            site = Path(directory)
+            MODULE.build(source, site, "eng")
+            review = json.loads((site / "review.json").read_text())
+            self.assertEqual(review["units"][0]["findings"], [])
+            self.assertEqual(review["units"][1]["findings"], [finding])
+
     def test_site_contains_source_and_extraction(self) -> None:
         source = ROOT / "crates/corpora-pdf/tests/fixtures/mixed.pdf"
         with tempfile.TemporaryDirectory() as directory:
