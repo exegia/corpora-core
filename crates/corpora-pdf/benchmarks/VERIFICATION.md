@@ -377,3 +377,57 @@ raw JSON extension is `reasoning.effort`. Request defaults and cache identity ar
 unchanged. A separate, explicitly configured `low`-effort experiment is the next
 candidate, not a proven accuracy or cost improvement. See the tool README for
 the official API references and experiment boundaries.
+
+## Explicit low-effort comparison (2026-11-10)
+
+The CLI now accepts `--gateway-reasoning-effort low|high` for Vercel only. The
+authenticated catalog must advertise the selected effort before inference;
+unsupported/missing capability fails closed with no inference call. The request
+includes `reasoning.effort`, and its hash isolates the cache from unspecified or
+other effort settings. Omitting the flag preserves the prior request/cache
+identity and injected callback signatures. The output cap remains 1,024 tokens.
+
+A separately authorized run made exactly six Gemini 3.6 Flash requests at `low`
+effort, plus three eligibility checks. Manifest hashes matched the frozen baseline
+manifests, and every rendered crop hash was checked before upload. No reference
+text was sent, changed or promoted; the ambiguous Aramaic reference stays
+provisional. No failed request was retried.
+
+| Crop | Unspecified effort | Explicit low effort |
+| --- | --- | --- |
+| Hebrew 18b | 6 NFD edits | 4 NFD edits; still incorrect |
+| Hebrew 18 | 1 NFD edit | Rejected; finish reason `length` |
+| Aramaic 1 | 1 edit against provisional reference | Same provisional difference |
+| Aramaic 5 | Rejected incomplete response | Exact match |
+| Greek 1 | Exact match | Exact match |
+| Greek 2 | Rejected incomplete response | Exact match |
+
+Completion improved from 4/6 to 5/6 in this single run. Exact matches among the
+five image-verified references increased from 1/5 to 3/5, but a different Hebrew
+line failed and the remaining Hebrew output still changed consonants/vowels.
+These are descriptive paired results, not statistical evidence of superiority or
+human acceptance. CER on returned candidates has a different denominator in each
+run and must not conceal rejected responses.
+
+The new accounting retained all six responses, including the rejected one:
+6,806 prompt tokens, 4,483 completion tokens, 11,289 total. Of the completion
+tokens, 4,292 were reported as reasoning tokens; they are a subset, not an
+additional charge. At the previously verified catalog rates, the full run's
+list-price estimate is $0.02191575. The baseline's $0.01836975 covers only four
+responses, so these figures do not establish overall savings. The rejected
+Hebrew response reported `length`, 1,020 completion tokens and 980 reasoning
+tokens: this new failure is confirmed truncation, unlike the old unrecorded
+finish reasons. Low effort did not eliminate reasoning-budget pressure.
+
+All five successful low-effort cache entries replayed with zero inference and
+preflight requests, credentials removed and network callbacks forbidden. The
+private dark viewer now shows default and low candidates alongside the unchanged
+source/reference, including failure reasons and reasoning-token counts. Evidence
+is in the existing private directory under `*-low-report.json`,
+`*-low-timing.json`, `*-low-cached-successes.json` and `low-summary.json`.
+
+Gemini remains review-required and unspecified effort remains the default. The
+new flag is an experiment control, not an accuracy fix. Before another paid run,
+select a bounded output-budget experiment or alternate recognizer rather than
+automatically raising limits. Validation: 27 OCR tests, Ruff, strict mypy,
+`make fmt`, `make ci` and `git diff --check` passed.

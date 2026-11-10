@@ -85,12 +85,22 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def identity(model: str = MODEL) -> dict[str, Any]:
+def request_settings(reasoning_effort: str | None = None) -> dict[str, Any]:
+    settings: dict[str, Any] = dict(SETTINGS)
+    if reasoning_effort is not None:
+        if reasoning_effort not in ("low", "high"):
+            raise GatewayError("invalid_reasoning_effort")
+        settings["reasoning"] = {"effort": reasoning_effort}
+    return settings
+
+
+def identity(model: str = MODEL, reasoning_effort: str | None = None) -> dict[str, Any]:
     """Pin the selected model and request settings, not upstream weight revisions."""
     if not re.fullmatch(r"[\w.-]+/[\w.-]+", model):
         raise GatewayError("invalid_model_id")
     config = json.dumps(
-        {"prompt": PROMPT, "model": model, **SETTINGS}, sort_keys=True
+        {"prompt": PROMPT, "model": model, **request_settings(reasoning_effort)},
+        sort_keys=True,
     ).encode()
     return {
         "model": model,
@@ -100,9 +110,9 @@ def identity(model: str = MODEL) -> dict[str, Any]:
     }
 
 
-def check_model(model: str) -> dict[str, Any]:
+def check_model(model: str, reasoning_effort: str | None = None) -> dict[str, Any]:
     """Read account-aware eligibility before the first uncached inference."""
-    identity(model)
+    identity(model, reasoning_effort)
     key = os.environ.get("AI_GATEWAY_API_KEY")
     if not key:
         raise GatewayError("not_configured")
@@ -134,7 +144,23 @@ def check_model(model: str) -> dict[str, Any]:
             "output", []
         ):
             raise GatewayError("model_requires_image_input_and_text_output")
-        return {"model": model, "status": "eligible", "image_input": True}
+        result: dict[str, Any] = {
+            "model": model,
+            "status": "eligible",
+            "image_input": True,
+        }
+        if reasoning_effort is not None:
+            options = selected.get("reasoning_options")
+            if not isinstance(options, list) or not any(
+                isinstance(option, dict)
+                and option.get("type") == "effort"
+                and isinstance(option.get("values"), list)
+                and reasoning_effort in option["values"]
+                for option in options
+            ):
+                raise GatewayError("reasoning_effort_not_supported")
+            result["reasoning_effort"] = reasoning_effort
+        return result
     except GatewayError:
         raise
     except urllib.error.HTTPError as error:
@@ -150,13 +176,15 @@ def check_model(model: str) -> dict[str, Any]:
         raise GatewayError("availability_check_failed") from None
 
 
-def recognize(image: bytes, model: str = MODEL) -> dict[str, Any]:
+def recognize(
+    image: bytes, model: str = MODEL, reasoning_effort: str | None = None
+) -> dict[str, Any]:
     key = os.environ.get("AI_GATEWAY_API_KEY")
     if not key:
         raise GatewayError("not_configured")
-    identity(model)
+    identity(model, reasoning_effort)
     body = {
-        **SETTINGS,
+        **request_settings(reasoning_effort),
         "model": model,
         "messages": [
             {"role": "system", "content": PROMPT},

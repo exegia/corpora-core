@@ -181,3 +181,5 @@ miss checks authenticated model eligibility before inference. Use `--gateway-mod
 for explicit model selection; the tool respects existing team provider allowlists.
 Rejected JSON responses retain sanitized finish reasons and token usage when supplied,
 including reasoning-token counts; partial text is rejected and is never cached as a candidate.
+`--gateway-reasoning-effort low|high` explicitly selects a catalog-supported effort
+for Vercel and separates its cache; omitting it preserves the existing request defaults.

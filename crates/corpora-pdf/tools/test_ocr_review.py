@@ -154,6 +154,54 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(item["error_code"], "http_error")
         self.assertFalse((self.root / "cache").exists())
 
+    def test_reasoning_effort_separates_cache_and_reuses_without_network(self):
+        recognize = Mock(return_value={"text": "לא", "metadata": {}})
+        self.run_pipeline(provider="vercel", gateway_recognize=recognize)
+        check = Mock(return_value={"status": "eligible", "reasoning_effort": "low"})
+        low = self.run_pipeline(
+            provider="vercel",
+            gateway_reasoning_effort="low",
+            gateway_recognize=recognize,
+            gateway_check=check,
+        )
+        self.assertEqual(low["calls"], 1)
+        check.assert_called_once_with(ocr.gateway_ocr.MODEL, "low")
+        recognize.assert_called_with(b"synthetic-image", ocr.gateway_ocr.MODEL, "low")
+        forbidden = Mock(side_effect=AssertionError("cache must not access network"))
+        cached = self.run_pipeline(
+            provider="vercel",
+            gateway_reasoning_effort="low",
+            gateway_recognize=forbidden,
+            gateway_check=forbidden,
+        )
+        self.assertEqual(cached["calls"], 0)
+        self.assertEqual(cached["preflight_requests"], 0)
+        high = self.run_pipeline(
+            provider="vercel",
+            gateway_reasoning_effort="high",
+            gateway_recognize=recognize,
+        )
+        self.assertEqual(high["calls"], 1)
+
+    def test_unsupported_reasoning_makes_no_inference_calls(self):
+        recognize = Mock()
+        check = Mock(
+            side_effect=ocr.gateway_ocr.GatewayError("reasoning_effort_not_supported")
+        )
+        report = self.run_pipeline(
+            provider="vercel",
+            gateway_reasoning_effort="low",
+            gateway_recognize=recognize,
+            gateway_check=check,
+        )
+        self.assertEqual(report["calls"], 0)
+        self.assertEqual(
+            report["regions"][0]["error_code"], "reasoning_effort_not_supported"
+        )
+        recognize.assert_not_called()
+        with self.assertRaisesRegex(ValueError, "requires the vercel provider"):
+            self.run_pipeline(gateway_reasoning_effort="low")
+
     def test_rejected_gateway_response_retains_accounting_without_text_or_cache(self):
         response = Mock()
         response.__enter__ = Mock(return_value=response)
@@ -351,6 +399,24 @@ class GatewayAdapterTest(unittest.TestCase):
                 "data:image/png;base64,Y3JvcA==",
             )
             self.assertNotIn("tools", body)
+            self.assertNotIn("reasoning", body)
+            ocr.gateway_ocr.recognize(b"crop", reasoning_effort="low")
+            low_body = json.loads(opener.open.call_args.args[0].data)
+            self.assertEqual(low_body["reasoning"], {"effort": "low"})
+            self.assertEqual(low_body["max_tokens"], 1024)
+            self.assertEqual(
+                ocr.gateway_ocr.identity()["request_sha256"],
+                ocr.digest(
+                    json.dumps(
+                        {
+                            "prompt": ocr.gateway_ocr.PROMPT,
+                            "model": ocr.gateway_ocr.MODEL,
+                            **ocr.gateway_ocr.SETTINGS,
+                        },
+                        sort_keys=True,
+                    ).encode()
+                ),
+            )
             for failure in ("length", "tool_calls", "content_filter"):
                 data["choices"][0]["finish_reason"] = failure
                 response.read.return_value = json.dumps(data).encode()
@@ -486,6 +552,26 @@ class GatewayAdapterTest(unittest.TestCase):
             request = opener.open.call_args.args[0]
             self.assertEqual(request.get_method(), "GET")
             self.assertIn("include_availability=true", request.full_url)
+            with self.assertRaises(ocr.gateway_ocr.GatewayError) as error:
+                ocr.gateway_ocr.check_model(ocr.gateway_ocr.MODEL, "low")
+            self.assertEqual(error.exception.code, "reasoning_effort_not_supported")
+            for options in (
+                [{"type": "effort", "values": ["high"]}],
+                [{"type": "effort", "values": "low"}],
+                [{"type": "budget_tokens", "values": ["low"]}],
+            ):
+                model["reasoning_options"] = options
+                response.read.return_value = json.dumps({"data": [model]}).encode()
+                with self.assertRaises(ocr.gateway_ocr.GatewayError):
+                    ocr.gateway_ocr.check_model(ocr.gateway_ocr.MODEL, "low")
+            model["reasoning_options"] = [{"type": "effort", "values": ["low", "high"]}]
+            response.read.return_value = json.dumps({"data": [model]}).encode()
+            self.assertEqual(
+                ocr.gateway_ocr.check_model(ocr.gateway_ocr.MODEL, "low")[
+                    "reasoning_effort"
+                ],
+                "low",
+            )
             model["modalities"]["input"] = ["text"]
             response.read.return_value = json.dumps({"data": [model]}).encode()
             with self.assertRaises(ocr.gateway_ocr.GatewayError):

@@ -96,7 +96,7 @@ Cached candidates do not require a new eligibility check or credential.
 No alternate model is silently substituted. Hosted model-internal routing is
 outside this client's control; results still require image review.
 
-### Reasoning-budget investigation
+### Explicit reasoning effort
 
 On 2026-11-10 the public Gateway catalog advertised `low` and `high` effort for
 `google/gemini-3.6-flash`; it did not advertise `minimal` or a numeric reasoning
@@ -105,12 +105,25 @@ and [Google mapping](https://vercel.com/docs/ai-gateway/models-and-providers/rea
 document the raw Chat Completions body extension `"reasoning": {"effort": "low"}`.
 Hiding reasoning with `exclude` does not disable internal reasoning.
 
-The adapter currently leaves reasoning effort unspecified and retains its
-1,024-token output cap. No budget change has been accepted on accuracy evidence.
-The next experiment should expose an explicit effort option, include it in cache
-identity, validate it against the selected model's capabilities, and compare `low`
-against the frozen line references within a new bounded request cap. Do not infer
-that the previous failures were truncation: their actual finish reasons were lost.
+The adapter leaves reasoning effort unspecified by default and retains its
+1,024-token output cap. To explicitly request a supported effort:
+
+```sh
+python crates/corpora-pdf/tools/ocr_review.py source.pdf manifest.json low-report.json \
+  --cache target/pdf-benchmark/review-cache --provider vercel --max-calls 2 \
+  --gateway-reasoning-effort low
+```
+
+The CLI accepts `low` or `high` only with `--provider vercel`. Before inference,
+the authenticated catalog must explicitly advertise that effort for the selected
+model; missing/unsupported capability fails as `reasoning_effort_not_supported`
+without an inference call. The option is sent as `reasoning.effort` and changes
+the request hash/cache identity. Omitting it preserves the original wire request
+and cache identity, including the existing callback signatures for injected
+adapters. Cached candidates need no capability check or credentials. An explicit
+effort does not guarantee accuracy or the provider's actual reasoning-token use.
+Do not infer that the previous failures were truncation: their actual finish
+reasons were lost. See `benchmarks/VERIFICATION.md` for the bounded comparison.
 
 The optional direct route uses Mistral OCR 3 (`mistral-ocr-2512`). Set `MISTRAL_API_KEY` in the
 process environment, then explicitly choose it:
