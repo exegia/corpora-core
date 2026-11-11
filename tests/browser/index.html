@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Corpora PDF review</title>
+  <link rel="stylesheet" href="review.css">
+</head>
+<body>
+  <header>
+    <div><strong>Corpora PDF review</strong><span id="source-name"></span></div>
+    <nav><button id="previous" type="button">← Previous</button><span id="page-label"></span><button id="next" type="button">Next →</button></nav>
+  </header>
+  <main>
+    <section class="panel source"><h2>Original source · <a id="source-link" target="_blank" rel="noopener">Open original</a></h2><iframe id="source-document" title="Original source"></iframe></section>
+    <section class="panel extraction"><h2>Extracted structure</h2><div id="summary"></div><div id="findings"></div><div id="elements"></div></section>
+  </main>
+  <script src="review.js"></script>
+</body>
+</html>

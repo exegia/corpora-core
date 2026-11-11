@@ -1,5 +1,16 @@
 # Operating the pipeline
 
+PDF extraction has an additional local benchmark suite outside root stack
+detection: `python3 -m unittest discover -s crates/corpora-pdf/benchmarks -p 'test_*.py'`.
+See `crates/corpora-pdf/benchmarks/README.md` for the synthetic end-to-end command.
+Private PDF manifests and results remain outside Git; no hosted service is used.
+The benchmark accepts `--tessdata-dir` for isolated language models and records
+their hashes. Missing or unloadable requested languages cannot silently fall back.
+When the PDF crate is present, the PR test job installs Poppler and Tesseract
+before `make ci`, then runs the benchmark, PDF review-browser and OCR candidate Python suites.
+PDF OCR guidance is owned by `crates/corpora-pdf/skills/pdf-ocr` and linked into
+`.github/skills/pdf-ocr`; its prompt/proposal are under `crates/corpora-pdf/agent`.
+
 How to set up a repository generated from this template and run the release flow. Rules live in
 [`BRANCH-AND-RELEASE-POLICY.md`](./BRANCH-AND-RELEASE-POLICY.md), stages in [`LIFECYCLE.md`](./LIFECYCLE.md).
 
@@ -125,6 +136,31 @@ and package checks; root stack detection does not discover nested Python project
 `.github/workflows/tei-converter.yml` runs these checks on relevant PR changes.
 See the package README for reading policies, metadata separation and supported boundaries.
 
+## EPUB conversion verification
+
+For `packages/epub-to-tf`, build `corpora-epub-check` with
+`cargo build -p corpora-convert --bin corpora-epub-check`, then run
+`uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/tests`.
+Use `packages/epub-to-tf/tools/qa_browser.py BUNDLE SITE` to compare semantic
+TF HTML with the original archived XHTML in a dark-mode local QA site. The
+package README covers conversion, repair and asset limits; root `make ci` does
+not discover the nested Python package.
+
+For the QA selection resolver, run `uv run --group dev ruff check .`,
+`uv run --group dev mypy src`, `uv run --group dev pytest -q`, and `uv build`
+from `packages/tf-ai-resolver`. Its loopback `serve` command connects semantic
+TF HTML selection to the expert; `apply` creates a reviewed derived reading
+feature without changing original slots. See the resolver README.
+`.github/workflows/epub-resolver.yml` runs both nested suites on PRs.
+
+`packages/pdf-to-tf` converts a local PDF to TEI and then TF only when the
+conversion score is greater than 95%, verifies every line, word and page, and
+reports located issues with suggested fixes. Build `corpora-pdf-extract`
+(`cargo build -p corpora-pdf --bin corpora-pdf-extract`), then run
+`make -C packages/pdf-to-tf check build`. `.github/workflows/pdf-converter.yml`
+runs both on PRs. `tei-to-tf` gained opt-in `--milestones pages` and
+`--facsimile zones`; its defaults are unchanged.
+
 
 ### Language and spelling QA
 
@@ -154,3 +190,27 @@ scripts with `-S warning -x`; CI runs it as part of `hygiene`.
 The secret-scan workflow retries the pinned gitleaks release download, then builds
 the same pinned version through the Go module proxy if the release CDN is unavailable.
 Both installation paths run the same required, redacted scan.
+
+The PDF QA builder renders source pages to PNG at the extraction coordinate scale,
+so the internal browser does not need a PDF plugin. Findings are collapsed by
+default and script findings link to their extracted element. Original PDFs and
+raw JSON remain available; the viewer never applies OCR candidates.
+
+The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
+Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.
+It preserves source text and emits review-required candidates; hosted recognition
+requires explicit provider selection and a request cap. Use `--provider vercel`
+with `AI_GATEWAY_API_KEY` (preferred), or `--provider mistral` with `MISTRAL_API_KEY`.
+Gateway requests preserve reported token usage, exclude reference text and have no
+client retries; cached candidates remain subject to image review. The first cache
+miss checks authenticated model eligibility before inference. Use `--gateway-model`
+for explicit model selection; the tool respects existing team provider allowlists.
+Direct Mistral OCR also retains validated `usage_info` page/byte counters and
+the reported OCR model in successful caches and rejected-response reports.
+Missing usage stays unknown; cached counters describe the original request.
+Rejected JSON responses retain sanitized finish reasons and token usage when supplied,
+including reasoning-token counts; partial text is rejected and is never cached as a candidate.
+`--gateway-reasoning-effort low|high` explicitly selects a catalog-supported effort
+for Vercel and separates its cache; omitting it preserves the existing request defaults.
+`--gateway-max-tokens N` (1–32768, default 1024) sets the Vercel output cap; a non-default
+cap must fit the catalog's advertised model limit and uses a separate cache.

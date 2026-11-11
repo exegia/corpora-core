@@ -1,5 +1,11 @@
 # TEI → Text-Fabric converter
 
+TEI is XML that labels parts of a text. This package reads those labels and
+builds Text-Fabric (TF): the words and characters plus pointers back to their
+headings, divisions, notes and source file. It keeps the original bytes so you
+can check every choice. Start with the commands below; the later sections
+explain the exact reading rules.
+
 Convert TEI P5 documents from local files/directories, direct public HTTPS files,
 GitHub repositories/tree/blob URLs, or Hugging Face model/dataset repositories.
 The converter separates reading content from document and repository metadata,
@@ -24,6 +30,77 @@ component as the revision. GitHub truncated tree listings fail explicitly. HF us
 the revision's complete `siblings` inventory. Private/gated repositories, archives
 and dataset files embedded inside Parquet/JSON are not supported: provide local TEI.
 The converter does not execute repository code or follow arbitrary manifest links.
+
+## Command options
+
+All commands take one or more `sources` and a required `--output NEW_DIRECTORY`.
+This table is also a quick map from a question to its setting:
+
+| Option | Default | What it chooses |
+| --- | --- | --- |
+| `--revision REF` | Source URL ref | Pin a GitHub/Hugging Face branch, tag, or commit. |
+| `--choice reject\|original\|edited` | `reject` | Which side of a TEI `choice` to read; reject ambiguity by default. |
+| `--apparatus reject\|lemma\|witness` | `reject` | Which `app` reading to use. |
+| `--witness TOKEN` | None | Exact witness token, such as `#A`, when apparatus is `witness`. |
+| `--notes separate\|include` | `separate` | Keep note XML outside reading slots, or include it in reading text. |
+| `--allow-no-namespace` | Off | Allow explicitly namespace-free TEI. |
+| `--milestones offsets\|pages` | `offsets` | `pages`: each `pb` becomes a TF `page` node up to the next `pb`. |
+| `--facsimile ignore\|zones` | `ignore` | `zones`: resolve `@facs` to integer zone coordinate features. |
+| `--max-slots N` | 1,000,000 | Cap Unicode character slots. |
+| `--max-memberships N` | 10,000,000 | Cap slot-to-node memberships. |
+| `--schema PATH` | None | Check against a local self-contained RNG or XSD. |
+| `--max-files N` | 1,000 | Cap acquired files. |
+| `--max-file-bytes N` | 64 MiB | Cap bytes in one acquired file. |
+| `--max-total-bytes N` | 256 MiB | Cap all acquired bytes. |
+| `--quality-engine PATH` | Off | Run the Rust `corpora-text-check` validation bridge; requires `--dictionaries`. |
+| `--dictionaries DIR` | None | Use installed, pinned spelling dictionaries with that bridge. |
+| `--locale LOCALE` | Detect | Set reading-text language/orthography, for example `en-GB`. |
+| `--metadata-locale LOCALE` | Detect separately | Set metadata language without changing the reading-text locale. |
+| `--corrections PATH` | None | Supply a JSON word-to-replacement map for non-corpus text in the quality loop. |
+| `--ai-bridge PATH` | Off | Ask the optional hosted quality bridge for bounded proposals. |
+| `--ai-model NAME` | `google/gemini-3.5-flash-lite` | Pick the bridge's Gateway model. |
+| `--ai-max-requests N` | 100 | Cap hosted calls in one run. |
+| `--repair-cycles N` | 3 | Cap quality repair/revalidation loops (1–10). |
+
+Use `uv run --project packages/tei-to-tf tei-to-tf --help` for the installed
+command's live flag list. Byte limits count source bytes; slot limits count
+Unicode scalar characters after decoding.
+
+## Python API
+
+The normal API writes a **new** bundle and returns its manifest dictionary:
+
+```python
+from pathlib import Path
+from tei_to_tf import Policy, convert
+
+manifest = convert(
+    ["book.xml"],
+    Path("output/book"),
+    policy=Policy(choice="edited", apparatus="lemma", notes="separate"),
+)
+print(manifest["format"])
+```
+
+| Argument to `convert` | Purpose |
+| --- | --- |
+| `inputs: list[str]` | Local paths or supported public source URLs. |
+| `output: Path` | New bundle directory; existing paths are refused. |
+| `policy: Policy` | Editorial, note, namespace and graph-size choices; defaults are in the command table. |
+| `limits: Limits` | Acquisition caps: files, bytes per file, total bytes; import from `tei_to_tf.acquire`. |
+| `revision: str \| None` | Remote source ref, resolved before acquisition. |
+| `schema: Path \| None` | Optional local RNG/XSD. |
+| `sources: list[Source] \| None` | Already acquired `Source(name, origin, data, revision)` objects; import from `tei_to_tf.model`. |
+
+`Policy` and `ConversionError` are exported from `tei_to_tf`. `convert` returns
+the manifest on success and raises `ConversionError` for an unsupported or
+unsafe conversion. For audited quality passes, import
+`quality_convert` from `tei_to_tf.quality`: it takes the same `inputs`,
+`output`, `policy`, `revision`, `schema`, `sources`, and `limits`, plus a Rust
+`checker`, optional `locale`, `metadata_locale`, `corrections`, `ai`, and
+`max_cycles` (default 3). It retains originals and pass receipts and runs
+final validation. The command flags above are the supported way to configure
+the bridge and dictionaries without constructing a checker object yourself.
 
 ## Content interpretation
 
@@ -56,7 +133,8 @@ Formatting whitespace inside reading regions is preserved; layout whitespace out
 `front/body/back` is not corpus text. Non-whitespace text in skipped group boundaries
 is an error rather than silent loss.
 
-TF types are `character`, `document`, `region`, `block`, `element`. Navigation uses
+TF types are `character`, `document`, `region`, `block`, `element` (plus `page` with
+`--milestones pages`). Navigation uses
 `document/region/block`; blocks partition region content at top-level children and
 leading text. These are navigation units, **not an inferred chapter schema**. Actual
 TEI hierarchy is represented by element nodes and `parent` edges; `tei_tag`, qualified
@@ -67,7 +145,27 @@ excluded and zero-width targets remain explicitly listed with their original str
 
 Whitespace-only document members are recorded as metadata-only and contribute no slots.
 Empty elements/milestones retain exact scalar offsets in document JSON; no fictitious
-characters or slotless TF nodes are created. Selected alternatives receive slots;
+characters or slotless TF nodes are created.
+
+### Pages and facsimile zones (opt-in)
+
+By default a `pb` is a zero-width milestone: its offset is kept in document JSON,
+and no TF node is created. Two options, both off by default, project printed-page
+structure. `pdf-to-tf` uses both.
+
+- `--milestones pages` (`Policy(milestones="pages")`): each TEI `pb` starts a TF
+  `page` node. The node runs to the next `pb` or to the end of its region. Features:
+  `page` (the `@n`), `source_path`, `start` and `end`. The manifest's `graph.pages`
+  counts page nodes, lists empty pages, and counts region characters before the
+  first `pb` (`characters_outside_pages`). Page text is checked through the real
+  loader, like document text.
+- `--facsimile zones` (`Policy(facsimile="zones")`): reads the
+  `facsimile/surface[/zone]` entries with an `xml:id`. Any page or element whose
+  `@facs` names exactly one of them gets `facs_surface` (the surface `@n`) and
+  integer `facs_ulx`, `facs_uly`, `facs_lrx` and `facs_lry`. Non-integer
+  coordinates are rejected rather than rounded. Other `@facs` values are listed
+  under `unresolved_references`. The zone table is kept in document JSON
+  metadata. Selected alternatives receive slots;
 unselected readings remain in excluded fragments and the original source.
 
 The official Text-Fabric writer creates feature files. A narrow normalization pass

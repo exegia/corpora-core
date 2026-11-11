@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "samples": [
+    {
+      "id": "synthetic",
+      "path": "../tests/fixtures/semantic.pdf",
+      "sha256": "adedbfb3a59071b138f1ebd940d28267fb8d5b21ecfc1538e7693ed2c66716f6",
+      "page": 1,
+      "regions": [
+        {
+          "id": "title",
+          "box": [
+            0.1,
+            0.02,
+            0.6,
+            0.06
+          ],
+          "reference": "Sample Document",
+          "reference_status": "independently_specified_fixture"
+        },
+        {
+          "id": "paragraph",
+          "box": [
+            0.1,
+            0.075,
+            0.8,
+            0.1
+          ],
+          "reference": "This is a clear paragraph.",
+          "reference_status": "independently_specified_fixture"
+        }
+      ],
+      "order": [
+        [
+          "title",
+          "paragraph"
+        ]
+      ]
+    }
+  ]
+}

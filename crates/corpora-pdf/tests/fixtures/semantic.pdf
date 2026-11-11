@@ -1,0 +1,50 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R /Annots [7 0 R] >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Length 485 >>
+stream
+BT /F2 18 Tf 72 750 Td (Sample Document) Tj ET
+BT /F1 12 Tf 72 720 Td (This is a clear paragraph.) Tj ET
+BT /F1 12 Tf 72 690 Td (1. First item) Tj ET
+BT /F1 12 Tf 72 672 Td (2. Second item) Tj ET
+BT /F1 12 Tf 72 642 Td (See Reference [1].) Tj ET
+BT /F2 16 Tf 72 612 Td (References) Tj ET
+BT /F1 12 Tf 72 590 Td ([1] Example Source.) Tj ET
+BT /F2 12 Tf 72 550 Td (Name) Tj ET
+BT /F2 12 Tf 260 550 Td (Value) Tj ET
+BT /F1 12 Tf 72 532 Td (Alpha) Tj ET
+BT /F1 12 Tf 260 532 Td (42) Tj ET
+endstream
+endobj
+7 0 obj
+<< /Type /Annot /Subtype /Link /Rect [95 638 170 655] /Border [0 0 0] /A << /S /URI /URI (https://example.org/reference) >> >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000267 00000 n 
+0000000337 00000 n 
+0000000412 00000 n 
+0000000947 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R >>
+startxref
+1089
+%%EOF

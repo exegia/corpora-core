@@ -15,6 +15,16 @@ categories = ["development-tools"]
 include = ["src/**/*", "Cargo.toml", "README.md"]
 
 [dependencies]
+corpora-core = { path = "../corpora-core", features = ["serde"] }
+roxmltree = "=0.21.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = "0.10"
+zip = { version = "9", default-features = false, features = ["deflate"] }
+
+[[bin]]
+name = "corpora-epub-check"
+path = "src/bin/epub_check.rs"
 
 [lints]
 workspace = true
