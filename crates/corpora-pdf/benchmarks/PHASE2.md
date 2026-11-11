@@ -171,3 +171,48 @@ saw a held-out line:
   (not a model under test) only located Aramaic words for WLC alignment.
 - **Scoring code.** `heldout_score.py` implements these metrics and thresholds
   (tests: `test_heldout_score.py`) and was committed before the run.
+
+## Held-out benchmark result (2026-11-11)
+
+**Reference review.** A first pass approved all 120 drafts in five minutes
+(about one second per Aramaic line). That pace cannot verify cantillation, so
+the Aramaic lines and one unreviewed Hebrew line were reviewed again before
+any inference (about ten seconds per line). Six Aramaic lines were excluded
+because the print does not match the WLC draft. Scored: Hebrew 40, Greek 40,
+Aramaic 34. No reference was corrected; Hebrew and Greek drafts come from the
+PDFs' own text layers.
+
+**Run.** Both models through Vercel AI Gateway, one request per line, no retries,
+default reasoning effort, the tool's fixed `max_tokens` of 1024. 228 requests.
+
+| Model | Script | Completed | Base error | Mark error (missing + inserted / marks) | Divine name | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| `anthropic/claude-opus-5.5` | Greek | 40/40 | 0.15% | 0.0% (0 / 504) | 0 | **pass** |
+| `anthropic/claude-opus-5.5` | Hebrew | 39/40 | 0.76% | 7.6% (32 / 422) | 0 | fail |
+| `anthropic/claude-opus-5.5` | Aramaic | 32/34 | 1.11% | 12.2% (100 / 817) | 0 | fail |
+| `google/gemini-3.6-flash` | Greek | 23/40 | 0.83% | 0.8% (2 / 262) | 0 | fail |
+| `google/gemini-3.6-flash` | Hebrew | 27/40 | 2.01% | 11.1% (31 / 280) | 2 | fail |
+| `google/gemini-3.6-flash` | Aramaic | 7/34 | 1.86% | 32.4% (46 / 142) | 0 | fail |
+
+Error rates cover completed lines only. Every incomplete line, for both models,
+stopped at the 1024-token output cap (`finish_reason: length`), mostly spent on
+reasoning; Gemini lost 57 of 114 lines this way. The cap was not raised during
+the run. Gemini's error rates rest on fewer lines and are not comparable to
+Opus's at equal coverage.
+
+Opus mark errors: in Hebrew, mostly missing holam (7) and dagesh (5) and inserted
+meteg (6); in Aramaic, cantillation accents swapped or dropped (qadma, revia,
+pashta, munah, ole) and meteg. Encoding variants (for example holam on vav) were
+not inspected line by line and may account for part of the Hebrew holam count.
+
+Usage: Opus 31,116 prompt and 46,692 completion tokens (about $1.06 at catalog
+list prices); Gemini 130,011 and 112,815 (about $0.52). The total of about $1.58
+exceeds the pre-registered estimate of under $1. Gateway returned no cost field.
+
+**Conclusion.** Opus 5.5 qualifies as a recognition candidate for SBLGNT-style
+born-digital Greek only. Neither model meets the thresholds for pointed Hebrew or
+cantillated Aramaic; marks remain the blocker. All outputs stay review-required.
+A follow-up with a higher, pre-registered output cap would separate completion
+failures from reading errors; it needs its own dated section before it runs.
+Private inputs, crops, ledger, reports and `runs/score.json` are under
+`target/pdf-benchmark/phase2/heldout/`.
