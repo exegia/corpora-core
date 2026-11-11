@@ -71,6 +71,32 @@ def metadata(node: etree._Element, namespace: str) -> dict[str, Any]:
     }
 
 
+ZONE_COORDINATES = ("ulx", "uly", "lrx", "lry")
+
+
+def facsimile_zones(member: etree._Element, namespace: str) -> dict[str, dict[str, str]]:
+    """Map xml:id of each facsimile surface/zone to its surface number and raw coordinates.
+
+    Only direct `facsimile/surface[/zone]` children of this TEI member are read; values stay
+    strings here so the exporter can reject non-integer coordinates instead of rounding them.
+    """
+    zones: dict[str, dict[str, str]] = {}
+    for facsimile in member:
+        if qname(facsimile) != (namespace, "facsimile"):
+            continue
+        for surface in facsimile:
+            if qname(surface) != (namespace, "surface"):
+                continue
+            label = surface.get("n", "")
+            for node in [surface, *(z for z in surface if qname(z) == (namespace, "zone"))]:
+                identity = node.get(f"{{{XML}}}id")
+                if identity:
+                    zones[identity] = {"surface": label} | {
+                        key: node.get(key, "") for key in ZONE_COORDINATES
+                    }
+    return zones
+
+
 def parse(source: Source, policy: Policy) -> tuple[list[Document], dict[str, Any]]:
     """Separate metadata from selected reading text, retaining original bytes elsewhere."""
     tree = secure_tree(source.data)
@@ -155,6 +181,8 @@ def parse(source: Source, policy: Policy) -> tuple[list[Document], dict[str, Any
                 if qname(a)[1] in {"TEI", "teiCorpus"}
             ]
             info["text_attributes"] = dict(text.attrib)
+            if policy.facsimile == "zones":
+                info["facsimile_zones"] = facsimile_zones(member, namespace)
             document = Document(identity, source.origin, locator, info)
             project(document, text, namespace, policy)
             documents.append(document)

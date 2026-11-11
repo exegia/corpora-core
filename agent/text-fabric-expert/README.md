@@ -1,5 +1,9 @@
 # Text-Fabric expert agent
 
+A Text-Fabric (TF) corpus is text plus labels and links. This bundle gives a
+coding agent instructions for reading that graph carefully. It is a guide for
+an agent host, not a separate converter or a model that runs by itself.
+
 A source-grounded expert for an existing coding-agent host. Invoke
 `$text-fabric-expert` in this repository, or load `SYSTEM.md` as the agent's system
 instructions. The host supplies the language model and file/command tools.
@@ -44,6 +48,18 @@ Choose features from the actual corpus; omit --features to use upstream defaults
 The official MCP snapshot requires Python 3.13+. The config generator itself uses
 stdlib Python 3.9+. Generated JSON uses the common mcpServers shape; adapt it to
 hosts using TOML or another configuration format. No host settings are changed.
+
+| Command or parameter | Purpose |
+| --- | --- |
+| `configure.py doctor` | Check which local tools and paths are available. |
+| `configure.py agora --plugin-root DIR --output NEW_FILE` | Generate configuration for a reviewed Agora plugin checkout. |
+| `configure.py local --corpus TF_DIR --command MCP_EXECUTABLE --output NEW_FILE` | Generate configuration for an installed `cfabric-mcp` and one corpus. |
+| `--features 'name name'` | In local mode, load only the named TF features; omit for upstream defaults. |
+
+The commands produce configuration JSON; add it to your chosen host yourself.
+The [TF AI resolver](../../packages/tf-ai-resolver/README.md) is the working
+API for asking this expert about a selected TF text span and reviewing its
+proposal.
 
 Enable one selected integration, enumerate its tools and smoke-test `list_corpora`
 and `describe_corpus`. Loading can create caches: use a disposable source copy when

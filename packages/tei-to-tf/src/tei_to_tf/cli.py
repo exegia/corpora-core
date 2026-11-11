@@ -31,6 +31,18 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--witness", help="Exact witness token, e.g. '#A'")
     parser.add_argument("--notes", choices=["separate", "include"], default="separate")
     parser.add_argument("--allow-no-namespace", action="store_true")
+    parser.add_argument(
+        "--milestones",
+        choices=["offsets", "pages"],
+        default="offsets",
+        help="pages: project each TEI pb up to the next pb as a TF page node",
+    )
+    parser.add_argument(
+        "--facsimile",
+        choices=["ignore", "zones"],
+        default="ignore",
+        help="zones: resolve @facs to integer facsimile zone coordinate features",
+    )
     parser.add_argument("--max-slots", type=int, default=1_000_000)
     parser.add_argument("--max-memberships", type=int, default=10_000_000)
     parser.add_argument("--schema", type=Path, help="Optional local self-contained RNG or XSD")
@@ -81,6 +93,8 @@ def main(argv: list[str] | None = None) -> int:
                         args.allow_no_namespace,
                         args.max_slots,
                         args.max_memberships,
+                        args.milestones,
+                        args.facsimile,
                     ),
                     args.locale,
                     corrections,
@@ -125,6 +139,8 @@ def main(argv: list[str] | None = None) -> int:
                 args.allow_no_namespace,
                 args.max_slots,
                 args.max_memberships,
+                args.milestones,
+                args.facsimile,
             ),
             Limits(args.max_files, args.max_file_bytes, args.max_total_bytes),
             args.revision,

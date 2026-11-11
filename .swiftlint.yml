@@ -2,5 +2,7 @@
 # by corpora-typegen and validated by `swift test`, not hand-maintained.
 excluded:
   - .build
+  - .claude # local agent worktrees, never committed
+  - .worktrees
   - generated/swift
   - target

@@ -1,5 +1,10 @@
 # Hosted quality review through Vercel AI SDK
 
+This bridge asks a model for **suggestions** about a small list of spelling or
+XML findings. Think of it as asking a helper to propose corrections on a
+worksheet. The TEI converter checks each proposal and rechecks the complete
+candidate before export. The bridge cannot approve a broken ID or edit a file.
+
 This optional Node 22+ bridge gives the Python TEI converter structured correction
 proposals using `generateText` and `Output.object`. The provider receives a portable JSON
 shape; strict bounds and nonempty-value checks run locally on the returned object.
@@ -12,6 +17,51 @@ npm ci --prefix packages/quality-ai
 npm run check --prefix packages/quality-ai
 npm test --prefix packages/quality-ai
 ```
+
+## Request and response
+
+The CLI reads **one JSON object** on standard input and writes one JSON result:
+
+```sh
+printf '%s\n' '{"task":"spelling","model":"provider/model","context":"A short source excerpt","issues":[]}' \
+  | node packages/quality-ai/bridge.mjs
+```
+
+Use an available `provider/model` and set `AI_GATEWAY_API_KEY` in the process
+environment for a real call. An empty issue list above only shows the wire
+shape; the TEI converter normally supplies actual findings. The CLI returns
+an `error` object and exit code 1 if configuration or the request fails.
+
+| Input field | Meaning and limit |
+| --- | --- |
+| `task` | `spelling` or `xml`. |
+| `model` | Gateway name in `provider/model` form. |
+| `context` | Exact excerpt to review, at most 100,000 characters. |
+| `issues` | At most 100 issue objects with IDs and source evidence. |
+
+The response has `edits` (`id`, exact nonempty `before`, exact nonempty
+`after`, nonempty `reason`), `unresolved` explanations, `model`, and SDK
+`usage`. Each array is capped at 100. For XML, `id` is the zero-based Unicode
+scalar start of `before` in `context`; for spelling it is the supplied issue
+ID. The module also exports `correct(input, testModel?)` and the `proposals`
+Zod schema for Node callers. `testModel` is for offline SDK tests; ordinary
+calls use the named Gateway model and process credential.
+
+```js
+import { correct } from './packages/quality-ai/bridge.mjs';
+
+const result = await correct({
+  task: 'xml',
+  model: 'provider/model', // replace with your configured Gateway model
+  context: '<title>Example</Title>',
+  issues: [{ id: 14, message: 'Closing tag case differs' }],
+});
+console.log(result.edits, result.unresolved);
+```
+
+This returns proposals only. The caller must check exact spans, policy and
+the complete revised source; use the TEI converter's quality path for that
+orchestration.
 
 Create a Gateway API key and provide `AI_GATEWAY_API_KEY` through your secret manager
 or local shell environment. Do not commit it or paste it into chat. The bridge does
