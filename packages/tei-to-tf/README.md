@@ -44,6 +44,8 @@ This table is also a quick map from a question to its setting:
 | `--witness TOKEN` | None | Exact witness token, such as `#A`, when apparatus is `witness`. |
 | `--notes separate\|include` | `separate` | Keep note XML outside reading slots, or include it in reading text. |
 | `--allow-no-namespace` | Off | Allow explicitly namespace-free TEI. |
+| `--milestones offsets\|pages` | `offsets` | `pages`: each `pb` becomes a TF `page` node up to the next `pb`. |
+| `--facsimile ignore\|zones` | `ignore` | `zones`: resolve `@facs` to integer zone coordinate features. |
 | `--max-slots N` | 1,000,000 | Cap Unicode character slots. |
 | `--max-memberships N` | 10,000,000 | Cap slot-to-node memberships. |
 | `--schema PATH` | None | Check against a local self-contained RNG or XSD. |
@@ -131,7 +133,8 @@ Formatting whitespace inside reading regions is preserved; layout whitespace out
 `front/body/back` is not corpus text. Non-whitespace text in skipped group boundaries
 is an error rather than silent loss.
 
-TF types are `character`, `document`, `region`, `block`, `element`. Navigation uses
+TF types are `character`, `document`, `region`, `block`, `element` (plus `page` with
+`--milestones pages`). Navigation uses
 `document/region/block`; blocks partition region content at top-level children and
 leading text. These are navigation units, **not an inferred chapter schema**. Actual
 TEI hierarchy is represented by element nodes and `parent` edges; `tei_tag`, qualified
@@ -142,7 +145,27 @@ excluded and zero-width targets remain explicitly listed with their original str
 
 Whitespace-only document members are recorded as metadata-only and contribute no slots.
 Empty elements/milestones retain exact scalar offsets in document JSON; no fictitious
-characters or slotless TF nodes are created. Selected alternatives receive slots;
+characters or slotless TF nodes are created.
+
+### Pages and facsimile zones (opt-in)
+
+By default a `pb` is a zero-width milestone: its offset is kept in document JSON,
+and no TF node is created. Two options, both off by default, project printed-page
+structure. `pdf-to-tf` uses both.
+
+- `--milestones pages` (`Policy(milestones="pages")`): each TEI `pb` starts a TF
+  `page` node. The node runs to the next `pb` or to the end of its region. Features:
+  `page` (the `@n`), `source_path`, `start` and `end`. The manifest's `graph.pages`
+  counts page nodes, lists empty pages, and counts region characters before the
+  first `pb` (`characters_outside_pages`). Page text is checked through the real
+  loader, like document text.
+- `--facsimile zones` (`Policy(facsimile="zones")`): reads the
+  `facsimile/surface[/zone]` entries with an `xml:id`. Any page or element whose
+  `@facs` names exactly one of them gets `facs_surface` (the surface `@n`) and
+  integer `facs_ulx`, `facs_uly`, `facs_lrx` and `facs_lry`. Non-integer
+  coordinates are rejected rather than rounded. Other `@facs` values are listed
+  under `unresolved_references`. The zone table is kept in document JSON
+  metadata. Selected alternatives receive slots;
 unselected readings remain in excluded fragments and the original source.
 
 The official Text-Fabric writer creates feature files. A narrow normalization pass

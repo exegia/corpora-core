@@ -1,9 +1,16 @@
 //! Local PDF text, layout, and OCR extraction.
 //!
 //! The engine invokes Poppler (`pdfinfo`, `pdftohtml`, `pdftoppm`) and
-//! Tesseract. It does not download models or expose an API server or CLI.
-//! Semantic labels and scores are evidence-backed estimates, not a claim of
-//! ground-truth transcription accuracy.
+//! Tesseract. It does not download models or expose an API server. The
+//! `corpora-pdf-extract` binary prints one extraction as JSON for consumers
+//! such as `packages/pdf-to-tf`. Semantic labels and scores are evidence-backed
+//! estimates, not a claim of ground-truth transcription accuracy.
+
+// whatlang and the JSON bridge's serde_json resolve two transitive hash table versions.
+#![expect(
+    clippy::multiple_crate_versions,
+    reason = "transitive whatlang and serde_json dependency graph"
+)]
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;

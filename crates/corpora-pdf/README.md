@@ -3,8 +3,17 @@
 `corpora-pdf` is a Rust **library** for local PDFs. Pass it a path and it returns
 page text, page positions, semantic candidates, links and formatting, language
 hints, visual elements, findings, and an evidence-based extraction score. It
-does not export Text-Fabric or provide a production CLI or web API. Another
-crate can consume its `PdfExtraction` value for those jobs.
+does not export Text-Fabric or provide a web API. The `corpora-pdf-extract`
+binary prints one `PdfExtraction` as JSON; [`pdf-to-tf`](../../packages/pdf-to-tf/README.md)
+uses it to convert PDFs to TEI and Text-Fabric.
+
+```sh
+cargo build -p corpora-pdf --bin corpora-pdf-extract
+target/debug/corpora-pdf-extract book.pdf --languages eng+heb [--tessdata DIR] \
+  [--max-pages N] [--no-visual-check] > extraction.json
+```
+
+It exits 2, with the error on stderr, for invalid arguments or a failed extraction.
 
 The crate includes the [pdf-ocr skill](skills/pdf-ocr/SKILL.md), its
 [specialist prompt](agent/SYSTEM.md), and the [implementation proposal](agent/PROPOSAL.md).

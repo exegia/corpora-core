@@ -15,14 +15,67 @@ from lxml import etree
 from tf.fabric import Fabric
 
 from .acquire import Limits, acquire
-from .model import ConversionError, Document, Policy, Source
-from .parse import parse, secure_tree
+from .model import ConversionError, Document, Element, Policy, Source
+from .parse import TEI, ZONE_COORDINATES, parse, secure_tree
+
+ZONE_FEATURES = tuple("facs_" + key for key in ZONE_COORDINATES)
 
 
 def write_json(path: Path, value: Any) -> None:
     path.write_text(
         json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n", encoding="utf-8"
     )
+
+
+def zone_features(
+    doc: Document, element: Element, unresolved: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Resolve one local `@facs` pointer to its surface label and integer zone coordinates."""
+    raw = element.attributes.get("facs")
+    if raw is None:
+        return {}
+    zones = doc.metadata.get("facsimile_zones", {})
+    tokens = raw.split()
+    if len(tokens) != 1 or not tokens[0].startswith("#") or tokens[0][1:] not in zones:
+        unresolved.append(
+            {
+                "document": doc.id,
+                "path": element.key,
+                "attribute": "facs",
+                "reference": raw,
+                "reason": "facs must name exactly one local facsimile surface or zone",
+            }
+        )
+        return {}
+    zone = zones[tokens[0][1:]]
+    features: dict[str, Any] = {"facs_surface": zone["surface"]}
+    for key in ZONE_COORDINATES:
+        value = zone[key]
+        if not re.fullmatch(r"-?[0-9]+", value):
+            raise ConversionError(
+                f"{tokens[0]}: {key}={value!r} is not an integer; "
+                "zone features need integer coordinates in a declared unit"
+            )
+        features["facs_" + key] = int(value)
+    return features
+
+
+def page_spans(doc: Document) -> tuple[list[tuple[Element, int, int]], int]:
+    """Pages run from each TEI `pb` to the next `pb` or the end of its region.
+
+    Returns (pb, start, end) spans and the count of region characters before any `pb`.
+    """
+    breaks = [e for e in doc.elements if e.namespace == TEI and e.tag == "pb"]
+    spans = []
+    for index, pb in enumerate(breaks):
+        region = next((r for r in doc.regions if r.start <= pb.start <= r.end), None)
+        end = region.end if region else len(doc.text)
+        if index + 1 < len(breaks):
+            end = min(end, breaks[index + 1].start)
+        spans.append((pb, pb.start, end))
+    covered = sum(end - start for _, start, end in spans)
+    total = sum(r.end - r.start for r in doc.regions)
+    return spans, total - covered
 
 
 def export(documents: list[Document], destination: Path, policy: Policy) -> dict[str, Any]:
@@ -45,6 +98,8 @@ def export(documents: list[Document], destination: Path, policy: Policy) -> dict
     relationships: list[tuple[str, str]] = []
     offsets: dict[str, int] = {}
     attribute_features: dict[str, str] = {}
+    unresolved: list[dict[str, Any]] = []
+    pages: dict[str, Any] = {"count": 0, "empty": [], "characters_outside_pages": 0}
     slot = 0
     for doc in documents:
         if not doc.text.strip():
@@ -97,14 +152,35 @@ def export(documents: list[Document], destination: Path, policy: Policy) -> dict
                 name = "attr_" + safe + "_" + hashlib.sha256(attr.encode()).hexdigest()[:12]
                 attribute_features[attr] = name
                 features[name] = value
+            if policy.facsimile == "zones":
+                features.update(zone_features(doc, element, unresolved))
             specs["element"].append(
                 (key, list(range(base + element.start + 1, base + element.end + 1)), features)
             )
             if element.parent:
                 relationships.append((key, doc.id + ":" + element.parent))
+        if policy.milestones == "pages":
+            spans, outside = page_spans(doc)
+            pages["characters_outside_pages"] += outside
+            for pb, start, end in spans:
+                label = pb.attributes.get("n", "")
+                if start == end:
+                    pages["empty"].append({"document": doc.id, "path": pb.key, "n": label})
+                    continue
+                features = {"page": label, "source_path": pb.key, "start": start, "end": end}
+                if policy.facsimile == "zones":
+                    features.update(zone_features(doc, pb, unresolved))
+                specs["page"].append(
+                    (
+                        doc.id + ":page:" + pb.key,
+                        list(range(base + start + 1, base + end + 1)),
+                        features,
+                    )
+                )
+                pages["count"] += 1
     if not slot:
         raise ConversionError("No reading text; metadata-only inputs cannot create a TF corpus")
-    for kind in ("document", "region", "block", "element"):
+    for kind in ("document", "region", "block", "element", "page"):
         for key, slots, features in specs[kind]:
             number = len(node["otype"]) + 1
             lookup[key] = number
@@ -115,7 +191,6 @@ def export(documents: list[Document], destination: Path, policy: Policy) -> dict
     for child, parent in relationships:
         if child in lookup and parent in lookup:
             edge["parent"][lookup[child]] = {lookup[parent]}
-    unresolved = []
     for doc in documents:
         ids = {
             e.attributes["{http://www.w3.org/XML/1998/namespace}id"]: doc.id + ":" + e.key
@@ -143,7 +218,7 @@ def export(documents: list[Document], destination: Path, policy: Policy) -> dict
                                 "reason": "external, excluded, zero-width or unresolved",
                             }
                         )
-    ints = {"start", "end", "block"}
+    ints = {"start", "end", "block", *ZONE_FEATURES}
     meta: dict[str, Any] = {name: {"valueType": "int" if name in ints else "str"} for name in node}
     meta.update({name: {"valueType": "str"} for name in edge})
     meta[""] = {"converter": "corpora-tei-to-tf", "slotPolicy": "Unicode scalar; no normalization"}
@@ -185,6 +260,7 @@ def export(documents: list[Document], destination: Path, policy: Policy) -> dict
         "attribute_features": attribute_features,
         "unresolved_references": unresolved,
         "document_slot_offsets": offsets,
+        **({"pages": pages} if policy.milestones == "pages" else {}),
     }
 
 
@@ -276,6 +352,11 @@ def convert(
             number = graph["node_ids"].get(doc.id)
             if number is not None and api.T.text(number) != doc.text:
                 raise ConversionError(f"Text round-trip failed for {doc.id}")
+            if policy.milestones == "pages":
+                for pb, start, end in page_spans(doc)[0]:
+                    number = graph["node_ids"].get(doc.id + ":page:" + pb.key)
+                    if number is not None and api.T.text(number) != doc.text[start:end]:
+                        raise ConversionError(f"Page round-trip failed at {pb.key}")
         # Do not distribute runtime-specific cache files.
         for path in (stage / "tf").iterdir():
             if path.is_dir():

@@ -19,11 +19,13 @@ serde = { workspace = true }
 sha2 = "0.10"
 tempfile = "3"
 thiserror = { workspace = true }
+serde_json = { workspace = true }
 whatlang = "=0.18.0"
 unicode-normalization = "0.1"
 
-[dev-dependencies]
-serde_json = { workspace = true }
+[[bin]]
+name = "corpora-pdf-extract"
+path = "src/bin/pdf_extract.rs"
 
 [lints]
 workspace = true

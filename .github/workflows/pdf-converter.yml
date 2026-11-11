@@ -1,0 +1,28 @@
+name: PDF converter
+on:
+  pull_request:
+    paths:
+      - 'packages/pdf-to-tf/**'
+      - 'packages/tei-to-tf/**'
+      - 'crates/corpora-pdf/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/pdf-converter.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - name: Install Poppler and Tesseract
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-eng
+      - run: cargo build --locked -p corpora-pdf --bin corpora-pdf-extract
+      - run: make -C packages/tei-to-tf check
+      - run: make -C packages/pdf-to-tf check build
+        env:
+          PDF_EXTRACTOR: ${{ github.workspace }}/target/debug/corpora-pdf-extract

@@ -17,8 +17,14 @@ class Policy:
     allow_no_namespace: bool = False
     max_slots: int = 1_000_000
     max_memberships: int = 10_000_000
+    milestones: str = "offsets"
+    facsimile: str = "ignore"
 
     def __post_init__(self) -> None:
+        if self.milestones not in {"offsets", "pages"}:
+            raise ConversionError("milestones must be offsets or pages")
+        if self.facsimile not in {"ignore", "zones"}:
+            raise ConversionError("facsimile must be ignore or zones")
         if self.max_slots < 1 or self.max_memberships < 1:
             raise ConversionError("Graph limits must be positive")
         if self.choice not in {"reject", "original", "edited"}:
