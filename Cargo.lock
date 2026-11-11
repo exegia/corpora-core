@@ -111,7 +111,7 @@ version = "0.1.0"
 
 [[package]]
 name = "corpora-convert"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "corpora-core",
  "roxmltree",
@@ -144,7 +144,7 @@ version = "0.1.0"
 
 [[package]]
 name = "corpora-pdf"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "roxmltree",
  "serde",
