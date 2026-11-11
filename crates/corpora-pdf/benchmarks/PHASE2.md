@@ -256,3 +256,67 @@ this run are the better estimate of reading accuracy. Lines that still stop at
 `finish_reason: length` under 4096 tokens are reported as completion failures of
 the model at this cap, not retried. Passing still qualifies a model only as a
 review-required candidate for that script on these sources.
+
+## Higher output cap result (2026-11-11)
+
+**Run.** As pre-registered: the same 114 lines and references, both models through
+Vercel AI Gateway only, default reasoning effort, `--gateway-max-tokens 4096`,
+one request per line, no retries, fresh caches, Gemini first. 228 inference
+requests and 6 read-only catalog checks. No combination was skipped by the
+spend rule. The catalog check confirmed 4096 within each model's advertised
+limit before inference.
+
+| Model | Script | Completed | Base error | Mark error (missing + inserted / marks) | Divine name | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| `anthropic/claude-opus-5.5` | Greek | 40/40 | 0.15% | 0.0% (0 / 504) | 0 | **pass** |
+| `anthropic/claude-opus-5.5` | Hebrew | 40/40 | 0.59% | 5.3% (23 / 435) | 0 | fail |
+| `anthropic/claude-opus-5.5` | Aramaic | 34/34 | 0.00% | 11.6% (100 / 865) | 0 | fail |
+| `google/gemini-3.6-flash` | Greek | 39/40 | 0.62% | 0.0% (0 / 489) | 0 | fail (completion) |
+| `google/gemini-3.6-flash` | Hebrew | 33/40 | 13.33% | 6.9% (24 / 350) | 0 | fail |
+| `google/gemini-3.6-flash` | Aramaic | 19/34 | 5.56% | 32.5% (157 / 483) | 0 | fail |
+
+Compared with the 1024-token run:
+
+| Model | Script | Completed 1024 → 4096 | Base error | Mark error | Divine name | Result |
+| --- | --- | --- | --- | --- | --- | --- |
+| Opus 5.5 | Greek | 40 → 40 | 0.15% → 0.15% | 0.0% → 0.0% | 0 → 0 | pass → pass |
+| Opus 5.5 | Hebrew | 39 → 40 | 0.76% → 0.59% | 7.6% → 5.3% | 0 → 0 | fail → fail |
+| Opus 5.5 | Aramaic | 32 → 34 | 1.11% → 0.00% | 12.2% → 11.6% | 0 → 0 | fail → fail |
+| Gemini 3.6 Flash | Greek | 23 → 39 | 0.83% → 0.62% | 0.8% → 0.0% | 0 → 0 | fail → fail |
+| Gemini 3.6 Flash | Hebrew | 27 → 33 | 2.01% → 13.33% | 11.1% → 6.9% | 2 → 0 | fail → fail |
+| Gemini 3.6 Flash | Aramaic | 7 → 19 | 1.86% → 5.56% | 32.4% → 32.5% | 0 → 0 | fail → fail |
+
+**Completion.** Opus completed all 114 lines; its largest completion was 1,112
+tokens, so its 3 first-run failures were budget-limited. Gemini completed 91 of
+114 (57 at 1024). All 23 remaining Gemini failures again ended with
+`finish_reason: length`, each at 4,092 completion tokens. Reasoning was 97.9% of
+Gemini's completion tokens, and its completed Hebrew and Aramaic lines used a
+median of 3,342 and 3,964, close to the cap. Gemini's failures therefore stay
+budget-limited at 4096 under default reasoning effort.
+
+**Reading.** On the lines completed in both runs (a secondary comparison, not
+pre-registered), Opus Hebrew mark error was 7.6% then 5.5% (39 lines) and Opus
+Aramaic 12.2% then 11.3% (32 lines); its marks fail either way. The Gateway
+catalog lists Opus as not accepting `temperature`, so these differences are
+run-to-run variation as much as an effect of the cap. Gemini's Hebrew base
+error comes mostly from one line where it returned the reference reading plus
+three further lines of other text (66 base edits); without that line it is
+1.48%, still above 1%. Gemini Greek misses only on completion (97.5% < 98%).
+Gemini's two first-run divine-name violations did not recur.
+
+**Usage.** Opus 31,116 prompt and 44,820 completion tokens (38,725 reasoning),
+about $1.02 at catalog list prices, 13 minutes. Gemini 130,011 prompt and
+318,291 completion tokens (311,576 reasoning), about $1.29, 38 minutes. Total
+about $2.31, within the pre-registered $2–3 estimate. Gateway returned no cost
+field.
+
+**Conclusion.** The first result stands, and this rerun does not change any
+pass or fail. Opus 5.5 remains a candidate for SBLGNT-style born-digital Greek
+only. For pointed Hebrew and cantillated Aramaic its errors are reading errors
+in the marks, not completion failures. Gemini 3.6 Flash still cannot be judged
+fairly at 4096 tokens with default reasoning, because a fifth of its lines run
+out of budget. A further Gemini run, with a larger cap or an explicit lower
+reasoning effort, needs its own dated section. All outputs stay review-required.
+Reports, `score.json`, `summary.json` (per-report status, finish reasons,
+tokens, time, cost) and `matched.json` are under
+`target/pdf-benchmark/phase2/heldout/runs-cap4096/`.
