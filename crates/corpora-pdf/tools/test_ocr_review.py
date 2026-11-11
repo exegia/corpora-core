@@ -81,9 +81,27 @@ class PipelineTest(unittest.TestCase):
             "render_region": self.render,
             "hosted_recognize": self.hosted,
             "gateway_check": Mock(return_value={"status": "eligible"}),
+            "read_page_boxes": Mock(
+                return_value={"media_box": [0, 0, 612, 792], "crop_box": [0, 0, 612, 792]}
+            ),
         }
         options.update(kwargs)
         return ocr.run(**options)
+
+    def test_report_records_rendered_page_frame_once_per_page(self):
+        boxes = Mock(
+            return_value={"media_box": [0, 0, 612, 828], "crop_box": [0, 18, 612, 810]}
+        )
+        other = copy.deepcopy(self.region)
+        other.update(id="two")
+        self.manifest["regions"].append(other)
+        report = self.run_pipeline(read_page_boxes=boxes, max_calls=2)
+        boxes.assert_called_once_with(self.pdf, 1)
+        frame = report["regions"][0]["page_frame"]
+        self.assertEqual(frame["rendered_box"], "media_box")
+        self.assertTrue(frame["crop_box_differs"])
+        self.assertEqual(frame["crop_box"], [0, 18, 612, 810])
+        self.assertEqual(report["regions"][1]["page_frame"], frame)
 
     def test_gateway_isolated_cache_budget_and_usage(self):
         self.run_pipeline()  # A Mistral cache entry must not satisfy Gateway.
@@ -837,6 +855,35 @@ class HostedAdapterTest(unittest.TestCase):
                 ocr.hosted(b"image")
             self.assertNotIn("test-only", str(error.exception))
             self.assertEqual(error.exception.metadata, {})
+
+
+class PageFrameTest(unittest.TestCase):
+    PDFINFO = (
+        b"Page    3 size: 612 x 792 pts (letter)\n"
+        b"Page    3 rot:  0\n"
+        b"Page    3 MediaBox:     0.00     0.00   612.00   828.00\n"
+        b"Page    3 CropBox:      0.00    18.00   612.00   810.00\n"
+        b"Page    3 BleedBox:     0.00    18.00   612.00   810.00\n"
+    )
+
+    def test_pdfinfo_boxes_parse_for_the_requested_page(self):
+        with patch.object(ocr, "command", return_value=self.PDFINFO) as command:
+            boxes = ocr.page_boxes(Path("source.pdf"), 3)
+        self.assertEqual(boxes["media_box"], [0.0, 0.0, 612.0, 828.0])
+        self.assertEqual(boxes["crop_box"], [0.0, 18.0, 612.0, 810.0])
+        self.assertEqual(command.call_args.args[0][:6], ["pdfinfo", "-box", "-f", "3", "-l", "3"])
+
+    def test_missing_boxes_are_rejected(self):
+        output = b"Page    3 size: 612 x 792 pts\n"
+        with patch.object(ocr, "command", return_value=output), self.assertRaises(ValueError):
+            ocr.page_boxes(Path("source.pdf"), 3)
+
+    def test_frame_flags_a_smaller_crop_box_only(self):
+        same = ocr.page_frame({"media_box": [0, 0, 612, 792], "crop_box": [0, 0, 612, 792]})
+        self.assertFalse(same["crop_box_differs"])
+        inset = ocr.page_frame({"media_box": [0, 0, 612, 828], "crop_box": [0, 18, 612, 810]})
+        self.assertTrue(inset["crop_box_differs"])
+        self.assertEqual(inset["rendered_box"], "media_box")
 
 
 if __name__ == "__main__":

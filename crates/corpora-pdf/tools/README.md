@@ -10,8 +10,13 @@ them alongside existing findings.
 
 Use an ignored private directory such as `target/pdf-benchmark/review-pipeline`.
 Hash the original PDF with `shasum -a 256`. Physical page numbers start at one;
-`bounds` is `[left, top, right, bottom]` normalized to the displayed page, with its
-origin at the top left. Select one text line per local Kraken region.
+`bounds` is `[left, top, right, bottom]` normalized to the page's MediaBox as
+Poppler renders it, with its origin at the top left. This is the same frame as the
+Rust extractor and the PDF QA browser. Viewers and libraries such as PyMuPDF use
+the CropBox instead; when a PDF's CropBox is smaller (common in scanned books),
+convert their coordinates before writing a manifest. Each report region records
+both boxes under `page_frame` and sets `crop_box_differs` for such pages.
+Select one text line per local Kraken region.
 
 ```json
 {

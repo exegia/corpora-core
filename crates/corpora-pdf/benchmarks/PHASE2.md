@@ -163,7 +163,9 @@ saw a held-out line:
   larger MediaBox (612×828). `ocr_review.py` renders the MediaBox through
   `pdftoppm`, so Aramaic bounds are expressed in that frame and every crop was
   rendered with the tool's own renderer and hashed. The Hebrew and Greek PDFs
-  have identical boxes. Rendering the CropBox in the tool is a separate fix.
+  have identical boxes. The whole Poppler pipeline (extractor, QA browser, OCR
+  tool) uses the MediaBox consistently; the tool now records both boxes per
+  region and flags pages where they differ.
 - **Selection result.** Hebrew: 40 lines on 40 pages, 4 containing the divine
   name. Greek: 40 lines on all 8 pages (32 main text, 8 apparatus). Aramaic: 40
   word spans of 3–6 words on 40 pages of the annotated text, avoiding verse
