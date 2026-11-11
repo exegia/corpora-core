@@ -106,9 +106,11 @@ unrecognized or ambiguous text remains available for downstream review.
 
 Phase 2 started on `feat/pdf-ocr-phase-2`. The dated
 [capability gate](../benchmarks/PHASE2.md) records the frozen first comparison,
-an alphabet-disqualified local model, the Gateway route check, implemented
-direct-Mistral accounting and the remaining credential prerequisite. No new accuracy result is
-claimed by that audit.
+an alphabet-disqualified local model and the Gateway route check. Hosted
+recognition uses Vercel AI Gateway only. On the frozen crop,
+`anthropic/claude-opus-5.5` matched the reference exactly; that qualifies it for
+the held-out benchmark, whose size, metrics and thresholds are pre-registered in
+the same document.
 
 Start with one dedicated OCR recognizer on the same frozen Hebrew crop that
 confused qubuts with segol. Inspect its output alphabet or documented output

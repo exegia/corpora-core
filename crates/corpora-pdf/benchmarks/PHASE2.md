@@ -88,3 +88,61 @@ and the local side-by-side page `review/index.html`. No PDF, crop,
 transcription, credential or generated candidate is committed. The larger
 human-reviewed script benchmark and layout acceptance remain later Phase 2 work
 as specified in `agent/PROPOSAL.md`.
+
+## Held-out line benchmark (pre-registered 2026-11-11)
+
+Fixed before any line is selected or sent to a model. Changing a threshold,
+metric or model after a run starts needs a new dated section, not an edit here.
+
+### Lines
+
+120 held-out lines, 40 per script, one text line per crop:
+
+| Script | Source | Kind |
+| --- | --- | --- |
+| Hebrew | Waltke–O'Connor grammar PDF (SHA-256 `6dbaadab…`), quoted pointed examples | Born-digital, BibleWorks `Bwhebb` font |
+| Greek | SBLGNT Galatians PDF (SHA-256 `ee9b75cd…`) | Born-digital, polytonic |
+| Aramaic | *Basics of Biblical Aramaic* PDF (SHA-256 `46896fb2…`) | Scanned, CVISION text layer |
+
+Spread lines across pages and include varied mark inventories. Exclude every
+region already sent to a model (`hebrew-line-18`, `hebrew-line-18b`,
+`greek-line-1`, `greek-line-2`, `aramaic-line-1`, `aramaic-line-5`) and any
+crop overlapping one. Greek comes from one 8-page, one-font source; its result
+does not generalize to other Greek printing.
+
+### References
+
+Draft each reference without any model under test: Hebrew from the decoded
+`Bwhebb` text layer, Greek from the PDF text layer, Aramaic from the
+Westminster Leningrad Codex verse matched by consonants against the scan's
+text layer. Cantillation is kept only when printed in the crop. A person then
+checks every draft against its crop and approves, corrects or excludes it with
+a reason. Only human-approved lines are scored. If a script ends with fewer than
+40 approved lines, report the real count rather than topping up after a run.
+
+### Metrics (NFD, per script, pooled over lines)
+
+- **Completion:** lines with a non-empty `review_required` candidate / lines sent.
+- **Base error:** edit distance over base characters (combining marks removed) /
+  reference base characters.
+- **Mark error:** (missing + inserted combining marks, located per aligned base
+  character) / reference marks. Hebrew counts points, dagesh, shin/sin dots and
+  printed accents; Greek counts accents, breathings, diaeresis and iota subscript.
+- **Divine name:** any mark added to an unpointed tetragrammaton is a violation.
+
+Failed or empty responses count as incomplete and are excluded from the error
+rates, which are reported with their line counts.
+
+### Thresholds (strict)
+
+A model passes a script only if all four hold for that script:
+completion ≥ 98%, base error ≤ 1%, mark error ≤ 2%, divine-name violations = 0.
+Scripts are judged separately; there is no cross-script average.
+
+### Run
+
+Models: `anthropic/claude-opus-5.5` and the baseline `google/gemini-3.6-flash`,
+both through Vercel AI Gateway, default reasoning effort, fresh caches.
+One request per line, `--max-calls 120` per model, no retries. Expected cost
+under $1 at catalog list prices. Passing qualifies a model as a candidate for
+that script on these sources only; every output stays review-required.
