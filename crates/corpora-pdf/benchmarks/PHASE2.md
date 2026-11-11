@@ -146,3 +146,26 @@ both through Vercel AI Gateway, default reasoning effort, fresh caches.
 One request per line, `--max-calls 120` per model, no retries. Expected cost
 under $1 at catalog list prices. Passing qualifies a model as a candidate for
 that script on these sources only; every output stays review-required.
+
+### Amendment before any inference (2026-11-11)
+
+Recorded during line selection, before references were reviewed or any model
+saw a held-out line:
+
+- **Hebrew stress signs.** Waltke–O'Connor prints its own stress signs (a `<`
+  above and a `^` below a letter) that have no single Unicode equivalent. Lines
+  containing them are not selected, so a correct reading cannot be scored as a
+  mark error. Other printed marks, including meteg, are kept.
+- **Apostrophe forms.** U+0027, U+2019, U+02BC, U+1FBD and U+1FBF print alike
+  in these sources and are folded to one character before scoring. No other
+  characters are folded.
+- **Aramaic crop frame.** The Aramaic PDF's CropBox (612×792) sits inside a
+  larger MediaBox (612×828). `ocr_review.py` renders the MediaBox through
+  `pdftoppm`, so Aramaic bounds are expressed in that frame and every crop was
+  rendered with the tool's own renderer and hashed. The Hebrew and Greek PDFs
+  have identical boxes. Rendering the CropBox in the tool is a separate fix.
+- **Selection result.** Hebrew: 40 lines on 40 pages, 4 containing the divine
+  name. Greek: 40 lines on all 8 pages (32 main text, 8 apparatus). Aramaic: 40
+  word spans of 3–6 words on 40 pages of the annotated text, avoiding verse
+  numbers, footnote superscripts and ketiv/qere brackets. Tesseract `heb`
+  (not a model under test) only located Aramaic words for WLC alignment.
