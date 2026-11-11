@@ -11,6 +11,7 @@ EPUB, or PDF stays available so a reader can check extracted content.
 | --- | --- | --- |
 | TEI XML | [TEI converter](packages/tei-to-tf/README.md) | Gets local or supported public repository TEI, selects a reading, and exports TF. |
 | A local EPUB | [EPUB converter](packages/epub-to-tf/README.md) | Checks the archive, follows its reading order, and exports TF plus assets. |
+| A local PDF to convert | [PDF converter](packages/pdf-to-tf/README.md) | Extracts and scores the PDF, converts to TEI and TF only above 95%, and reports located issues. |
 | XML text to check in Rust | [corpora-core](crates/corpora-core/README.md) | Reports structural, metadata, language, and optional spelling findings. |
 | EPUB bytes to check in Rust | [corpora-convert](crates/corpora-convert/README.md) | Returns source-bound EPUB findings and a reading projection. |
 | A local PDF to inspect | [corpora-pdf](crates/corpora-pdf/README.md) | Reads text or OCR, labels layout candidates, and returns visual evidence scores. |
@@ -89,11 +90,12 @@ each flag, the supported inputs, the exported files, and how to load the result.
 | --- | --- |
 | [`crates/corpora-core`](crates/corpora-core/README.md) | Shared diagnostics, XML/TEI checks, language selection, and optional spelling. |
 | [`crates/corpora-convert`](crates/corpora-convert/README.md) | Reusable EPUB validator and `corpora-epub-check` JSON CLI. |
-| [`crates/corpora-pdf`](crates/corpora-pdf/README.md) | Reusable local PDF text/OCR and semantic-candidate extraction library. |
+| [`crates/corpora-pdf`](crates/corpora-pdf/README.md) | Reusable local PDF text/OCR and semantic-candidate extraction library and `corpora-pdf-extract` JSON CLI. |
 | [`crates/corpora-typegen`](crates/corpora-typegen/README.md) | Schema reader and Rust/TypeScript/Swift/SQL emitters. |
 | [`crates/corpora-fabric`](crates/corpora-fabric/README.md), [`crates/corpora-source`](crates/corpora-source/README.md), [`crates/corpora-agent`](crates/corpora-agent/README.md) | Reserved Rust crates; their builder, connector, and runtime APIs are not implemented yet. |
 | [`packages/tei-to-tf`](packages/tei-to-tf/README.md) | TEI acquisition, reading policy, TF export, optional quality passes. |
 | [`packages/epub-to-tf`](packages/epub-to-tf/README.md) | EPUB export, semantic TF features, asset copying, visual QA. |
+| [`packages/pdf-to-tf`](packages/pdf-to-tf/README.md) | Score-gated PDF → TEI → TF, page/line/word mapping, located issue report. |
 | [`packages/tf-ai-resolver`](packages/tf-ai-resolver/README.md) | Exact TF selection, expert proposal, reviewed derived reading, loopback browser service. |
 | [`packages/quality-ai`](packages/quality-ai/README.md) | Optional hosted model bridge for TEI quality review. |
 | [`crates/corpora-core/schema`](crates/corpora-core/schema/README.md), [`packages/corpora-types`](packages/corpora-types/README.md), `generated/`, `Package.swift` | Shared schema, generated types, and SwiftPM library. |
@@ -138,12 +140,15 @@ own checks when you change them:
 make -C packages/tei-to-tf check build
 uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/tests
 uv run --project packages/tf-ai-resolver pytest -q packages/tf-ai-resolver/tests
+cargo build -p corpora-pdf --bin corpora-pdf-extract
+make -C packages/pdf-to-tf check build
 npm ci --prefix packages/quality-ai
 npm run check --prefix packages/quality-ai
 npm test --prefix packages/quality-ai
 ```
 
-The [TEI package workflow](.github/workflows/tei-converter.yml) and
+The [TEI package workflow](.github/workflows/tei-converter.yml),
+[PDF converter workflow](.github/workflows/pdf-converter.yml) and
 [EPUB/resolver workflow](.github/workflows/epub-resolver.yml) run their nested
 checks on relevant PRs. See each package README for its complete locked check
 command and real-loader verification.

@@ -87,6 +87,14 @@ feature. The original slots stay intact. Run its locked Ruff, mypy, pytest,
 and build checks from the package directory; see its README.
 `.github/workflows/epub-resolver.yml` runs both nested suites on PRs.
 
+`packages/pdf-to-tf` converts a local PDF to TEI and then TF only when the
+conversion score is greater than 95%, verifies every line, word and page, and
+reports located issues with suggested fixes. Build `corpora-pdf-extract`
+(`cargo build -p corpora-pdf --bin corpora-pdf-extract`), then run
+`make -C packages/pdf-to-tf check build`. `.github/workflows/pdf-converter.yml`
+runs both on PRs. `tei-to-tf` gained opt-in `--milestones pages` and
+`--facsimile zones`; its defaults are unchanged.
+
 
 ### Language and spelling QA
 

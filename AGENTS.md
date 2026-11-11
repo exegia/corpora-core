@@ -174,6 +174,18 @@ explicit `apply` writes a derived `resolved_reading` feature while retaining
 source slots. Run its Ruff, mypy, pytest, and build checks from that package.
 `.github/workflows/epub-resolver.yml` runs both nested package suites on PRs.
 
+## PDF conversion package
+
+`packages/pdf-to-tf` converts a local PDF to TEI and then to TF through `tei-to-tf`.
+It extracts with the Rust `corpora-pdf-extract` binary and converts only when the
+conversion score is greater than 95%. It verifies every line, word and page through
+the real loader, and writes `conversion-report.md` with located issues and suggested
+fixes. Run `cargo build -p corpora-pdf --bin corpora-pdf-extract`, then
+`make -C packages/pdf-to-tf check build`. `.github/workflows/pdf-converter.yml`
+runs these on relevant PRs. The score is OCR evidence, not accuracy against a
+reference. `tei-to-tf` gained opt-in `--milestones pages` and `--facsimile zones`
+for this package; its defaults are unchanged.
+
 
 ### Language and spelling QA
 

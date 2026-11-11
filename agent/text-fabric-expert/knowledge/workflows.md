@@ -52,7 +52,7 @@ CFR assertions apply only to an installed CFR-capable runtime; older CF uses .cf
 | TEI → TF | `uv run --project packages/tei-to-tf tei-to-tf SOURCE --output NEW_DIR`; text-fabric-factory for additional profiles | Namespaces, mixed content/tails, choices/apparatus policy, witnesses, standOff, overlap and Unicode scalar spans |
 | Generic XML / USX → TF | Explicit vocabulary mapping to source model then walker/exporter | XML is syntax, not schema; USX book/chapter/verse milestones, notes, bridges and empty verses require a USX adapter |
 | EPUB / Markdown → TF | Existing document parser → structure/text model → explicit slot/feature mapping | EPUB spine order, headings/sections, notes, links, whitespace and source locators |
-| PDF → TF | pdf_prep quality gate, reviewed extraction → document model → exporter | OCR confidence, page references, columns/reading order, headers, tables, glyph loss; no claim of lossless PDF reconstruction |
+| PDF → TF | `packages/pdf-to-tf`: corpora-pdf extraction, score gate (> 95%), TEI with pages/zones, `tei-to-tf --milestones pages --facsimile zones`, line/word/page verification | Score is OCR evidence, not accuracy; page references, columns/reading order, headers, tables, glyph and mark loss; no claim of lossless PDF reconstruction |
 | DOC / DOCX → TF | Sandboxed office-format extractor → document model → exporter | Distinguish legacy binary DOC from DOCX ZIP/XML; preserve revisions, footnotes/tables where supported; report extraction losses |
 | TF → XML / SQL / graph | Explicit export schema, official runtime data access | Overlap needs stand-off XML, many-to-many membership tables, valued edges, metadata and reversible ID mapping |
 
