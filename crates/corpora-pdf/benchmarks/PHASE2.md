@@ -218,3 +218,41 @@ A follow-up with a higher, pre-registered output cap would separate completion
 failures from reading errors; it needs its own dated section before it runs.
 Private inputs, crops, ledger, reports and `runs/score.json` are under
 `target/pdf-benchmark/phase2/heldout/`.
+
+## Higher output cap rerun (pre-registered 2026-11-11)
+
+Fixed before any request of this rerun is sent. It measures whether the first
+run's incomplete lines were limited by the 1024-token output cap rather than by
+the models' reading. It does not replace the first result, which stands as
+recorded above; both are reported side by side.
+
+Unchanged from the first run:
+
+- **Lines and references.** The same 114 human-approved lines (Hebrew 40,
+  Greek 40, Aramaic 34) and the same reviewed references in
+  `reference-ledger.json`. No line is added, removed or re-reviewed.
+- **Metrics, thresholds and scorer.** As in "Held-out line benchmark" and its
+  amendment, computed by the committed `heldout_score.py` without changes.
+- **Models.** `anthropic/claude-opus-5.5` and `google/gemini-3.6-flash`, through
+  Vercel AI Gateway only, default reasoning effort, the same prompt.
+- **Requests.** One request per line, no retries, `--max-calls 40` per script
+  per model, fresh caches (new cache directories; no first-run cache is read).
+
+Changed: the output cap is 4096 tokens (`--gateway-max-tokens 4096`), which both
+models' authenticated catalog entries advertise as within their limits
+(128,000 and 64,000). The cap changes the request hash, so no first-run
+candidate can be reused.
+
+Spend. Worst case at catalog list prices is about $1.9 for Gemini and $9.5 for
+Opus if every line used the full cap; the first run's usage suggests about $2–3
+in total. Gemini runs first, then Opus, each in the order Hebrew, Greek, Aramaic.
+Before each Opus script, if the cumulative estimate plus that script's worst case
+(40 × 4096 output tokens) would exceed $8, that script and later ones are not
+run; they are reported as skipped and not run later under this section.
+
+Reading the result. If incomplete lines fall to near zero, the first run's
+completion failures were budget-limited, and the completed-line error rates of
+this run are the better estimate of reading accuracy. Lines that still stop at
+`finish_reason: length` under 4096 tokens are reported as completion failures of
+the model at this cap, not retried. Passing still qualifies a model only as a
+review-required candidate for that script on these sources.

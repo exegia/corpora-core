@@ -22,8 +22,10 @@ PROMPT = (
     "supply vowels from memory, or invent missing characters. Output plain text "
     "only, without Markdown or explanation. Use [unclear] for unreadable text."
 )
+DEFAULT_MAX_TOKENS = 1024
+MAX_TOKENS_LIMIT = 32768
 SETTINGS = {
-    "max_tokens": 1024,
+    "max_tokens": DEFAULT_MAX_TOKENS,
     "temperature": 0,
     "stream": False,
 }
@@ -85,8 +87,20 @@ class NoRedirect(urllib.request.HTTPRedirectHandler):
         return None
 
 
-def request_settings(reasoning_effort: str | None = None) -> dict[str, Any]:
+def output_cap(max_tokens: int | None = None) -> int:
+    """Validate an explicit output-token cap; None selects the default."""
+    if max_tokens is None:
+        return DEFAULT_MAX_TOKENS
+    if type(max_tokens) is not int or not 1 <= max_tokens <= MAX_TOKENS_LIMIT:
+        raise GatewayError("invalid_max_tokens")
+    return max_tokens
+
+
+def request_settings(
+    reasoning_effort: str | None = None, max_tokens: int | None = None
+) -> dict[str, Any]:
     settings: dict[str, Any] = dict(SETTINGS)
+    settings["max_tokens"] = output_cap(max_tokens)
     if reasoning_effort is not None:
         if reasoning_effort not in ("low", "high"):
             raise GatewayError("invalid_reasoning_effort")
@@ -94,25 +108,40 @@ def request_settings(reasoning_effort: str | None = None) -> dict[str, Any]:
     return settings
 
 
-def identity(model: str = MODEL, reasoning_effort: str | None = None) -> dict[str, Any]:
-    """Pin the selected model and request settings, not upstream weight revisions."""
+def identity(
+    model: str = MODEL,
+    reasoning_effort: str | None = None,
+    max_tokens: int | None = None,
+) -> dict[str, Any]:
+    """Pin the selected model and request settings, not upstream weight revisions.
+
+    The default cap leaves the identity byte-identical to earlier releases, so
+    existing caches stay valid; any other cap changes the hash and the cache.
+    """
     if not re.fullmatch(r"[\w.-]+/[\w.-]+", model):
         raise GatewayError("invalid_model_id")
+    settings = request_settings(reasoning_effort, max_tokens)
     config = json.dumps(
-        {"prompt": PROMPT, "model": model, **request_settings(reasoning_effort)},
+        {"prompt": PROMPT, "model": model, **settings},
         sort_keys=True,
     ).encode()
-    return {
+    result = {
         "model": model,
         "endpoint": ENDPOINT,
         "request_sha256": hashlib.sha256(config).hexdigest(),
         "model_revision": "provider_managed_alias",
     }
+    if settings["max_tokens"] != DEFAULT_MAX_TOKENS:
+        result["max_tokens"] = settings["max_tokens"]
+    return result
 
 
-def check_model(model: str, reasoning_effort: str | None = None) -> dict[str, Any]:
+def check_model(
+    model: str, reasoning_effort: str | None = None, max_tokens: int | None = None
+) -> dict[str, Any]:
     """Read account-aware eligibility before the first uncached inference."""
-    identity(model, reasoning_effort)
+    cap = output_cap(max_tokens)
+    identity(model, reasoning_effort, max_tokens)
     key = os.environ.get("AI_GATEWAY_API_KEY")
     if not key:
         raise GatewayError("not_configured")
@@ -160,6 +189,14 @@ def check_model(model: str, reasoning_effort: str | None = None) -> dict[str, An
             ):
                 raise GatewayError("reasoning_effort_not_supported")
             result["reasoning_effort"] = reasoning_effort
+        if cap != DEFAULT_MAX_TOKENS:
+            limit = selected.get("max_tokens")
+            if type(limit) is not int or limit < 1:
+                raise GatewayError("max_tokens_limit_unknown")
+            if cap > limit:
+                raise GatewayError("max_tokens_exceeds_model_limit")
+            result["max_tokens"] = cap
+            result["model_max_tokens"] = limit
         return result
     except GatewayError:
         raise
@@ -177,14 +214,17 @@ def check_model(model: str, reasoning_effort: str | None = None) -> dict[str, An
 
 
 def recognize(
-    image: bytes, model: str = MODEL, reasoning_effort: str | None = None
+    image: bytes,
+    model: str = MODEL,
+    reasoning_effort: str | None = None,
+    max_tokens: int | None = None,
 ) -> dict[str, Any]:
     key = os.environ.get("AI_GATEWAY_API_KEY")
     if not key:
         raise GatewayError("not_configured")
-    identity(model, reasoning_effort)
+    identity(model, reasoning_effort, max_tokens)
     body = {
-        **request_settings(reasoning_effort),
+        **request_settings(reasoning_effort, max_tokens),
         "model": model,
         "messages": [
             {"role": "system", "content": PROMPT},

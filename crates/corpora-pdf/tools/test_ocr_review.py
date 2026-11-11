@@ -323,6 +323,87 @@ class PipelineTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "requires the vercel provider"):
             self.run_pipeline(gateway_reasoning_effort="low")
 
+    def test_max_tokens_separates_cache_and_reaches_provider(self):
+        recognize = Mock(return_value={"text": "לא", "metadata": {}})
+        default = self.run_pipeline(provider="vercel", gateway_recognize=recognize)
+        self.assertNotIn("max_tokens", default["identity"])
+        recognize.assert_called_once_with(b"synthetic-image", ocr.gateway_ocr.MODEL)
+        check = Mock(return_value={"status": "eligible", "max_tokens": 4096})
+        raised = self.run_pipeline(
+            provider="vercel",
+            gateway_max_tokens=4096,
+            gateway_recognize=recognize,
+            gateway_check=check,
+        )
+        self.assertEqual(raised["calls"], 1)
+        self.assertEqual(raised["identity"]["max_tokens"], 4096)
+        self.assertNotEqual(
+            raised["regions"][0]["cache_key"], default["regions"][0]["cache_key"]
+        )
+        check.assert_called_once_with(ocr.gateway_ocr.MODEL, max_tokens=4096)
+        recognize.assert_called_with(
+            b"synthetic-image", ocr.gateway_ocr.MODEL, max_tokens=4096
+        )
+        forbidden = Mock(side_effect=AssertionError("cache must not access network"))
+        for cap in (4096, 1024):  # An explicit default reuses the default cache.
+            with self.subTest(cap=cap):
+                cached = self.run_pipeline(
+                    provider="vercel",
+                    gateway_max_tokens=cap,
+                    gateway_recognize=forbidden,
+                    gateway_check=forbidden,
+                )
+                self.assertEqual(cached["calls"], 0)
+                self.assertEqual(cached["preflight_requests"], 0)
+        self.assertEqual(cached["identity"], default["identity"])
+        both = self.run_pipeline(
+            provider="vercel",
+            gateway_max_tokens=4096,
+            gateway_reasoning_effort="low",
+            gateway_recognize=recognize,
+            gateway_check=check,
+        )
+        self.assertEqual(both["calls"], 1)
+        check.assert_called_with(ocr.gateway_ocr.MODEL, "low", max_tokens=4096)
+        recognize.assert_called_with(
+            b"synthetic-image", ocr.gateway_ocr.MODEL, "low", max_tokens=4096
+        )
+
+    def test_invalid_or_unsupported_max_tokens_make_no_requests(self):
+        recognize = Mock()
+        for cap in (0, -1, 32769, True, 4096.0, "4096"):
+            with self.subTest(cap=cap), self.assertRaises(ValueError):
+                self.run_pipeline(
+                    provider="vercel",
+                    gateway_max_tokens=cap,
+                    gateway_recognize=recognize,
+                )
+        with self.assertRaisesRegex(ValueError, "requires the vercel provider"):
+            self.run_pipeline(gateway_max_tokens=4096)
+        self.render.assert_not_called()
+        check = Mock(
+            side_effect=ocr.gateway_ocr.GatewayError("max_tokens_exceeds_model_limit")
+        )
+        report = self.run_pipeline(
+            provider="vercel",
+            gateway_max_tokens=32768,
+            gateway_recognize=recognize,
+            gateway_check=check,
+        )
+        self.assertEqual(report["calls"], 0)
+        self.assertEqual(
+            report["regions"][0]["error_code"], "max_tokens_exceeds_model_limit"
+        )
+        recognize.assert_not_called()
+        self.assertFalse((self.root / "cache").exists())
+        self.assertEqual(ocr.max_tokens_argument("4096"), 4096)
+        for value in ("0", "32769", "many", "4096.5"):
+            with (
+                self.subTest(value=value),
+                self.assertRaises(ocr.argparse.ArgumentTypeError),
+            ):
+                ocr.max_tokens_argument(value)
+
     def test_rejected_gateway_response_retains_accounting_without_text_or_cache(self):
         response = Mock()
         response.__enter__ = Mock(return_value=response)
@@ -525,6 +606,23 @@ class GatewayAdapterTest(unittest.TestCase):
             low_body = json.loads(opener.open.call_args.args[0].data)
             self.assertEqual(low_body["reasoning"], {"effort": "low"})
             self.assertEqual(low_body["max_tokens"], 1024)
+            ocr.gateway_ocr.recognize(b"crop", max_tokens=4096)
+            capped_body = json.loads(opener.open.call_args.args[0].data)
+            self.assertEqual(capped_body["max_tokens"], 4096)
+            self.assertEqual(
+                ocr.gateway_ocr.identity(max_tokens=1024), ocr.gateway_ocr.identity()
+            )
+            self.assertNotIn("max_tokens", ocr.gateway_ocr.identity())
+            capped = ocr.gateway_ocr.identity(max_tokens=4096)
+            self.assertEqual(capped["max_tokens"], 4096)
+            self.assertNotEqual(
+                capped["request_sha256"], ocr.gateway_ocr.identity()["request_sha256"]
+            )
+            calls = opener.open.call_count
+            with self.assertRaises(ocr.gateway_ocr.GatewayError) as invalid:
+                ocr.gateway_ocr.recognize(b"crop", max_tokens=32769)
+            self.assertEqual(invalid.exception.code, "invalid_max_tokens")
+            self.assertEqual(opener.open.call_count, calls)
             self.assertEqual(
                 ocr.gateway_ocr.identity()["request_sha256"],
                 ocr.digest(
@@ -693,6 +791,32 @@ class GatewayAdapterTest(unittest.TestCase):
                 ],
                 "low",
             )
+            # The default cap needs no advertised limit; a raised cap does.
+            self.assertNotIn(
+                "max_tokens",
+                ocr.gateway_ocr.check_model(ocr.gateway_ocr.MODEL, max_tokens=1024),
+            )
+            with self.assertRaises(ocr.gateway_ocr.GatewayError) as error:
+                ocr.gateway_ocr.check_model(ocr.gateway_ocr.MODEL, max_tokens=4096)
+            self.assertEqual(error.exception.code, "max_tokens_limit_unknown")
+            model["max_tokens"] = 4000
+            response.read.return_value = json.dumps({"data": [model]}).encode()
+            with self.assertRaises(ocr.gateway_ocr.GatewayError) as error:
+                ocr.gateway_ocr.check_model(ocr.gateway_ocr.MODEL, max_tokens=4096)
+            self.assertEqual(error.exception.code, "max_tokens_exceeds_model_limit")
+            model["max_tokens"] = 64000
+            response.read.return_value = json.dumps({"data": [model]}).encode()
+            result = ocr.gateway_ocr.check_model(
+                ocr.gateway_ocr.MODEL, "low", max_tokens=4096
+            )
+            self.assertEqual(
+                (result["max_tokens"], result["model_max_tokens"]), (4096, 64000)
+            )
+            calls = opener.open.call_count
+            with self.assertRaises(ocr.gateway_ocr.GatewayError) as error:
+                ocr.gateway_ocr.check_model(ocr.gateway_ocr.MODEL, max_tokens=0)
+            self.assertEqual(error.exception.code, "invalid_max_tokens")
+            self.assertEqual(opener.open.call_count, calls)
             model["modalities"]["input"] = ["text"]
             response.read.return_value = json.dumps({"data": [model]}).encode()
             with self.assertRaises(ocr.gateway_ocr.GatewayError):

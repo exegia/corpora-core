@@ -130,6 +130,29 @@ effort does not guarantee accuracy or the provider's actual reasoning-token use.
 Do not infer that the previous failures were truncation: their actual finish
 reasons were lost. See `benchmarks/VERIFICATION.md` for the bounded comparison.
 
+### Explicit output-token cap
+
+Gateway requests send `max_tokens: 1024` by default. Reasoning models spend part
+of that cap on reasoning, so a long line can stop with `finish_reason: length`
+before any text is returned; such responses are rejected, not cached. To request
+a different cap:
+
+```sh
+python crates/corpora-pdf/tools/ocr_review.py source.pdf manifest.json capped-report.json \
+  --cache target/pdf-benchmark/review-cache --provider vercel --max-calls 2 \
+  --gateway-max-tokens 4096
+```
+
+The cap must be an integer from 1 to 32768 and requires `--provider vercel`.
+Omitting it, or passing 1024, leaves the wire request, identity and cache key
+unchanged. Any other value is recorded as `identity.max_tokens`, changes the
+request hash and therefore uses a separate cache. Before the first uncached
+inference, the authenticated catalog's advertised `max_tokens` for the selected
+model must be present and at least the requested cap; otherwise every region
+fails as `max_tokens_limit_unknown` or `max_tokens_exceeds_model_limit` without
+an inference call. A higher cap raises the worst-case cost per line in
+proportion; keep `--max-calls` explicit.
+
 The optional direct route uses Mistral OCR 3 (`mistral-ocr-2512`). Set `MISTRAL_API_KEY` in the
 process environment, then explicitly choose it:
 
