@@ -169,3 +169,5 @@ saw a held-out line:
   word spans of 3–6 words on 40 pages of the annotated text, avoiding verse
   numbers, footnote superscripts and ketiv/qere brackets. Tesseract `heb`
   (not a model under test) only located Aramaic words for WLC alignment.
+- **Scoring code.** `heldout_score.py` implements these metrics and thresholds
+  (tests: `test_heldout_score.py`) and was committed before the run.
