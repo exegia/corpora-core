@@ -88,3 +88,86 @@ and the local side-by-side page `review/index.html`. No PDF, crop,
 transcription, credential or generated candidate is committed. The larger
 human-reviewed script benchmark and layout acceptance remain later Phase 2 work
 as specified in `agent/PROPOSAL.md`.
+
+## Held-out line benchmark (pre-registered 2026-11-11)
+
+Fixed before any line is selected or sent to a model. Changing a threshold,
+metric or model after a run starts needs a new dated section, not an edit here.
+
+### Lines
+
+120 held-out lines, 40 per script, one text line per crop:
+
+| Script | Source | Kind |
+| --- | --- | --- |
+| Hebrew | Waltke–O'Connor grammar PDF (SHA-256 `6dbaadab…`), quoted pointed examples | Born-digital, BibleWorks `Bwhebb` font |
+| Greek | SBLGNT Galatians PDF (SHA-256 `ee9b75cd…`) | Born-digital, polytonic |
+| Aramaic | *Basics of Biblical Aramaic* PDF (SHA-256 `46896fb2…`) | Scanned, CVISION text layer |
+
+Spread lines across pages and include varied mark inventories. Exclude every
+region already sent to a model (`hebrew-line-18`, `hebrew-line-18b`,
+`greek-line-1`, `greek-line-2`, `aramaic-line-1`, `aramaic-line-5`) and any
+crop overlapping one. Greek comes from one 8-page, one-font source; its result
+does not generalize to other Greek printing.
+
+### References
+
+Draft each reference without any model under test: Hebrew from the decoded
+`Bwhebb` text layer, Greek from the PDF text layer, Aramaic from the
+Westminster Leningrad Codex verse matched by consonants against the scan's
+text layer. Cantillation is kept only when printed in the crop. A person then
+checks every draft against its crop and approves, corrects or excludes it with
+a reason. Only human-approved lines are scored. If a script ends with fewer than
+40 approved lines, report the real count rather than topping up after a run.
+
+### Metrics (NFD, per script, pooled over lines)
+
+- **Completion:** lines with a non-empty `review_required` candidate / lines sent.
+- **Base error:** edit distance over base characters (combining marks removed) /
+  reference base characters.
+- **Mark error:** (missing + inserted combining marks, located per aligned base
+  character) / reference marks. Hebrew counts points, dagesh, shin/sin dots and
+  printed accents; Greek counts accents, breathings, diaeresis and iota subscript.
+- **Divine name:** any mark added to an unpointed tetragrammaton is a violation.
+
+Failed or empty responses count as incomplete and are excluded from the error
+rates, which are reported with their line counts.
+
+### Thresholds (strict)
+
+A model passes a script only if all four hold for that script:
+completion ≥ 98%, base error ≤ 1%, mark error ≤ 2%, divine-name violations = 0.
+Scripts are judged separately; there is no cross-script average.
+
+### Run
+
+Models: `anthropic/claude-opus-5.5` and the baseline `google/gemini-3.6-flash`,
+both through Vercel AI Gateway, default reasoning effort, fresh caches.
+One request per line, `--max-calls 120` per model, no retries. Expected cost
+under $1 at catalog list prices. Passing qualifies a model as a candidate for
+that script on these sources only; every output stays review-required.
+
+### Amendment before any inference (2026-11-11)
+
+Recorded during line selection, before references were reviewed or any model
+saw a held-out line:
+
+- **Hebrew stress signs.** Waltke–O'Connor prints its own stress signs (a `<`
+  above and a `^` below a letter) that have no single Unicode equivalent. Lines
+  containing them are not selected, so a correct reading cannot be scored as a
+  mark error. Other printed marks, including meteg, are kept.
+- **Apostrophe forms.** U+0027, U+2019, U+02BC, U+1FBD and U+1FBF print alike
+  in these sources and are folded to one character before scoring. No other
+  characters are folded.
+- **Aramaic crop frame.** The Aramaic PDF's CropBox (612×792) sits inside a
+  larger MediaBox (612×828). `ocr_review.py` renders the MediaBox through
+  `pdftoppm`, so Aramaic bounds are expressed in that frame and every crop was
+  rendered with the tool's own renderer and hashed. The Hebrew and Greek PDFs
+  have identical boxes. Rendering the CropBox in the tool is a separate fix.
+- **Selection result.** Hebrew: 40 lines on 40 pages, 4 containing the divine
+  name. Greek: 40 lines on all 8 pages (32 main text, 8 apparatus). Aramaic: 40
+  word spans of 3–6 words on 40 pages of the annotated text, avoiding verse
+  numbers, footnote superscripts and ketiv/qere brackets. Tesseract `heb`
+  (not a model under test) only located Aramaic words for WLC alignment.
+- **Scoring code.** `heldout_score.py` implements these metrics and thresholds
+  (tests: `test_heldout_score.py`) and was committed before the run.
