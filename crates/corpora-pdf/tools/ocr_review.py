@@ -489,6 +489,7 @@ def run(
     gateway_model: str = gateway_ocr.MODEL,
     gateway_check: Callable[..., dict[str, Any]] = gateway_ocr.check_model,
     gateway_reasoning_effort: str | None = None,
+    gateway_max_tokens: int | None = None,
     read_page_boxes: Callable[[Path, int], dict[str, list[float]]] = page_boxes,
 ) -> dict[str, Any]:
     if output.resolve() == pdf.resolve() or (
@@ -498,6 +499,16 @@ def run(
     regions = validate_manifest(pdf, manifest)
     if gateway_reasoning_effort is not None and provider != "vercel":
         raise ValueError("Gateway reasoning effort requires the vercel provider")
+    if gateway_max_tokens is not None:
+        if provider != "vercel":
+            raise ValueError("Gateway max tokens requires the vercel provider")
+        gateway_ocr.output_cap(gateway_max_tokens)
+        if gateway_max_tokens == gateway_ocr.DEFAULT_MAX_TOKENS:
+            gateway_max_tokens = None  # Same request and cache as omitting it.
+    # Optional settings are passed only when set, keeping default calls unchanged.
+    gateway_options: dict[str, Any] = (
+        {} if gateway_max_tokens is None else {"max_tokens": gateway_max_tokens}
+    )
     if (
         provider not in ("local", "mistral", "vercel")
         or type(max_calls) is not int
@@ -522,7 +533,9 @@ def run(
             "kraken_version": command([str(kraken), "--version"]).decode().strip(),
         }
     elif provider == "vercel":
-        identity = gateway_ocr.identity(gateway_model, gateway_reasoning_effort)
+        identity = gateway_ocr.identity(
+            gateway_model, gateway_reasoning_effort, gateway_max_tokens
+        )
     else:
         identity = {"model": MODEL}
     # Retain version explicitly rather than relying on empty stdout from Poppler.
@@ -598,10 +611,12 @@ def run(
                         report["preflight_requests"] += 1
                         try:
                             gateway_preflight = (
-                                gateway_check(gateway_model)
+                                gateway_check(gateway_model, **gateway_options)
                                 if gateway_reasoning_effort is None
                                 else gateway_check(
-                                    gateway_model, gateway_reasoning_effort
+                                    gateway_model,
+                                    gateway_reasoning_effort,
+                                    **gateway_options,
                                 )
                             )
                         except gateway_ocr.GatewayError as preflight_error:
@@ -612,10 +627,13 @@ def run(
                 report["calls"] += 1
                 if provider == "vercel":
                     response = (
-                        gateway_recognize(image, gateway_model)
+                        gateway_recognize(image, gateway_model, **gateway_options)
                         if gateway_reasoning_effort is None
                         else gateway_recognize(
-                            image, gateway_model, gateway_reasoning_effort
+                            image,
+                            gateway_model,
+                            gateway_reasoning_effort,
+                            **gateway_options,
                         )
                     )
                     candidate = response["text"]
@@ -688,6 +706,18 @@ def run(
     return report
 
 
+def max_tokens_argument(value: str) -> int:
+    try:
+        cap = int(value)
+    except ValueError:
+        cap = 0
+    if not 1 <= cap <= gateway_ocr.MAX_TOKENS_LIMIT:
+        raise argparse.ArgumentTypeError(
+            f"must be an integer from 1 to {gateway_ocr.MAX_TOKENS_LIMIT}"
+        )
+    return cap
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("pdf", type=Path)
@@ -710,6 +740,16 @@ def main() -> int:
         choices=("low", "high"),
         help="explicit reasoning effort; must be advertised by the selected Gateway model",
     )
+    parser.add_argument(
+        "--gateway-max-tokens",
+        type=max_tokens_argument,
+        metavar="N",
+        help=(
+            f"explicit Gateway output-token cap (default {gateway_ocr.DEFAULT_MAX_TOKENS}); "
+            "a non-default cap is checked against the model's advertised limit "
+            "and uses a separate cache"
+        ),
+    )
     args = parser.parse_args()
     if args.output.resolve() == args.manifest.resolve():
         parser.exit(2, "output must not overwrite the input manifest\n")
@@ -725,6 +765,7 @@ def main() -> int:
             args.kraken,
             gateway_model=args.gateway_model,
             gateway_reasoning_effort=args.gateway_reasoning_effort,
+            gateway_max_tokens=args.gateway_max_tokens,
         )
     except (ValueError, TypeError, OSError, subprocess.SubprocessError):
         parser.exit(

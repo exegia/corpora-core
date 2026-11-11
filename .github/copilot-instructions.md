@@ -138,3 +138,5 @@ Rejected JSON responses retain sanitized finish reasons and token usage when sup
 including reasoning-token counts; partial text is rejected and is never cached as a candidate.
 `--gateway-reasoning-effort low|high` explicitly selects a catalog-supported effort
 for Vercel and separates its cache; omitting it preserves the existing request defaults.
+`--gateway-max-tokens N` (1–32768, default 1024) sets the Vercel output cap; a non-default
+cap must fit the catalog's advertised model limit and uses a separate cache.
