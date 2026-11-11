@@ -279,8 +279,43 @@ def command(arguments: list[str], timeout: int = 180) -> bytes:
         ) from None
 
 
+def page_boxes(pdf: Path, page: int) -> dict[str, list[float]]:
+    """Return one page's MediaBox and CropBox in PDF points, as pdfinfo reports them."""
+    text = command(
+        ["pdfinfo", "-box", "-f", str(page), "-l", str(page), str(pdf)], timeout=30
+    ).decode("utf-8", "replace")
+    boxes = {}
+    for name, key in (("MediaBox", "media_box"), ("CropBox", "crop_box")):
+        found = re.search(
+            rf"^Page\s+{page}\s+{name}:\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)\s+([-\d.]+)",
+            text,
+            re.MULTILINE,
+        )
+        if found:
+            boxes[key] = [float(value) for value in found.groups()]
+    if set(boxes) != {"media_box", "crop_box"}:
+        raise ValueError("pdfinfo did not report page boxes")
+    return boxes
+
+
+def page_frame(boxes: dict[str, list[float]]) -> dict[str, Any]:
+    """Describe the frame that bounds refer to.
+
+    Poppler renders the MediaBox, so bounds are normalized to it; this is the same
+    frame as the Rust extractor and the PDF QA browser. Viewers and libraries such
+    as PyMuPDF show the CropBox, which can be smaller; convert before reusing their
+    coordinates.
+    """
+    differs = any(
+        abs(a - b) > 0.01 for a, b in zip(boxes["media_box"], boxes["crop_box"])
+    )
+    return {"rendered_box": "media_box", **boxes, "crop_box_differs": differs}
+
+
 def render(pdf: Path, region: dict[str, Any], work: Path) -> bytes:
     from PIL import Image
+
+    # pdftoppm renders the MediaBox by default; bounds are normalized to it.
 
     prefix = work / "page"
     command(
@@ -454,6 +489,7 @@ def run(
     gateway_model: str = gateway_ocr.MODEL,
     gateway_check: Callable[..., dict[str, Any]] = gateway_ocr.check_model,
     gateway_reasoning_effort: str | None = None,
+    read_page_boxes: Callable[[Path, int], dict[str, list[float]]] = page_boxes,
 ) -> dict[str, Any]:
     if output.resolve() == pdf.resolve() or (
         model is not None and output.resolve() == model.resolve()
@@ -505,7 +541,10 @@ def run(
     }
     gateway_preflight: dict[str, Any] | gateway_ocr.GatewayError | None = None
     report["preflight_requests"] = 0
+    frames: dict[int, dict[str, Any]] = {}
     for region in regions:
+        if region["page"] not in frames:
+            frames[region["page"]] = page_frame(read_page_boxes(pdf, region["page"]))
         with tempfile.TemporaryDirectory() as directory:
             image = render_region(pdf, region, Path(directory))
         key_fields = {
@@ -529,6 +568,7 @@ def run(
             "page": region["page"],
             "bounds": region["bounds"],
             "coordinate_space": "normalized_page_top_left",
+            "page_frame": frames[region["page"]],
             "script": region["script"],
             "raw_text": region["raw_text"],
             "text_sha256": digest(region["raw_text"].encode()),
