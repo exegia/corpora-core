@@ -518,3 +518,25 @@ the OCR candidate suite (27 tests), benchmark suite (12 tests),
 `node --check tests/browser/review.js`, `make fmt`, `make ci`, and
 `git diff --check`. Browser navigation, finding-to-element focus, source image
 loading and evidence labels were also exercised in the internal browser.
+
+## Phase 2 direct-Mistral accounting (2026-11-10)
+
+The adapter now captures validated `usage_info.pages_processed`,
+`usage_info.doc_size_bytes` and reported OCR model identity before validating the
+single-page Markdown candidate. Parsed responses rejected for invalid content
+retain safe accounting in the report, but never cache the rejected text. Network
+errors, non-JSON responses and missing counters leave usage unknown. The request
+body, model pin, request cap and cache identity are unchanged.
+
+Credential-free tests exercise a successful response through the pipeline and
+replay its cache with credentials removed and network creation forbidden. They
+also cover rejected multi-page output with retained usage and exhausted request
+budget, no failed cache writes, old caches without metadata, legacy string
+callbacks, unknown model strings, invalid counter types, blank/oversized output,
+malformed JSON and sanitized transport failures. Reported counters are never
+inferred from page-list length or turned into a billing claim. No paid inference
+or new accuracy evaluation was performed in this increment.
+
+Validation: the OCR candidate suite (33 tests), Ruff, strict mypy, `make fmt`,
+`make ci` and `git diff --check`. The next one-crop experiment remains gated on
+a locally configured direct-provider credential; see `PHASE2.md`.

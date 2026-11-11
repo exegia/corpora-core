@@ -133,6 +133,27 @@ python crates/corpora-pdf/tools/ocr_review.py source.pdf manifest.json report.js
   --cache target/pdf-benchmark/review-cache --provider mistral --max-calls 2
 ```
 
+Direct Mistral responses retain `recognition_metadata.requested_model`, the
+validated `reported_model` identifier when supplied, and `usage_info` with
+nonnegative integer `pages_processed` and `doc_size_bytes` counters. These fields
+follow the [OCR response contract](https://docs.mistral.ai/api/endpoint/ocr).
+Reported model names accept dated Mistral OCR IDs or `latest`, including the
+documented `-completion` suffix; unrecognized strings are omitted. Requested and
+reported identities remain separate and are not proof of transcription accuracy.
+
+Accounting survives successful cache replay and rejection of a parsed response
+with invalid page content. Blank, oversized, malformed or multi-page candidates
+are never cached. Provider error bodies and arbitrary response fields are not
+retained. Absent/null/invalid counters stay unknown (omitted or `{}`), not zero;
+transport errors and unparseable responses cannot supply usage. These are page
+and byte counts, not Gateway token counts or an invoice. Cached counts describe
+the original request and must not be summed as new spend.
+
+Existing caches without metadata still load without paid refetches. The Python
+`hosted(image)` compatibility wrapper still returns Markdown; the pipeline uses
+`hosted_response(image)` to retain accounting and still accepts string-returning
+custom callbacks. Neither the pinned model, wire request nor cache identity changes.
+
 Only selected crop images are uploaded. There are no hidden retries; failed attempts
 consume the per-run request budget. A cap counts requests, not a guaranteed invoice
 amount. Successful cache hits consume no requests. Provider failures and exhausted

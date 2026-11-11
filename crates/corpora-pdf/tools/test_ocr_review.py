@@ -108,6 +108,109 @@ class PipelineTest(unittest.TestCase):
             changed = self.run_pipeline(provider="vercel", gateway_recognize=recognize)
             self.assertEqual(changed["calls"], 1)
 
+    def test_mistral_accounting_survives_cache_without_credentials(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = json.dumps(
+            {
+                "pages": [{"markdown": "לֹא"}],
+                "model": "mistral-ocr-2512-completion",
+                "usage_info": {"pages_processed": 1, "doc_size_bytes": 123},
+            }
+        ).encode()
+        opener = Mock()
+        opener.open.return_value = response
+        with (
+            patch.dict(os.environ, {"MISTRAL_API_KEY": "test-only"}),
+            patch.object(ocr.urllib.request, "build_opener", return_value=opener),
+        ):
+            first = self.run_pipeline(hosted_recognize=ocr.hosted_response)
+        item = first["regions"][0]
+        self.assertEqual(first["calls"], 1)
+        self.assertEqual(item["candidate_text"], "לֹא")
+        self.assertEqual(item["output_format"], "markdown")
+        self.assertEqual(item["status"], "review_required")
+        self.assertIsNone(item["missing_marks"])
+        self.assertEqual(
+            item["recognition_metadata"],
+            {
+                "requested_model": ocr.MODEL,
+                "reported_model": "mistral-ocr-2512-completion",
+                "usage_info": {"pages_processed": 1, "doc_size_bytes": 123},
+            },
+        )
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch.object(
+                ocr.urllib.request,
+                "build_opener",
+                side_effect=AssertionError("network forbidden"),
+            ),
+        ):
+            second = self.run_pipeline(hosted_recognize=ocr.hosted_response)
+        self.assertEqual(second["calls"], 0)
+        self.assertTrue(second["regions"][0]["cache_hit"])
+        self.assertEqual(
+            second["regions"][0]["recognition_metadata"], item["recognition_metadata"]
+        )
+        opener.open.assert_called_once()
+
+    def test_mistral_rejected_output_retains_usage_without_cache_or_retry(self):
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = json.dumps(
+            {
+                "pages": [
+                    {"markdown": "PRIVATE_PARTIAL"},
+                    {"markdown": "PRIVATE_OTHER"},
+                ],
+                "model": ocr.MODEL,
+                "usage_info": {
+                    "pages_processed": 2,
+                    "doc_size_bytes": None,
+                    "secret": "PRIVATE",
+                },
+            }
+        ).encode()
+        opener = Mock()
+        opener.open.return_value = response
+        other = copy.deepcopy(self.region)
+        other.update(id="two", page=2)
+        self.manifest["regions"].append(other)
+        with (
+            patch.dict(os.environ, {"MISTRAL_API_KEY": "test-only"}),
+            patch.object(ocr.urllib.request, "build_opener", return_value=opener),
+        ):
+            report = self.run_pipeline(hosted_recognize=ocr.hosted_response)
+        item = report["regions"][0]
+        self.assertEqual(item["status"], "recognition_failed")
+        self.assertIsNone(item["candidate_text"])
+        self.assertEqual(item["raw_text"], self.region["raw_text"])
+        self.assertEqual(
+            item["recognition_metadata"]["usage_info"], {"pages_processed": 2}
+        )
+        self.assertEqual(item["error_code"], "hosted_ocr_failed")
+        self.assertEqual(report["regions"][1]["status"], "budget_exhausted")
+        self.assertNotIn("PRIVATE", json.dumps(report))
+        self.assertNotIn("test-only", json.dumps(report))
+        self.assertFalse((self.root / "cache").exists())
+        self.assertEqual(report["calls"], 1)
+        opener.open.assert_called_once()
+
+    def test_legacy_mistral_cache_without_metadata_needs_no_request(self):
+        first = self.run_pipeline()
+        entry = self.root / "cache" / (first["regions"][0]["cache_key"] + ".json")
+        cached = json.loads(entry.read_text())
+        cached.pop("recognition_metadata")
+        entry.write_text(json.dumps(cached))
+        self.hosted.side_effect = AssertionError("cache miss")
+        second = self.run_pipeline()
+        self.assertEqual(second["calls"], 0)
+        self.assertEqual(second["regions"][0]["recognition_metadata"], {})
+        self.assertEqual(second["regions"][0]["candidate_text"], "לא")
+
     def test_ineligible_model_makes_no_inference_requests(self):
         recognize = Mock()
         check = Mock(side_effect=ocr.gateway_ocr.GatewayError("provider_not_allowed"))
@@ -615,6 +718,103 @@ class GatewayAdapterTest(unittest.TestCase):
 
 
 class HostedAdapterTest(unittest.TestCase):
+    def test_accounting_omits_invalid_counters_and_unrecognized_models(self):
+        for invalid in (None, True, False, -1, 1.5, "1", {}, []):
+            with self.subTest(invalid=invalid):
+                metadata = ocr.hosted_metadata(
+                    {
+                        "model": "PRIVATE_RESPONSE_TEXT",
+                        "usage_info": {
+                            "pages_processed": invalid,
+                            "doc_size_bytes": 12,
+                            "other": "PRIVATE",
+                        },
+                    }
+                )
+                self.assertEqual(
+                    metadata,
+                    {
+                        "requested_model": ocr.MODEL,
+                        "usage_info": {"doc_size_bytes": 12},
+                    },
+                )
+        for missing in ({}, None, [], {"usage_info": None}, {"usage_info": []}):
+            self.assertEqual(ocr.hosted_metadata(missing)["usage_info"], {})
+        self.assertEqual(
+            ocr.hosted_metadata(
+                {
+                    "model": "mistral-ocr-2503-completion",
+                    "usage_info": {"pages_processed": 0, "doc_size_bytes": 0},
+                }
+            ),
+            {
+                "requested_model": ocr.MODEL,
+                "reported_model": "mistral-ocr-2503-completion",
+                "usage_info": {"pages_processed": 0, "doc_size_bytes": 0},
+            },
+        )
+
+    def test_invalid_response_retains_only_safe_accounting(self):
+        invalid_pages = (
+            None,
+            {},
+            [],
+            [None],
+            [{"markdown": 42}],
+            [{"markdown": " "}],
+            [{"markdown": "x" * 10001}],
+        )
+        for pages in invalid_pages:
+            with self.subTest(pages_type=type(pages).__name__):
+                response = Mock()
+                response.__enter__ = Mock(return_value=response)
+                response.__exit__ = Mock(return_value=False)
+                response.read.return_value = json.dumps(
+                    {
+                        "pages": pages,
+                        "model": ocr.MODEL,
+                        "usage_info": {"pages_processed": 1},
+                        "error": "PRIVATE",
+                        "document_annotation": "PRIVATE",
+                    }
+                ).encode()
+                opener = Mock()
+                opener.open.return_value = response
+                with (
+                    patch.dict(os.environ, {"MISTRAL_API_KEY": "test-only"}),
+                    patch.object(
+                        ocr.urllib.request, "build_opener", return_value=opener
+                    ),
+                    self.assertRaises(ocr.HostedOCRError) as error,
+                ):
+                    ocr.hosted_response(b"image")
+                self.assertEqual(
+                    error.exception.metadata["usage_info"], {"pages_processed": 1}
+                )
+                self.assertNotIn(
+                    "PRIVATE",
+                    str(error.exception) + json.dumps(error.exception.metadata),
+                )
+                opener.open.assert_called_once()
+
+    def test_unparseable_and_transport_failures_have_unknown_usage(self):
+        for raw in (b"not JSON PRIVATE", b"[]", b"null", b"x" * (2 * 1024 * 1024 + 1)):
+            response = Mock()
+            response.__enter__ = Mock(return_value=response)
+            response.__exit__ = Mock(return_value=False)
+            response.read.return_value = raw
+            opener = Mock()
+            opener.open.return_value = response
+            with (
+                patch.dict(os.environ, {"MISTRAL_API_KEY": "test-only"}),
+                patch.object(ocr.urllib.request, "build_opener", return_value=opener),
+                self.assertRaises(ocr.HostedOCRError) as error,
+            ):
+                ocr.hosted_response(b"image")
+            self.assertFalse(error.exception.metadata.get("usage_info"))
+            self.assertNotIn("PRIVATE", str(error.exception))
+            opener.open.assert_called_once()
+
     def test_request_contract_and_secret_free_error(self):
         response = Mock()
         response.__enter__ = Mock(return_value=response)
@@ -636,6 +836,7 @@ class HostedAdapterTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "no retry") as error:
                 ocr.hosted(b"image")
             self.assertNotIn("test-only", str(error.exception))
+            self.assertEqual(error.exception.metadata, {})
 
 
 if __name__ == "__main__":

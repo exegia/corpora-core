@@ -9,6 +9,7 @@ import http.client
 import json
 import math
 import os
+import re
 import struct
 import subprocess
 import tempfile
@@ -310,7 +311,37 @@ def render(pdf: Path, region: dict[str, Any], work: Path) -> bytes:
     return crop.read_bytes()
 
 
-def hosted(image: bytes) -> str:
+class HostedOCRError(ValueError):
+    """Sanitized direct-provider failure with any validated response accounting."""
+
+    def __init__(self, metadata: dict[str, Any] | None = None) -> None:
+        super().__init__(
+            "hosted OCR failed or returned invalid output; no retry performed"
+        )
+        self.metadata = metadata or {}
+
+
+def hosted_metadata(data: Any) -> dict[str, Any]:
+    """Only retain known counters and OCR model identifiers, never response text."""
+    metadata: dict[str, Any] = {"requested_model": MODEL, "usage_info": {}}
+    if not isinstance(data, dict):
+        return metadata
+    reported = data.get("model")
+    if isinstance(reported, str) and re.fullmatch(
+        r"mistral-ocr-(?:[0-9]{4}(?:-[0-9]{2,8})?|latest)(?:-completion)?", reported
+    ):
+        metadata["reported_model"] = reported
+    usage = data.get("usage_info")
+    if isinstance(usage, dict):
+        metadata["usage_info"] = {
+            name: usage[name]
+            for name in ("pages_processed", "doc_size_bytes")
+            if type(usage.get(name)) is int and usage[name] >= 0
+        }
+    return metadata
+
+
+def hosted_response(image: bytes) -> dict[str, Any]:
     key = os.environ.get("MISTRAL_API_KEY")
     if not key:
         raise ValueError("MISTRAL_API_KEY is required for uncached hosted requests")
@@ -335,6 +366,7 @@ def hosted(image: bytes) -> str:
         ) -> None:
             return None
 
+    metadata: dict[str, Any] = {}
     try:
         with urllib.request.build_opener(NoRedirect).open(
             request, timeout=120
@@ -343,10 +375,18 @@ def hosted(image: bytes) -> str:
         if len(payload) > 2 * 1024 * 1024:
             raise ValueError()
         data = json.loads(payload)
+        metadata = hosted_metadata(data)
         pages = data["pages"]
-        if len(pages) != 1 or not isinstance(pages[0]["markdown"], str):
+        if not isinstance(pages, list) or len(pages) != 1:
             raise ValueError()
-        return pages[0]["markdown"]
+        candidate = pages[0]["markdown"]
+        if (
+            not isinstance(candidate, str)
+            or not candidate.strip()
+            or len(candidate) > 10000
+        ):
+            raise ValueError()
+        return {"text": candidate, "metadata": metadata}
     except (
         OSError,
         ValueError,
@@ -355,9 +395,13 @@ def hosted(image: bytes) -> str:
         IndexError,
         http.client.HTTPException,
     ):
-        raise ValueError(
-            "hosted OCR failed or returned invalid output; no retry performed"
-        ) from None
+        raise HostedOCRError(metadata) from None
+
+
+def hosted(image: bytes) -> str:
+    """Compatibility wrapper for callers expecting only Markdown."""
+    candidate: str = hosted_response(image)["text"]
+    return candidate
 
 
 def local(
@@ -404,7 +448,7 @@ def run(
     model: Path | None = None,
     kraken: Path | None = None,
     render_region: Callable[[Path, dict[str, Any], Path], bytes] = render,
-    hosted_recognize: Callable[[bytes], str] = hosted,
+    hosted_recognize: Callable[[bytes], str | dict[str, Any]] = hosted_response,
     local_recognize: Callable[[bytes, Path | None, Path | None, str], str] = local,
     gateway_recognize: Callable[..., dict[str, Any]] = gateway_ocr.recognize,
     gateway_model: str = gateway_ocr.MODEL,
@@ -537,7 +581,14 @@ def run(
                     candidate = response["text"]
                     recognition_metadata = response["metadata"]
                 elif provider == "mistral":
-                    candidate = hosted_recognize(image)
+                    hosted_result = hosted_recognize(image)
+                    if isinstance(hosted_result, dict):
+                        candidate = hosted_result.get("text")
+                        recognition_metadata = hosted_result.get("metadata", {})
+                        if not isinstance(recognition_metadata, dict):
+                            raise HostedOCRError()
+                    else:
+                        candidate = hosted_result
                 else:
                     candidate = local_recognize(
                         image,
@@ -573,6 +624,10 @@ def run(
                 if isinstance(error, gateway_ocr.GatewayError):
                     item["error_code"] = error.code
                     item["http_status"] = error.http_status
+                    if error.metadata:
+                        item["recognition_metadata"] = error.metadata
+                elif isinstance(error, HostedOCRError):
+                    item["error_code"] = "hosted_ocr_failed"
                     if error.metadata:
                         item["recognition_metadata"] = error.metadata
                 report["regions"].append(item)
