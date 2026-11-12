@@ -6,8 +6,8 @@ See `crates/corpora-pdf/benchmarks/README.md` for the synthetic end-to-end comma
 Private PDF manifests and results remain outside Git; no hosted service is used.
 The benchmark accepts `--tessdata-dir` for isolated language models and records
 their hashes. Missing or unloadable requested languages cannot silently fall back.
-When the PDF crate is present, the PR test job installs Poppler and Tesseract
-before `make ci`, then runs the benchmark, PDF review-browser and OCR candidate Python suites.
+When the PDF crate is present, the PR test job installs Poppler, Tesseract and uv
+(the review page renders its TEI column through pdf-to-tf) before `make ci`, then runs the benchmark, PDF review-browser and OCR candidate Python suites.
 PDF OCR guidance is owned by `crates/corpora-pdf/skills/pdf-ocr` and linked into
 `.github/skills/pdf-ocr`; its prompt/proposal are under `crates/corpora-pdf/agent`.
 

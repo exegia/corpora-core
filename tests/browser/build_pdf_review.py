@@ -34,6 +34,8 @@ def render_page(pdf: Path, site: Path, number: int) -> str:
 
 def write_tei(site: Path, title: str) -> str:
     """Write document.tei.xml as pdf-to-tf would build it from result.json."""
+    if shutil.which("uv") is None:
+        raise RuntimeError("The TEI column needs uv to run pdf-to-tf; install uv or pass --no-tei")
     subprocess.run(
         ["uv", "run", "--quiet", "--project", str(PDF_TO_TF), "python", "-c", TEI_SCRIPT,
          str(site / "result.json"), str(site / "document.tei.xml"), title],

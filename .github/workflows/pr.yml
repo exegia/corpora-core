@@ -93,6 +93,9 @@ jobs:
               ;;
             *) echo "Unsupported PDF test runner: $RUNNER_OS" >&2; exit 1 ;;
           esac
+      # The PDF review browser renders its TEI column through pdf-to-tf with uv.
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: ${{ hashFiles('crates/corpora-pdf/Cargo.toml') != '' }}
       - run: make ci
       - name: Check PDF benchmark and review browser
         if: ${{ hashFiles('crates/corpora-pdf/Cargo.toml') != '' }}

@@ -23,8 +23,8 @@ The optional [quality AI bridge](packages/quality-ai/README.md) helps the TEI
 quality pipeline review bounded findings. The [Text-Fabric expert bundle](agent/text-fabric-expert/README.md)
 contains the agent instructions and evaluation setup.
 
-When the PDF crate is present, PR tests install Poppler and Tesseract before
-`make ci`, then run the PDF benchmark, review-browser and OCR candidate Python suites.
+When the PDF crate is present, PR tests install Poppler, Tesseract and uv (for
+the review page's TEI column) before `make ci`, then run the PDF benchmark, review-browser and OCR candidate Python suites.
 The [PDF OCR skill](crates/corpora-pdf/skills/pdf-ocr/SKILL.md) and
 [proposal](crates/corpora-pdf/agent/PROPOSAL.md) define specialist recognition,
 optional paid fallback and location-linked review findings for historical scripts.
