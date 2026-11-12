@@ -106,7 +106,7 @@ line can be verified.
 | Heading h1–h4 | `div[@type=section]/head[@type=hN]` | `element`, `tei_tag=head`, `parent` edges |
 | Paragraph line | `p[@n]/seg[@type=line]`; `@n` is the paragraph number, repeated when a paragraph continues on the next page | `element`, `tei_tag=seg` (and `p`) |
 | List item | `list/item` | `element`, `tei_tag=item` |
-| Reference | `listBibl/bibl` | `element`, `tei_tag=bibl` |
+| Reference line | `listBibl/bibl[@n]/seg[@type=line]`; one `bibl` per bibliography entry, `@n` repeated when an entry continues on the next page. Extractions without entry numbers get one `bibl` per line | `element`, `tei_tag=seg` (and `bibl`) |
 | Citation | `ab[@type=citation]` | `element`, `tei_tag=ab` |
 | Footnote line | `note[@place=foot]/seg[@type=line]`, one `note` per note number | `element`, `tei_tag=seg` (and `note`) |
 | Running header / footer | `fw[@type=header]` / `fw[@type=footer]` | `element`, `tei_tag=fw` |

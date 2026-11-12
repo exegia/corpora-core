@@ -19,6 +19,7 @@ fn line(text: &str, x: f32, y: f32, width: f32, height: f32) -> Element {
         section_path: Vec::new(),
         table_id: None,
         paragraph: None,
+        entry: None,
         extraction_score: None,
         words: Vec::new(),
     }
@@ -501,4 +502,72 @@ fn a_bibliography_runs_on_through_its_subheadings() {
     )]);
     assert_eq!(pages[0].elements[2].kind, ElementKind::Reference);
     assert_eq!(pages[0].elements[4].kind, ElementKind::Reference);
+}
+
+#[test]
+fn bibliography_lines_are_grouped_into_entries_by_hanging_indent() {
+    let reference = |text: &str, x: f32, y: f32, width: f32| {
+        let mut element = line(text, x, y, width, 24.0);
+        element.kind = ElementKind::Reference;
+        styled(element, 16.0)
+    };
+    let mut heading = line("Bibliography", 108.0, 80.0, 200.0, 30.0);
+    heading.kind = ElementKind::H2;
+    let pages = label(vec![
+        page(
+            14,
+            vec![
+                styled(heading, 20.0),
+                reference(
+                    "Alston, William P. Illocutionary Acts.",
+                    108.0,
+                    149.0,
+                    641.0,
+                ),
+                reference("University Press, 2000.", 162.0, 172.0, 199.0),
+                reference(
+                    "Merril, Eugene H. Everlasting Dominion.",
+                    108.0,
+                    214.0,
+                    673.0,
+                ),
+                reference(
+                    "--------. \u{201c}Effectual Call or Causal",
+                    108.0,
+                    260.0,
+                    570.0,
+                ),
+                reference("Supervenient Grace.\u{201d}", 216.0, 282.0, 512.0),
+                reference(
+                    "Searle, John R. Speech Acts: an Essay in the",
+                    108.0,
+                    330.0,
+                    687.0,
+                ),
+            ],
+        ),
+        page(
+            15,
+            vec![
+                reference("Cambridge University Press, 2005.", 162.0, 111.0, 296.0),
+                reference("Secondary", 422.0, 160.0, 78.0),
+                reference("Warfield, B.B. Inspiration.", 108.0, 200.0, 600.0),
+            ],
+        ),
+    ]);
+    let entries = |page: &Page| -> Vec<Option<usize>> {
+        page.elements
+            .iter()
+            .filter(|e| e.kind == ElementKind::Reference)
+            .map(|e| e.entry)
+            .collect()
+    };
+    assert_eq!(
+        entries(&pages[0]),
+        [Some(1), Some(1), Some(2), Some(3), Some(3), Some(4)]
+    );
+    // The entry runs on at the top of the next page; a centred subheading stands
+    // alone.
+    assert_eq!(entries(&pages[1]), [Some(4), Some(5), Some(6)]);
+    assert_eq!(pages[0].elements[0].entry, None);
 }

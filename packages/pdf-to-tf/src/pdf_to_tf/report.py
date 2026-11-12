@@ -12,7 +12,7 @@ MAPPING = [
     ("Heading h1–h4", "`div[@type=section]/head[@type=hN]`", "`element` `head`, parent edges"),
     ("Paragraph line", "`p[@n]/seg[@type=line]`", "`element` `tei_tag=seg` (and `p`)"),
     ("List item", "`list/item`", "`element` `tei_tag=item`"),
-    ("Reference", "`listBibl/bibl`", "`element` `tei_tag=bibl`"),
+    ("Reference line", "`listBibl/bibl[@n]/seg`", "`element` `tei_tag=seg` (and `bibl`)"),
     ("Citation", "`ab[@type=citation]`", "`element` `tei_tag=ab`"),
     ("Footnote line", "`note[@place=foot]/seg`", "`element` `tei_tag=seg` (and `note`)"),
     ("Running header / footer", "`fw[@type=header|footer]`", "`element` `tei_tag=fw`"),

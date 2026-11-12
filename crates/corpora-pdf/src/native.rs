@@ -209,6 +209,7 @@ fn text_fragment(
         section_path: Vec::new(),
         table_id: None,
         paragraph: None,
+        entry: None,
         extraction_score: None,
         words: Vec::new(),
     };
@@ -229,6 +230,7 @@ fn image(node: roxmltree::Node<'_, '_>) -> Result<Element, PdfError> {
         section_path: Vec::new(),
         table_id: None,
         paragraph: None,
+        entry: None,
         extraction_score: None,
         words: Vec::new(),
     })

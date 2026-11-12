@@ -16,4 +16,4 @@
 #tei.types [data-type]:not(.tei-pb){position:relative}
 #tei.types [data-type]:not(.tei-pb)::before{content:attr(data-type);display:block;width:max-content;margin-bottom:.1rem;padding:0 .35rem;border:1px solid #52718d;border-radius:4px;color:#bad8ef;font:500 .68rem/1.5 system-ui,sans-serif;text-indent:0;text-transform:none;font-style:normal;letter-spacing:0}
 #tei.types .tei-note[data-type]::before{border-color:#7a6a4a;color:#e3c58f}#tei.types .tei-fw[data-type]::before{border-color:#55606c;color:#a9b4c0}
-#tei.types .tei-bibl::before,#tei.types .tei-item::before{display:none}
+#tei.types .tei-item::before{display:none}#tei.types .tei-bibl::before{display:inline-block;margin:0 .4rem 0 0}

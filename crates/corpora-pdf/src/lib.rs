@@ -142,6 +142,12 @@ pub struct Element {
     /// serialized results may omit this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub paragraph: Option<usize>,
+    /// One-based number of the bibliography entry a `reference` line belongs to,
+    /// counted through the document. Lines of one entry share it, including an
+    /// entry that continues on the next page. `None` for other labels; older
+    /// serialized results may omit this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub entry: Option<usize>,
     /// Element-specific visual estimate when one is available.
     pub extraction_score: Option<ExtractionScore>,
     /// OCR words in recognition order, retaining individual geometry and confidence.
@@ -1021,6 +1027,7 @@ fn ocr_element(row: &[&OcrWord]) -> Element {
         section_path: Vec::new(),
         table_id: None,
         paragraph: None,
+        entry: None,
         extraction_score: Some(ExtractionScore {
             value: score,
             basis: ScoreBasis::OcrWordConfidence,

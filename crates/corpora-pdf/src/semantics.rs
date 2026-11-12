@@ -46,12 +46,12 @@ pub fn label_document(pages: &mut [Page], styles: &mut [Vec<LineStyle>]) {
         assign_section_paths(&mut page.elements);
     }
     number_paragraphs(pages);
+    number_entries(pages);
     for page in pages.iter() {
-        debug_assert!(
-            page.elements
-                .iter()
-                .all(|e| { e.paragraph.is_some() == (e.kind == ElementKind::Paragraph) })
-        );
+        debug_assert!(page.elements.iter().all(|e| {
+            e.paragraph.is_some() == (e.kind == ElementKind::Paragraph)
+                && e.entry.is_some() == (e.kind == ElementKind::Reference)
+        }));
     }
 }
 
@@ -946,6 +946,48 @@ fn order_paragraph_lines(page: &mut Page, styles: &mut Vec<LineStyle>) {
     if styles.len() == elements.len() {
         let old = std::mem::take(styles);
         *styles = order.iter().map(|&i| old[i]).collect();
+    }
+}
+
+/// Number bibliography entries through the document by hanging indent. A
+/// `reference` line flush with the left edge of its column starts an entry; a line
+/// indented past that edge continues the entry above it, also at the top of the
+/// next page. An indent wider than a fifth of the column (a centred subheading such
+/// as "Secondary") is not a hanging indent and stands alone. A bibliography set
+/// without hanging indents gets one entry per line.
+fn number_entries(pages: &mut [Page]) {
+    let mut count = 0;
+    for page in pages.iter_mut() {
+        let lines: Vec<usize> = (0..page.elements.len())
+            .filter(|&i| page.elements[i].kind == ElementKind::Reference)
+            .collect();
+        let line = median(
+            lines
+                .iter()
+                .map(|&i| page.elements[i].bounds.height)
+                .collect(),
+        );
+        let continues: Vec<bool> = lines
+            .iter()
+            .map(|&i| {
+                let b = &page.elements[i].bounds;
+                // The column: reference lines on this page that overlap this one.
+                let column = lines.iter().map(|&j| &page.elements[j].bounds).filter(|a| {
+                    (a.x + a.width).min(b.x + b.width) - a.x.max(b.x) >= a.width.min(b.width) * 0.5
+                });
+                let (left, right) = column.fold((b.x, b.x + b.width), |(l, r), a| {
+                    (l.min(a.x), r.max(a.x + a.width))
+                });
+                let indent = b.x - left;
+                indent > line * 0.75 && indent <= (right - left) * 0.2
+            })
+            .collect();
+        for (position, &index) in lines.iter().enumerate() {
+            if !continues[position] || count == 0 {
+                count += 1;
+            }
+            page.elements[index].entry = Some(count);
+        }
     }
 }
 

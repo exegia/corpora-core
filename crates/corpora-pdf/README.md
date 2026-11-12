@@ -164,6 +164,12 @@ line. Blank lines are dropped after it runs.
   pieces) keep Poppler's order. A paragraph keeps its number on the
   next page when the page's last body line is full width and the next page's first
   body line is not indented.
+- `reference` lines carry an `entry` number, counted through the document, so
+  the lines of one bibliography entry share it. A line flush with the left edge of
+  its column starts an entry; a line with a hanging indent continues the entry
+  above it, also at the top of the next page. An indent wider than a fifth of the
+  column (a centred subheading such as "Secondary") is not a hanging indent and
+  stands alone. A bibliography set without hanging indents gets one entry per line.
 - A numbered list item needs a space and text after its marker, so a DOI
   ("10.70623/NAJW4433.") or a continued page number ("243.") is not a list item.
   A citation needs a bracketed number (`[1]`, `[2, 5]`), not any bracketed word.

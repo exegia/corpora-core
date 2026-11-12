@@ -472,6 +472,14 @@ class Builder:
                 self.lines(note, note_lines, page, surface)
                 note.tail = "\n"
             return
+        if kind == "reference" and all(e.get("entry") for _, e in texted):
+            list_bibl = sub(parent, "listBibl")
+            for entry in entries(texted):
+                bibl = sub(list_bibl, "bibl", {"n": str(entry[0][1]["entry"])})
+                self.lines(bibl, entry, page, surface)
+                bibl.tail = "\n"
+            list_bibl.tail = "\n"
+            return
         if kind in LINE_BLOCKS:
             ab = sub(parent, "ab", {"type": kind.replace("_", "-")})
             self.lines(ab, texted, page, surface)
@@ -503,6 +511,20 @@ def new_paragraph(last: dict[str, Any], here: dict[str, Any], line: float) -> bo
         return bool(last["paragraph"] != here["paragraph"])
     a, b = last["bounds"], here["bounds"]
     return bool(b["y"] < a["y"] or b["y"] - (a["y"] + a["height"]) > PARAGRAPH_GAP * line)
+
+
+def entries(
+    lines: list[tuple[int, dict[str, Any]]],
+) -> list[list[tuple[int, dict[str, Any]]]]:
+    """Split a page's reference lines into bibliography entries by their corpora-pdf
+    ``entry`` number; consecutive lines with one number form one ``bibl``."""
+    out: list[list[tuple[int, dict[str, Any]]]] = []
+    for member in lines:
+        if out and out[-1][-1][1]["entry"] == member[1]["entry"]:
+            out[-1].append(member)
+        else:
+            out.append([member])
+    return out
 
 
 def footnotes(

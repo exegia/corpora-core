@@ -4,6 +4,7 @@ import shutil
 import stat
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 from lxml import etree
@@ -222,6 +223,44 @@ def test_numbered_paragraphs_group_lines_into_p_with_n():
     paragraphs = root.xpath("//t:body//t:p", namespaces=NS)
     assert [p.get("n") for p in paragraphs] == ["1", "2"]
     assert [len(p) for p in paragraphs] == [2, 1]
+
+
+def bibliography() -> dict[str, Any]:
+    lines = [
+        ("Alston, William P. Illocutionary Acts.", 100, 1),
+        ("University Press, 2000.", 113, 1),
+        ("Austin, J.L. How to Do Things.", 130, 2),
+    ]
+    elements = [el("h2", "Bibliography", 80)]
+    for text, y, number in lines:
+        element = el("reference", text, y)
+        element["entry"] = number
+        elements.append(element)
+    return extraction([page(1, elements)])
+
+
+def test_bibliography_entries_group_lines_into_bibl_with_n():
+    root = tree(bibliography())
+    entries = root.xpath("//t:listBibl/t:bibl", namespaces=NS)
+    assert [b.get("n") for b in entries] == ["1", "2"]
+    assert [[seg.text for seg in b] for b in entries] == [
+        ["Alston, William P. Illocutionary Acts.", "University Press, 2000."],
+        ["Austin, J.L. How to Do Things."],
+    ]
+    # Extractions without entry numbers keep one bibl per line.
+    old = bibliography()
+    for element in old["pages"][0]["elements"]:
+        element.pop("entry", None)
+    assert len(tree(old).xpath("//t:listBibl/t:bibl", namespaces=NS)) == 3
+
+
+def test_bibliography_entries_stay_in_tf_text(tmp_path):
+    report = run(tmp_path, bibliography())
+    assert report["verification"]["mismatches"] == 0
+    tf_dir = tmp_path / "out/tei-to-tf/tf"
+    api = Fabric(locations=str(tf_dir), silent="deep").load("page", silent="deep")
+    text = api.T.text(next(iter(api.F.otype.s("page"))))
+    assert "Illocutionary Acts.\nUniversity Press, 2000.\nAustin, J.L." in text
 
 
 def test_footnotes_and_running_heads_stay_in_tf_text(tmp_path):

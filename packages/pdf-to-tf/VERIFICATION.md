@@ -207,3 +207,12 @@ the cells passed the capitals test, but no body text follows them.
   bold, and no document-level rule overrides that yet.
 - The Prostitution cover page is plain `paragraph`. It has no issue details, so the
   front-matter rules do not label its title and author.
+
+### Bibliography entries
+
+`reference` lines now carry an `entry` number from their hanging indent, and
+pdf-to-tf writes one `bibl[@n]` per entry with its lines as `seg[@type=line]`.
+On the triadic article, the 43 bibliography lines on pages 14–15 form 21 entries,
+matching the printed page, with 0 verification mismatches; labels and paragraph
+numbers are unchanged. The Prostitution bibliography sets every line flush, with
+no hanging indent, so it keeps one entry per line (62).
