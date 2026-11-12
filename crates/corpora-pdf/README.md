@@ -121,20 +121,27 @@ for every PDF, reconstruct complex tables, or repair an OCR model's script error
 Once every page is extracted, a document pass adds labels that need more than one
 line. Blank lines are dropped after it runs.
 
-- `running_header` / `running_footer`: a line in the top 8.5% or bottom 7% of the
+- `running_header` / `running_footer`: a line in the top or bottom 10% of the
   page whose letters repeat in that band on another page, or a bare page number.
-  A line already labelled as a heading is never page furniture. A linked source
-  notice set apart at the foot of a page (for example a repository notice on a
-  cover page) is also a `running_footer`.
+  It must be the page's outermost text: a line with a title above it is body
+  text. A page number at the foot needs space above it, so a wrapped note line
+  such as "243." stays a footnote; a standalone page number below the footnote
+  rule is still a `running_footer`. A heading set larger than 1.15 times the body
+  text is never page furniture; a running head set in bold capitals at body size
+  is. A linked source notice set apart at the foot of a page (for example a
+  repository notice on a cover page) is also a `running_footer`.
 - `footnote`: every line below the footnote rule (a long blank, underlined run in
   the lower half of the page). Without a rule, a run of smaller lines at the foot
-  of the page that starts with a note number.
+  of the page that starts with a note number followed by note text.
 - Section labels such as "Abstract", "Keywords", "Recommended Citation" and
   "Cover Page Footnote" become `h2` headings, and the lines right under them
   become `abstract`, `keywords`, `citation` or `footnote`. A centred line in
-  capitals ("INTRODUCTION") is an `h2`. Every line under "Bibliography",
-  "References" or "Works Cited" is a `reference` until the next heading, across
-  pages.
+  capitals ("INTRODUCTION") or a centred section number ("2.", "IV") is an `h2`
+  when body text with lowercase letters follows within five line heights, so a
+  cover page set in capitals and table cells in scripts without case stay body
+  text. Every line under "Bibliography", "References" or "Works Cited" is a
+  `reference` until the next heading of the same or a higher level, across pages;
+  subheadings such as "Primary" and "Secondary" do not end it.
 - Front matter, only on the first two pages, before any running header, and only
   when a page shows issue details ("Volume 1", "October 2010") or an abstract,
   keywords or citation label: large lines above the issue details are the
@@ -143,8 +150,13 @@ line. Blank lines are dropped after it runs.
   `publication_metadata`.
 - `paragraph` lines carry a `paragraph` number, counted through the document, so
   the lines of one visual paragraph share it. A paragraph starts at a line
-  indented past the line above it, after more than half a line of extra space, or
-  after anything that is not body text (a heading, list, image). Lines are linked
+  indented past the line above it, after a gap larger than the page's usual line
+  spacing plus a third of a line (at least half and at most 0.6 of a line, so
+  uneven spacing on a scan stays one paragraph and double-spaced table rows stay
+  apart), or after anything that is not body text (a heading, list, image). A
+  full-width last line at the foot of one column continues at the top of the next
+  column when that line is not indented and only page furniture lies between them
+  in Poppler's order. Lines are linked
   by position, not by Poppler's output order, and each paragraph's lines are put
   together, top to bottom, where its first line was extracted: Poppler can emit
   the end of a paragraph after the next paragraph's lines. Pages where two

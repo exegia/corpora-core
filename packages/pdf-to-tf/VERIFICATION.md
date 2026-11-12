@@ -164,3 +164,46 @@ in pieces at ligatures ("Th", "γγελ"), and it also covers page columns. A fi
 version without this check scrambled those pieces on 13 pages of the two files.
 With it, the extraction of those files, `hebrew-40.pdf`, `aramaic-25.pdf`,
 `aune-3.pdf` and the crate fixtures is identical with and without the reordering.
+
+## 2026-11-12: four Academia.edu articles
+
+Four article PDFs with different layouts, image quality and density were converted
+with `--languages eng` and checked in the review page. Gate scores did not change,
+because they measure text extraction, not labels:
+
+| PDF | Pages | Source | Gate |
+| --- | ---: | --- | --- |
+| Towards a Nonjuridical Understanding of Episcopal Succession | 17 | book reprint, scan with a text layer | gated, 94.33% |
+| Bishop appointing in the patristic time | 24 | born-digital, legacy Greek font | gated, 93.55% |
+| Ordination in the New Testament | 5 | two-column scan with hidden OCR | converted, 98.30% |
+| Prostitution and the Church in the Homilies | 20 | born-digital student paper | converted, 98.45% |
+
+Labelling problems found and fixed in `corpora-pdf`:
+
+| Problem | Before | After |
+| --- | --- | --- |
+| Towards: uneven line spacing on the scan split paragraphs | 130 paragraphs | 69 |
+| Towards: centred section numbers "1." to "5." | `paragraph` | `h2` (one OCR'd as "4-" stays `h1`) |
+| Bishop: running heads and page numbers ending just below the 8.5% band | `h2` / `paragraph` | 46 `running_header` |
+| Ordination: a paragraph running from the left column into the right | 2 paragraphs each time | 1 (2 places) |
+| Prostitution: page numbers below the footnote rule | `footnote` | 18 `running_footer` |
+| Prostitution: cover page lines in capitals | `h2` | `paragraph` |
+| Prostitution: bibliography with "Primary" and "Secondary" subheadings | `paragraph` | 62 `reference` |
+
+Checks on earlier inputs: the triadic article's labels and paragraph numbers are
+identical to the previous build. SBLGNT Front and Galatians, `hebrew-40.pdf`,
+`aune-3.pdf` and the crate fixtures are unchanged. On `aramaic-25.pdf`, two cells of
+the vocabulary table are no longer `h2`, which was wrong. Hebrew has no capitals, so
+the cells passed the capitals test, but no body text follows them.
+
+### Limits of the source PDFs
+
+- Bishop prints Greek in a legacy font without a Unicode map, so the text layer
+  reads "presbutšrion" (626 script findings). This needs a font map, not a
+  labelling rule. Its Polish and French summaries (pages 23–24) score low because
+  only the `eng` Tesseract model was installed.
+- Ordination's hidden OCR layer has garbage such as "ｾＮＭａｴ" in places.
+- A body line on Bishop page 20 is still `h3`. The extractor sees it as larger and
+  bold, and no document-level rule overrides that yet.
+- The Prostitution cover page is plain `paragraph`. It has no issue details, so the
+  front-matter rules do not label its title and author.

@@ -98,14 +98,18 @@ fn repeated_margin_lines_and_page_numbers_are_running_headers() {
 #[test]
 fn a_heading_repeated_at_the_top_of_pages_stays_a_heading() {
     let heading = || {
-        let (mut element, style) = body("Sample Document", 44.0);
+        let mut element = line("Sample Document", 135.0, 44.0, 600.0, 36.0);
         element.kind = ElementKind::H1;
-        (element, style)
+        styled(element, 24.0)
     };
-    let pages = label(vec![
-        page(1, vec![heading(), body("Text.", 300.0)]),
-        page(2, vec![heading(), body("Text.", 300.0)]),
-    ]);
+    let text = || {
+        vec![
+            heading(),
+            body("Text that runs", 300.0),
+            body("across the page.", 330.0),
+        ]
+    };
+    let pages = label(vec![page(1, text()), page(2, text())]);
     assert!(pages.iter().all(|p| p.elements[0].kind == ElementKind::H1));
 }
 
@@ -359,4 +363,142 @@ fn pages_with_lines_in_pieces_keep_their_order() {
     )]);
     let texts: Vec<&str> = pages[0].elements.iter().map(|e| e.text.as_str()).collect();
     assert_eq!(texts, ["Second line", "and its other piece.", "First line"]);
+}
+
+#[test]
+fn a_page_number_below_the_footnote_rule_is_a_footer() {
+    let pages = label(vec![page(
+        5,
+        vec![
+            body("Body text that cites a note.1", 300.0),
+            body("and keeps going.", 324.0),
+            styled(line("   ", 135.0, 900.0, 221.0, 16.0), 16.0),
+            styled(
+                line("1 A footnote that ends", 135.0, 920.0, 600.0, 20.0),
+                13.0,
+            ),
+            styled(line("243.", 135.0, 941.0, 40.0, 20.0), 13.0),
+            styled(line("7", 450.0, 1094.0, 12.0, 20.0), 16.0),
+        ],
+    )]);
+    assert_eq!(
+        kinds(&pages[0])[2..],
+        [
+            ("1 A footnote that ends", ElementKind::Footnote),
+            ("243.", ElementKind::Footnote),
+            ("7", ElementKind::RunningFooter),
+        ]
+    );
+    // Spaces after a page number do not make it a note number.
+    let pages = label(vec![page(
+        6,
+        vec![
+            body("Body text.", 300.0),
+            styled(line("3\u{a0}\u{a0}", 450.0, 1100.0, 18.0, 20.0), 16.0),
+        ],
+    )]);
+    assert_eq!(pages[0].elements[1].kind, ElementKind::RunningFooter);
+}
+
+#[test]
+fn a_repeated_line_under_a_title_is_body_text() {
+    let text = || {
+        let mut title = line("Sample Document", 108.0, 44.0, 236.0, 36.0);
+        title.kind = ElementKind::H1;
+        vec![
+            styled(title, 24.0),
+            body("This is a clear paragraph.", 95.0),
+            body("More text follows", 300.0),
+            body("on the page.", 324.0),
+        ]
+    };
+    let pages = label(vec![page(1, text()), page(2, text())]);
+    for page in &pages {
+        assert_eq!(page.elements[1].kind, ElementKind::Paragraph);
+    }
+}
+
+#[test]
+fn a_centred_section_number_heads_the_text_after_it() {
+    let pages = label(vec![page(
+        4,
+        vec![
+            body("The end of the previous section.", 300.0),
+            styled(line("2.", 453.0, 400.0, 12.0, 14.0), 13.0),
+            body("In this regard, the next section opens.", 430.0),
+            body("It goes on here.", 454.0),
+            styled(line("3.", 453.0, 700.0, 12.0, 14.0), 13.0),
+        ],
+    )]);
+    assert_eq!(pages[0].elements[1].kind, ElementKind::H2);
+    // Nothing follows the second number, so it introduces no section.
+    assert_eq!(pages[0].elements[4].kind, ElementKind::Paragraph);
+}
+
+#[test]
+fn uneven_line_spacing_keeps_a_paragraph_but_spaced_rows_stay_apart() {
+    let scanned: Vec<_> = [100.0, 119.0, 139.0, 158.0, 178.0]
+        .iter()
+        .map(|&y| styled(line("a scanned line of text", 68.0, y, 468.0, 13.0), 13.0))
+        .collect();
+    let pages = label(vec![page(1, scanned)]);
+    assert!(pages[0].elements.iter().all(|e| e.paragraph == Some(1)));
+
+    let rows: Vec<_> = [155.0, 182.0, 211.0, 239.0]
+        .iter()
+        .map(|&y| styled(line("a gloss", 555.0, y, 100.0, 15.0), 13.0))
+        .collect();
+    let pages = label(vec![page(1, rows)]);
+    let numbers: Vec<_> = pages[0].elements.iter().map(|e| e.paragraph).collect();
+    assert_eq!(numbers, [Some(1), Some(2), Some(3), Some(4)]);
+}
+
+#[test]
+fn a_paragraph_runs_from_the_foot_of_one_column_to_the_next() {
+    let column = |x: f32, first_x: f32, ys: &[f32]| -> Vec<(Element, LineStyle)> {
+        ys.iter()
+            .enumerate()
+            .map(|(i, &y)| {
+                let left = if i == 0 { first_x } else { x };
+                styled(
+                    line("a line of column text", left, y, x + 320.0 - left, 13.0),
+                    13.0,
+                )
+            })
+            .collect()
+    };
+    let mut lines = column(80.0, 100.0, &[900.0, 918.0, 936.0, 954.0]);
+    lines.extend(column(483.0, 483.0, &[81.0, 99.0, 117.0]));
+    let pages = label(vec![page(2, lines)]);
+    let numbers: Vec<_> = pages[0].elements.iter().map(|e| e.paragraph).collect();
+    assert!(numbers.iter().all(|&n| n == Some(1)), "{numbers:?}");
+    // The left column still reads first.
+    assert_eq!(pages[0].elements[0].bounds.x, 100.0);
+
+    // A first-line indent at the top of the next column starts a new paragraph.
+    let mut lines = column(80.0, 100.0, &[900.0, 918.0, 936.0, 954.0]);
+    lines.extend(column(483.0, 503.0, &[81.0, 99.0, 117.0]));
+    let pages = label(vec![page(2, lines)]);
+    assert_eq!(pages[0].elements[4].paragraph, Some(2));
+}
+
+#[test]
+fn a_bibliography_runs_on_through_its_subheadings() {
+    let heading = |text: &str, kind: ElementKind, y: f32| {
+        let mut element = line(text, 108.0, y, 200.0, 20.0);
+        element.kind = kind;
+        styled(element, 18.0)
+    };
+    let pages = label(vec![page(
+        19,
+        vec![
+            heading("Bibliography", ElementKind::H2, 120.0),
+            heading("Primary", ElementKind::H4, 160.0),
+            body("Chrysostom, John, Homilies (Paris, 1862)", 200.0),
+            heading("Secondary", ElementKind::H4, 240.0),
+            body("Carroll, Thomas K., Preaching the Word (1984)", 280.0),
+        ],
+    )]);
+    assert_eq!(pages[0].elements[2].kind, ElementKind::Reference);
+    assert_eq!(pages[0].elements[4].kind, ElementKind::Reference);
 }

@@ -12,14 +12,14 @@ use crate::native::LineStyle;
 use crate::{Element, ElementKind, MarkKind, Page};
 
 /// A line whose bottom is above this fraction of the page height is in the top band.
-const HEADER_BAND: f32 = 0.085;
+const HEADER_BAND: f32 = 0.10;
 /// A line whose top is below this fraction of the page height is in the bottom band.
-const FOOTER_BAND: f32 = 0.93;
+const FOOTER_BAND: f32 = 0.90;
 /// At most this many leading pages can hold title-page front matter.
 const MAX_FRONT_PAGES: usize = 2;
 
 pub fn label_document(pages: &mut [Page], styles: &mut [Vec<LineStyle>]) {
-    label_running_lines(pages);
+    label_running_lines(pages, styles);
     for page in pages.iter_mut() {
         label_detached_footer(page);
     }
@@ -112,46 +112,145 @@ fn band(page_height: f32, element: &Element, top: bool) -> bool {
     }
 }
 
-/// A text line that could be page furniture. A line already set as a heading (large
-/// and bold) is a document title even when the same page layout repeats.
-fn margin_candidate(element: &Element) -> bool {
-    is_text(element) && heading_level(element.kind) == 0
+/// Median font size of the page's text lines.
+fn body_size(page: &Page, styles: &[LineStyle]) -> f32 {
+    median(
+        page.elements
+            .iter()
+            .zip(styles)
+            .filter(|(e, _)| is_text(e))
+            .map(|(_, s)| s.size)
+            .collect(),
+    )
 }
 
-/// Lines in the top or bottom margin band whose letters repeat on another page, or
-/// that hold a page number and no letters.
-fn label_running_lines(pages: &mut [Page]) {
+/// A text line that could be page furniture. A heading set larger than the body
+/// text is a document title even when the same page layout repeats; a running head
+/// that only looks like a heading (capitals, bold) is not larger than the body.
+fn margin_candidate(element: &Element, style: Option<&LineStyle>, body: f32) -> bool {
+    is_text(element)
+        && (heading_level(element.kind) == 0 || style.is_some_and(|s| s.size <= body * 1.15))
+}
+
+/// Text that can be a page number: digits and no letters ("12", "- 12 -").
+fn page_number_text(text: &str) -> bool {
+    letters(text).is_empty() && text.chars().any(|c| c.is_ascii_digit())
+}
+
+/// Whether a line opens with a note number: "12 Ibid.", not "1982), 20.".
+fn opens_with_number(text: &str) -> bool {
+    text.trim_start()
+        .split_once(char::is_whitespace)
+        .is_some_and(|(number, rest)| {
+            !number.is_empty()
+                && number.chars().all(|c| c.is_ascii_digit())
+                && !rest.trim().is_empty()
+        })
+}
+
+/// Space between a line and the nearest text line above it that it overlaps
+/// horizontally; a page number stands apart, a wrapped "243." does not.
+fn space_above(page: &Page, index: usize) -> f32 {
+    let b = &page.elements[index].bounds;
+    page.elements
+        .iter()
+        .enumerate()
+        .filter(|&(i, e)| {
+            let a = &e.bounds;
+            i != index
+                && is_text(e)
+                && a.y < b.y
+                && (a.x + a.width).min(b.x + b.width) > a.x.max(b.x)
+        })
+        .map(|(_, e)| b.y - bottom(e))
+        .reduce(f32::min)
+        .unwrap_or(f32::INFINITY)
+}
+
+/// The page's footnote rule: a long run of blank (underlined) text in the lower
+/// half of the page.
+fn footnote_rule(page: &Page) -> Option<f32> {
+    page.elements
+        .iter()
+        .filter(|e| {
+            e.kind != ElementKind::Image
+                && !is_text(e)
+                && e.bounds.width >= page.width * 0.12
+                && e.bounds.y >= page.height * 0.45
+        })
+        .map(|e| e.bounds.y)
+        .reduce(f32::min)
+}
+
+/// Lines in the top or bottom margin band whose letters repeat in that band on
+/// another page, or that hold a page number and no letters. A page number at the
+/// foot stands clear of the text above it, so a wrapped footnote line ("243.") is
+/// not one. Footnotes are never footers: a line that opens with a note number or
+/// sits below the footnote rule keeps its place, even when it repeats ("Ibid.").
+fn label_running_lines(pages: &mut [Page], styles: &[Vec<LineStyle>]) {
+    let empty = Vec::new();
+    let mut candidates: Vec<Vec<(usize, bool, String)>> = Vec::with_capacity(pages.len());
     let mut counts: HashMap<(bool, String), usize> = HashMap::new();
-    for page in pages.iter() {
-        let mut seen = HashSet::new();
-        for element in page.elements.iter().filter(|e| margin_candidate(e)) {
+    for (number, page) in pages.iter().enumerate() {
+        let styles = styles.get(number).unwrap_or(&empty);
+        let body = body_size(page, styles);
+        let rule = footnote_rule(page);
+        let line = line_height(page);
+        let mut found = Vec::new();
+        for (index, element) in page.elements.iter().enumerate() {
+            if !margin_candidate(element, styles.get(index), body) {
+                continue;
+            }
+            // Below the footnote rule only a page number standing apart is furniture;
+            // a wrapped note line such as "243." sits right under the line above.
+            let standalone = page_number_text(&element.text) && space_above(page, index) > line;
             for top in [true, false] {
-                if band(page.height, element, top) {
-                    seen.insert((top, letters(&element.text)));
+                let note = !top
+                    && (opens_with_number(&element.text)
+                        || (!standalone && rule.is_some_and(|y| element.bounds.y >= y - 1.0)));
+                if band(page.height, element, top) && !note {
+                    found.push((index, top, letters(&element.text)));
                 }
             }
         }
+        // Running lines are the page's outermost text: anything else between a
+        // candidate and the page edge (a title above it, say) makes it body text.
+        let outer = |&(index, top, _): &(usize, bool, String)| {
+            let edge = &page.elements[index].bounds;
+            page.elements.iter().enumerate().all(|(other, e)| {
+                let beyond = if top {
+                    bottom(e) <= edge.y
+                } else {
+                    e.bounds.y >= bottom(&page.elements[index])
+                };
+                !is_text(e) || !beyond || found.iter().any(|f| f.0 == other && f.1 == top)
+            })
+        };
+        let found: Vec<(usize, bool, String)> =
+            found.iter().filter(|f| outer(f)).cloned().collect();
+        let seen: HashSet<(bool, String)> = found
+            .iter()
+            .map(|(_, top, signature)| (*top, signature.clone()))
+            .collect();
         for key in seen {
             *counts.entry(key).or_default() += 1;
         }
+        candidates.push(found);
     }
-    for page in pages.iter_mut() {
-        let height = page.height;
-        for element in page.elements.iter_mut().filter(|e| margin_candidate(e)) {
-            for top in [true, false] {
-                if !band(height, element, top) {
-                    continue;
-                }
-                let signature = letters(&element.text);
-                let page_number =
-                    signature.is_empty() && element.text.chars().any(|c| c.is_ascii_digit());
-                if page_number || counts.get(&(top, signature)).copied().unwrap_or(0) >= 2 {
-                    element.kind = if top {
-                        ElementKind::RunningHeader
-                    } else {
-                        ElementKind::RunningFooter
-                    };
-                }
+    for (page, found) in pages.iter_mut().zip(candidates) {
+        let line = line_height(page);
+        for (index, top, signature) in found {
+            let element = &page.elements[index];
+            let page_number =
+                page_number_text(&element.text) && (top || space_above(page, index) > line);
+            let repeated =
+                !signature.is_empty() && counts.get(&(top, signature)).copied().unwrap_or(0) >= 2;
+            if page_number || repeated {
+                page.elements[index].kind = if top {
+                    ElementKind::RunningHeader
+                } else {
+                    ElementKind::RunningFooter
+                };
             }
         }
     }
@@ -200,17 +299,7 @@ fn label_detached_footer(page: &mut Page) {
 /// the lower half of the page. Without a rule, a run of smaller lines at the foot of
 /// the page that starts with a note number is taken instead.
 fn label_footnotes(page: &mut Page, styles: &[LineStyle]) {
-    let rule = page
-        .elements
-        .iter()
-        .filter(|e| {
-            e.kind != ElementKind::Image
-                && !is_text(e)
-                && e.bounds.width >= page.width * 0.12
-                && e.bounds.y >= page.height * 0.45
-        })
-        .map(|e| e.bounds.y)
-        .reduce(f32::min);
+    let rule = footnote_rule(page);
     let free = |e: &Element| {
         is_text(e)
             && !matches!(
@@ -226,14 +315,7 @@ fn label_footnotes(page: &mut Page, styles: &[LineStyle]) {
         }
         return;
     }
-    let body = median(
-        page.elements
-            .iter()
-            .zip(styles)
-            .filter(|(e, _)| is_text(e))
-            .map(|(_, s)| s.size)
-            .collect(),
-    );
+    let body = body_size(page, styles);
     let line = line_height(page);
     let order: Vec<usize> = visual_order(page)
         .into_iter()
@@ -257,14 +339,7 @@ fn label_footnotes(page: &mut Page, styles: &[LineStyle]) {
         return;
     };
     let opener = &page.elements[first];
-    let numbered = opener
-        .text
-        .trim_start()
-        .split_once(char::is_whitespace)
-        .is_some_and(|(number, _)| {
-            !number.is_empty() && number.chars().all(|c| c.is_ascii_digit())
-        });
-    if numbered && opener.bounds.y >= page.height * 0.5 {
+    if opens_with_number(&opener.text) && opener.bounds.y >= page.height * 0.5 {
         for &index in &order[start..] {
             page.elements[index].kind = ElementKind::Footnote;
         }
@@ -298,17 +373,51 @@ fn section_label(text: &str) -> Option<Label> {
     }
 }
 
+fn centred(element: &Element, page_width: f32) -> bool {
+    let centre = element.bounds.x + element.bounds.width / 2.0;
+    (centre - page_width / 2.0).abs() <= page_width * 0.06
+        && element.bounds.width <= page_width * 0.85
+}
+
 /// A centred line in capitals (small caps included), such as "INTRODUCTION".
 fn is_caps_heading(element: &Element, page_width: f32) -> bool {
     let text = element.text.trim();
     let letters = text.chars().filter(|c| c.is_alphabetic()).count();
-    let centre = element.bounds.x + element.bounds.width / 2.0;
     letters >= 3
         && !text.chars().any(char::is_lowercase)
         && text.split_whitespace().count() <= 14
         && !text.ends_with('.')
-        && (centre - page_width / 2.0).abs() <= page_width * 0.06
-        && element.bounds.width <= page_width * 0.85
+        && centred(element, page_width)
+}
+
+/// A centred section number on its own line: "2.", "II", "IV.".
+fn is_section_number(element: &Element, page_width: f32) -> bool {
+    let text = element.text.trim().trim_end_matches('.');
+    let arabic = (1..=2).contains(&text.len()) && text.chars().all(|c| c.is_ascii_digit());
+    let roman = (1..=6).contains(&text.len()) && text.chars().all(|c| "IVXLC".contains(c));
+    (arabic || roman) && centred(element, page_width)
+}
+
+/// Whether the next line below `position` in `order` is body text in ordinary
+/// case, close enough to be what a heading introduces. A title page's centred
+/// capitals ("KEN TULLY", "FINAL PAPER", a date) are followed by more capitals or
+/// by nothing, so they are not section headings.
+fn followed_by_body(page: &Page, order: &[usize], position: usize, line: f32) -> bool {
+    let here = &page.elements[order[position]];
+    order[position + 1..]
+        .iter()
+        .map(|&i| &page.elements[i])
+        .find(|e| !furniture(e.kind) && e.kind != ElementKind::Image)
+        .is_some_and(|next| {
+            matches!(
+                next.kind,
+                ElementKind::Paragraph
+                    | ElementKind::ListItem
+                    | ElementKind::Citation
+                    | ElementKind::Reference
+            ) && next.text.chars().any(char::is_lowercase)
+                && next.bounds.y - bottom(here) <= line * 5.0
+        })
 }
 
 const fn heading_level(kind: ElementKind) -> usize {
@@ -324,14 +433,18 @@ const fn heading_level(kind: ElementKind) -> usize {
 /// Section labels and caps headings, then the blocks they introduce: lines under
 /// "Abstract", "Keywords", "Recommended Citation" or "Cover Page Footnote" until a
 /// gap of more than 1.5 line heights, and every line of a bibliography until the
-/// next heading, across pages.
+/// next heading at its level or above, across pages ("Primary" and "Secondary"
+/// sub-headings keep it going).
 fn label_sections(pages: &mut [Page]) {
-    let mut bibliography = false;
+    // The level of the bibliography heading, while its entries run.
+    let mut bibliography: Option<usize> = None;
     for page in pages.iter_mut() {
         let line = line_height(page);
         let width = page.width;
         let mut block: Option<(ElementKind, f32)> = None;
-        for index in visual_order(page) {
+        let order = visual_order(page);
+        for (position, &index) in order.iter().enumerate() {
+            let introduces = followed_by_body(page, &order, position, line);
             let element = &mut page.elements[index];
             if !matches!(
                 element.kind,
@@ -350,18 +463,23 @@ fn label_sections(pages: &mut [Page]) {
                 if heading_level(element.kind) == 0 {
                     element.kind = ElementKind::H2;
                 }
-                bibliography = label == Label::Bibliography;
+                bibliography =
+                    (label == Label::Bibliography).then_some(heading_level(element.kind));
                 block = match label {
                     Label::Block(kind) => Some((kind, bottom(element))),
                     Label::Bibliography => None,
                 };
                 continue;
             }
-            if heading_level(element.kind) > 0 || is_caps_heading(element, width) {
+            let new_heading = introduces
+                && (is_caps_heading(element, width) || is_section_number(element, width));
+            if heading_level(element.kind) > 0 || new_heading {
                 if heading_level(element.kind) == 0 {
                     element.kind = ElementKind::H2;
                 }
-                bibliography = false;
+                if bibliography.is_some_and(|level| heading_level(element.kind) <= level) {
+                    bibliography = None;
+                }
                 block = None;
                 continue;
             }
@@ -373,7 +491,7 @@ fn label_sections(pages: &mut [Page]) {
                 }
                 block = None;
             }
-            if bibliography {
+            if bibliography.is_some() {
                 element.kind = ElementKind::Reference;
             }
         }
@@ -578,27 +696,57 @@ const fn furniture(kind: ElementKind) -> bool {
 struct Flow {
     lines: Vec<usize>,
     root: Vec<usize>,
+    /// Each line's piece of its paragraph within one column: a paragraph that runs
+    /// on into the next column has one piece per column, in reading order.
+    piece: Vec<usize>,
     carried_in: Option<usize>,
     /// The page's last paragraph line, when its paragraph runs on past the page.
     open_end: Option<usize>,
 }
 
-/// The paragraph line directly above `below`: overlapping it horizontally, with no
-/// more than half a line of space between them. Poppler's element order is not
-/// always reading order, so lines are linked by position.
-fn line_above(page: &Page, lines: &[usize], below: usize, line: f32) -> Option<usize> {
+/// Whether `b` sits below `a` in the same column.
+fn stacked(a: &crate::Rect, b: &crate::Rect, line: f32) -> bool {
+    let overlap = (a.x + a.width).min(b.x + b.width) - a.x.max(b.x);
+    b.y > line.mul_add(0.3, a.y) && overlap >= a.width.min(b.width) * 0.5
+}
+
+/// The page's usual space between consecutive lines: the median gap from each
+/// paragraph line to the nearest line below it, ignoring gaps over a line height.
+/// Scanned pages wobble around it; a paragraph break leaves clearly more.
+fn line_spacing(page: &Page, lines: &[usize], line: f32) -> f32 {
+    let mut gaps: Vec<f32> = lines
+        .iter()
+        .filter_map(|&i| {
+            let a = &page.elements[i].bounds;
+            lines
+                .iter()
+                .filter(|&&j| j != i && stacked(a, &page.elements[j].bounds, line))
+                .map(|&j| page.elements[j].bounds.y - (a.y + a.height))
+                .reduce(f32::min)
+        })
+        .filter(|&gap| gap <= line)
+        .collect();
+    gaps.sort_by(f32::total_cmp);
+    gaps.get(gaps.len() / 2).copied().unwrap_or(0.0)
+}
+
+/// The paragraph line directly above `below`: in the same column, with no more
+/// space between them than `max_gap`. Poppler's element order is not always
+/// reading order, so lines are linked by position.
+fn line_above(
+    page: &Page,
+    lines: &[usize],
+    below: usize,
+    line: f32,
+    max_gap: f32,
+) -> Option<usize> {
     let b = &page.elements[below].bounds;
     lines
         .iter()
         .copied()
         .filter(|&i| {
             let a = &page.elements[i].bounds;
-            let overlap = (a.x + a.width).min(b.x + b.width) - a.x.max(b.x);
-            let gap = b.y - (a.y + a.height);
-            i != below
-                && b.y > line.mul_add(0.3, a.y)
-                && gap <= line * 0.5
-                && overlap >= a.width.min(b.width) * 0.5
+            i != below && stacked(a, b, line) && b.y - (a.y + a.height) <= max_gap
         })
         .max_by(|&i, &j| {
             page.elements[i]
@@ -606,6 +754,50 @@ fn line_above(page: &Page, lines: &[usize], below: usize, line: f32) -> Option<u
                 .y
                 .total_cmp(&page.elements[j].bounds.y)
         })
+}
+
+/// A paragraph that fills the foot of one column continues at the top of the
+/// next: the column's first line is flush, and the paragraph line extracted just
+/// before it is a full-width last line, lower down, in a column to its left.
+/// `above` holds each line's line above; `root` is rewritten in place.
+fn join_columns(
+    page: &Page,
+    lines: &[usize],
+    above: &[Option<usize>],
+    root: &mut [usize],
+    indent: f32,
+    full: f32,
+) {
+    let x = |i: usize| page.elements[i].bounds.x;
+    let below_of = |p: usize| (0..lines.len()).find(|&q| above[q] == Some(lines[p]));
+    let mut alias: HashMap<usize, usize> = HashMap::new();
+    for start in (1..lines.len()).filter(|&p| above[p].is_none()) {
+        let previous = start - 1;
+        let flush = below_of(start).is_none_or(|q| x(lines[start]) <= x(lines[q]) + indent);
+        let between_furniture =
+            (lines[previous] + 1..lines[start]).all(|i| furniture(page.elements[i].kind));
+        let (a, b) = (
+            &page.elements[lines[previous]].bounds,
+            &page.elements[lines[start]].bounds,
+        );
+        if flush
+            && between_furniture
+            && below_of(previous).is_none()
+            && a.y > b.y
+            && a.x + a.width <= b.x + indent
+            && a.width >= full
+        {
+            alias.insert(root[start], root[previous]);
+        }
+    }
+    for value in root.iter_mut() {
+        for _ in 0..alias.len() {
+            match alias.get(value) {
+                Some(&next) if next != *value => *value = next,
+                _ => break,
+            }
+        }
+    }
 }
 
 fn page_flow(page: &Page) -> Flow {
@@ -620,11 +812,15 @@ fn page_flow(page: &Page) -> Flow {
     );
     let indent = line * 0.75;
     let x = |i: usize| page.elements[i].bounds.x;
+    // More than the usual line spacing plus a third of a line starts a paragraph.
+    let max_gap = line_spacing(page, &lines, line)
+        .mul_add(1.0, line * 0.35)
+        .clamp(line * 0.5, line * 0.6);
     // A line continues the paragraph of the line above it unless it is indented
     // past that line (a first-line indent, or the start of a block quotation).
     let above: Vec<Option<usize>> = lines
         .iter()
-        .map(|&i| line_above(page, &lines, i, line))
+        .map(|&i| line_above(page, &lines, i, line, max_gap))
         .collect();
     let continues =
         |position: usize| above[position].filter(|&a| x(lines[position]) <= x(a) + indent);
@@ -643,6 +839,13 @@ fn page_flow(page: &Page) -> Flow {
             root[position] = root[a_position];
         }
     }
+    let widths: Vec<f32> = lines
+        .iter()
+        .map(|&i| page.elements[i].bounds.width)
+        .collect();
+    let full = median(widths) * 0.8;
+    let piece = root.clone();
+    join_columns(page, &lines, &above, &mut root, indent, full);
     // Anything else in the body (a heading, a list, an image) between the page top
     // and a line, or below the last line, ends the paragraph at the page break.
     let interrupts = |range: std::ops::Range<f32>| {
@@ -662,11 +865,6 @@ fn page_flow(page: &Page) -> Flow {
         let flush = next.is_none_or(|q| x(lines[p]) <= x(lines[q]) + indent);
         flush && !interrupts(0.0..page.elements[lines[p]].bounds.y)
     });
-    let widths: Vec<f32> = lines
-        .iter()
-        .map(|&i| page.elements[i].bounds.width)
-        .collect();
-    let full = median(widths) * 0.8;
     let last = lines.iter().copied().max_by(|&a, &b| {
         page.elements[a]
             .bounds
@@ -682,6 +880,7 @@ fn page_flow(page: &Page) -> Flow {
     Flow {
         lines,
         root,
+        piece,
         carried_in,
         open_end,
     }
@@ -709,16 +908,20 @@ fn order_paragraph_lines(page: &mut Page, styles: &mut Vec<LineStyle>) {
     if shares_rows(page, &flow.lines) {
         return;
     }
+    let piece_of: HashMap<usize, usize> = flow.lines.iter().copied().zip(flow.piece).collect();
     let mut members: HashMap<usize, Vec<usize>> = HashMap::new();
     for (position, &index) in flow.lines.iter().enumerate() {
         members.entry(flow.root[position]).or_default().push(index);
     }
+    // Column by column, then top to bottom within a column.
     for lines in members.values_mut() {
         lines.sort_by(|&a, &b| {
-            page.elements[a]
-                .bounds
-                .y
-                .total_cmp(&page.elements[b].bounds.y)
+            piece_of[&a].cmp(&piece_of[&b]).then(
+                page.elements[a]
+                    .bounds
+                    .y
+                    .total_cmp(&page.elements[b].bounds.y),
+            )
         });
     }
     let root_of: HashMap<usize, usize> = flow
