@@ -5,6 +5,36 @@ other programs can inspect. Think of TF as the book's text plus labeled pointers
 to its chapters, headings, notes, links, and other parts. The original TEI,
 EPUB, or PDF stays available so a reader can check extracted content.
 
+## Use `corpora-core` from another Rust crate
+
+**Requirements:** Rust 1.91+ and already-decoded UTF-8 text. XML, TEI metadata,
+and language checks need no API key or dictionary. In this workspace, add the
+dependency to the other crate's `Cargo.toml`:
+
+```toml
+[dependencies]
+corpora-core = { workspace = true }
+```
+
+Then call one check and inspect its report:
+
+```rust
+use corpora_core::structural::check_xml;
+
+fn main() -> corpora_core::Result<()> {
+    let xml = "<book><title>Example</title></book>";
+    let report = check_xml("book.xml", xml)?;
+    println!("passed: {}", report.passed());
+    Ok(())
+}
+```
+
+The crate has **no HTTP endpoints**. Its optional `corpora-text-check` CLI reads
+one JSON request per line on stdin and writes one response per line on stdout.
+See the [core crate integration guide](crates/corpora-core/README.md) for an
+external-workspace dependency, the full Rust API, CLI arguments and JSON
+operations, and the spelling setup.
+
 **Choose a starting point:**
 
 | I have… | Use… | What it does |
@@ -23,28 +53,28 @@ The optional [quality AI bridge](packages/quality-ai/README.md) helps the TEI
 quality pipeline review bounded findings. The [Text-Fabric expert bundle](agent/text-fabric-expert/README.md)
 contains the agent instructions and evaluation setup.
 
-When the PDF crate is present, PR tests install Poppler and Tesseract before
-`make ci`, then run the PDF benchmark, review-browser and OCR candidate Python suites.
+When the PDF crate is present, PR tests install Poppler, Tesseract and uv (for
+the review page's TEI column) before `make ci`, then run the PDF benchmark, review-browser and OCR candidate Python suites.
 The [PDF OCR skill](crates/corpora-pdf/skills/pdf-ocr/SKILL.md) and
 [proposal](crates/corpora-pdf/agent/PROPOSAL.md) define specialist recognition,
 optional paid fallback and location-linked review findings for historical scripts.
 
 ## How the pieces fit
 
-```text
-TEI XML ──> Python acquisition and reading policy ──> Text-Fabric .tf files
-                   │       │
-                   │       └── Rust structural, purpose, and spelling checks
-                   └── original source and repair record
-
-EPUB ──> Rust archive/OPF/XHTML check ──> Python export ──> .tf + assets
-  └────────────────────── original archive ────────────────────────┘
-
-PDF ──> Rust extraction + local OCR ──> page elements, scores, and QA site
-
-.tf bundle ──> Text-Fabric / Context-Fabric loader ──> QA HTML
-                                                   └── optional AI proposal
-                                                       and reviewed derived text
+```mermaid
+flowchart LR
+    TEI[TEI XML] --> Policy[Python reading policy]
+    Policy --> Core[corpora-core checks]
+    Core --> TF[Text-Fabric .tf bundle]
+    EPUB[EPUB] --> EPUBCheck[Rust archive and XHTML check]
+    EPUBCheck --> EPUBExport[Python export]
+    EPUBExport --> TF
+    PDF[PDF] --> PDFExtract[Rust extraction and local OCR]
+    PDFExtract --> Review[Positioned text, scores, QA site]
+    PDFExtract --> PDFConvert[Score-gated PDF to TEI]
+    PDFConvert --> Policy
+    TF --> Loader[Text-Fabric / Context-Fabric loader]
+    Loader --> QA[QA and optional reviewed AI proposal]
 ```
 
 Rust decides whether checked source structures are valid under a stated policy.
@@ -181,6 +211,8 @@ The PDF QA builder renders source pages to PNG at the extraction coordinate scal
 so the internal browser does not need a PDF plugin. Findings are collapsed by
 default and script findings link to their extracted element. Original PDFs and
 raw JSON remain available; the viewer never applies OCR candidates.
+A third column renders the TEI that `pdf-to-tf` builds from the same extraction
+as HTML, labelled by semantic type; `--no-tei` skips it (it needs `uv`).
 
 The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
 Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.

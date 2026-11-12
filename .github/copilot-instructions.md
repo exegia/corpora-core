@@ -67,8 +67,8 @@ the synthetic smoke command and local-only real-PDF manifest. Keep attachments,
 transcriptions and generated reports out of Git; retain reference review status.
 Use `--tessdata-dir` for isolated multilingual models; reports retain model hashes
 and missing requested languages fail rather than silently falling back.
-The PR test job installs Poppler and Tesseract when the PDF crate is present,
-and runs the benchmark, PDF review-browser and OCR candidate Python suites after `make ci`.
+The PR test job installs Poppler, Tesseract and uv (for the review page's TEI column)
+when the PDF crate is present, and runs the benchmark, PDF review-browser and OCR candidate Python suites after `make ci`.
 The crate-owned skill is `crates/corpora-pdf/skills/pdf-ocr/SKILL.md`, discovered
 through `.github/skills/pdf-ocr`. Its prompt and proposal are in the crate's
 `agent/` directory. Exact missing marks require image-verified evidence; script
@@ -131,6 +131,8 @@ The PDF QA builder renders source pages to PNG at the extraction coordinate scal
 so the internal browser does not need a PDF plugin. Findings are collapsed by
 default and script findings link to their extracted element. Original PDFs and
 raw JSON remain available; the viewer never applies OCR candidates.
+A third column renders the TEI that `pdf-to-tf` builds from the same extraction
+as HTML, labelled by semantic type; `--no-tei` skips it (it needs `uv`).
 
 The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
 Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.
