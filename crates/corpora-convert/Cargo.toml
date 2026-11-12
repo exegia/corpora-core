@@ -15,7 +15,7 @@ categories = ["development-tools"]
 include = ["src/**/*", "Cargo.toml", "README.md"]
 
 [dependencies]
-corpora-core = { path = "../corpora-core", features = ["serde"] }
+corpora-core = { workspace = true, features = ["serde"] }
 roxmltree = "=0.21.1"
 serde = { workspace = true }
 serde_json = { workspace = true }

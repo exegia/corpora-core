@@ -104,7 +104,12 @@ cargo = { level = "warn", priority = -1 }
 1. **Set up crates.io auth:** `cargo login` locally; set `CARGO_REGISTRY_TOKEN` in the `crates` environment on GitHub.
 2. **Enable publishing:** set repository variable `PUBLISH_CRATES=true`.
 3. **Release cycle:** PRs merge to `dev` → promote to `next` → release branch bumps version → merge to `main` → tag triggers `publish.yml` → `cargo publish --locked`.
-4. **Dry run:** `cargo publish --dry-run` before the release.
+4. **Dry run:** `cargo package --workspace --locked` (what the release `crate-assets` job runs) or
+   `cargo publish --dry-run` before the release.
+5. **Crates that depend on each other:** declare them once in the root `[workspace.dependencies]` as
+   one-line entries with both `path` and `version` (`demo-core = { path = "crates/demo-core", version = "0.1.0" }`)
+   and use `demo-core = { workspace = true }` in members. `scripts/version.sh set` keeps the version equal to
+   the workspace version; a path dependency without one fails `cargo package`.
 
 The release workflow handles version bumps; never edit `Cargo.toml` version by hand.
 
