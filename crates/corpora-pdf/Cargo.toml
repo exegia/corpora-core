@@ -1,0 +1,31 @@
+[package]
+name = "corpora-pdf"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Local PDF extraction and OCR engine for Corpora"
+readme = "README.md"
+keywords = ["pdf", "ocr", "document", "extraction"]
+categories = ["text-processing"]
+include = ["src/**/*", "Cargo.toml", "README.md", "skills/**/*", "agent/**/*", "benchmarks/*.md", "tools/**/*"]
+
+[dependencies]
+roxmltree = "=0.21.1"
+serde = { workspace = true }
+sha2 = "0.10"
+tempfile = "3"
+thiserror = { workspace = true }
+serde_json = { workspace = true }
+whatlang = "=0.18.0"
+unicode-normalization = "0.1"
+
+[[bin]]
+name = "corpora-pdf-extract"
+path = "src/bin/pdf_extract.rs"
+
+[lints]
+workspace = true

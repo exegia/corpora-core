@@ -1,0 +1,43 @@
+[package]
+name = "corpora-core"
+version.workspace = true
+edition.workspace = true
+rust-version = "1.91"
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Core types and traits for the Corpora apps suite"
+documentation = "https://docs.rs/corpora-core"
+readme = "README.md"
+keywords = ["corpora", "text-fabric", "conversion"]
+categories = ["development-tools"]
+include = ["src/**/*", "Cargo.toml", "README.md", "tools/MATCHUM-LICENSE"]
+
+[dependencies]
+thiserror.workspace = true
+serde = { workspace = true, optional = true }
+whatlang = "=0.18.0"
+matchum-dict = { version = "=0.0.1", optional = true }
+serde_json = { workspace = true, optional = true }
+regex = { version = "1", optional = true }
+sha2 = "0.10"
+roxmltree = "=0.21.1"
+flate2 = { version = "1", optional = true }
+unicode-normalization = { version = "0.1", optional = true }
+
+[dev-dependencies]
+insta.workspace = true
+
+[features]
+default = []
+serde = ["dep:serde"]
+spellcheck = ["serde", "dep:matchum-dict", "dep:serde_json", "dep:regex", "dep:flate2", "dep:unicode-normalization"]
+
+[[bin]]
+name = "corpora-text-check"
+path = "src/bin/text_check.rs"
+required-features = ["spellcheck"]
+
+[lints]
+workspace = true

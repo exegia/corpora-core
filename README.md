@@ -1,159 +1,200 @@
-# `corpora-template`
+# corpora-core
 
-<!-- Replace this title and paragraph with your project. Keep the sections below that still apply. -->
+This repository helps turn source documents into a Text-Fabric (TF) corpus that
+other programs can inspect. Think of TF as the book's text plus labeled pointers
+to its chapters, headings, notes, links, and other parts. The original TEI,
+EPUB, or PDF stays available so a reader can check extracted content.
 
-A GitHub template with the boring-but-essential parts already wired: SemVer releases driven by Conventional
-Commits, CI that adapts to your stack, secrets handling, end-to-end test hooks, and guidance for AI coding agents.
-It works the same for **Rust + GPUI, Python, TypeScript, React, Expo, SwiftUI** and projects that **build AI
-agents**, and it stays green before you have written any product code.
+**Choose a starting point:**
 
-## What you get
+| I have… | Use… | What it does |
+| --- | --- | --- |
+| TEI XML | [TEI converter](packages/tei-to-tf/README.md) | Gets local or supported public repository TEI, selects a reading, and exports TF. |
+| A local EPUB | [EPUB converter](packages/epub-to-tf/README.md) | Checks the archive, follows its reading order, and exports TF plus assets. |
+| A local PDF to convert | [PDF converter](packages/pdf-to-tf/README.md) | Extracts and scores the PDF, converts to TEI and TF only above 95%, and reports located issues. |
+| XML text to check in Rust | [corpora-core](crates/corpora-core/README.md) | Reports structural, metadata, language, and optional spelling findings. |
+| EPUB bytes to check in Rust | [corpora-convert](crates/corpora-convert/README.md) | Returns source-bound EPUB findings and a reading projection. |
+| A local PDF to inspect | [corpora-pdf](crates/corpora-pdf/README.md) | Reads text or OCR, labels layout candidates, and returns visual evidence scores. |
+| PDF extraction accuracy to measure | [PDF benchmark](crates/corpora-pdf/benchmarks/README.md) | Compares selected regions against image transcriptions, with character/word error rates, reading-order checks, and model hashes for multilingual runs. |
+| TF text to review with AI | [TF AI resolver](packages/tf-ai-resolver/README.md) | Pins a selection, asks the expert for a proposal, and applies an approved derived reading. |
+| A shared model in another language | [type generator](crates/corpora-typegen/README.md) | Generates Rust, TypeScript, Swift, and SQL from one schema. |
 
-| Area         | What is included                                                                                            |
-| ------------ | ----------------------------------------------------------------------------------------------------------- |
-| Dev cycle    | One `make` entry point; stack auto-detection; `make doctor`, `setup`, `dev`, `fmt`, `ci`                    |
-| CI           | PR gate (`guard`, `check`, `e2e`, `package`), nightly matrix, CodeQL, dependency review                     |
-| Releases     | `dev -> next -> release/vX.Y.Z -> main`, SemVer from commits, generated changelog, tags, GitHub Releases    |
-| Publishing   | Opt-in PyPI (OIDC), npm (provenance), crates.io, EAS, custom deploy; artifacts attached to releases         |
-| Secrets      | gitleaks hook and CI gate, `.env` workflow, push to GitHub secrets, push protection on                      |
-| Repo as code | `.github/settings.yml`, branch/tag rulesets, labels, generated Dependabot config                            |
-| AI agents    | `AGENTS.md`, `CLAUDE.md`, Copilot instructions, ten skills in `.github/skills/`, validator                  |
-| Community    | Issue forms, PR template, `CODEOWNERS`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, `CONTRIBUTING.md`, MIT license |
-| Self-tests   | `make selftest` tests the automation scripts themselves                                                     |
+The optional [quality AI bridge](packages/quality-ai/README.md) helps the TEI
+quality pipeline review bounded findings. The [Text-Fabric expert bundle](agent/text-fabric-expert/README.md)
+contains the agent instructions and evaluation setup.
 
-## Quick start
+When the PDF crate is present, PR tests install Poppler and Tesseract before
+`make ci`, then run the PDF benchmark, review-browser and OCR candidate Python suites.
+The [PDF OCR skill](crates/corpora-pdf/skills/pdf-ocr/SKILL.md) and
+[proposal](crates/corpora-pdf/agent/PROPOSAL.md) define specialist recognition,
+optional paid fallback and location-linked review findings for historical scripts.
 
-```bash
-make doctor     # which tools are missing for the stacks detected here
-make setup      # deps, git hooks, .env, commit template, agent skill links
-make ci         # exactly what CI runs on a pull request
-```
-
-With no manifest present every task is a no-op, so this passes on a fresh copy. Add `pyproject.toml`,
-`package.json`, `Cargo.toml` or `Package.swift` and the same commands start running your tools.
-
-### Use it for a new project
-
-1. Click **Use this template** and clone the new repository.
-2. Replace this README, `LICENSE` (holder), `SECURITY.md` and `CODE_OF_CONDUCT.md` contacts
-   (`REPLACE_ME@example.com`), and `.github/CODEOWNERS`.
-3. Create the automation GitHub App and set `AUTOMATION_APP_ID` / `AUTOMATION_APP_PRIVATE_KEY`
-   ([details](.github/WORKFLOW.md#2-secrets-and-variables)).
-4. `make repo-bootstrap` creates `dev` and `next`, makes `dev` the default branch, and applies settings,
-   labels, rulesets and security features.
-5. `make setup`, add your first stack manifest, then `make dependabot`.
-6. Delete the skills and `.env.example` sections for stacks you do not use. [`TODO.md`](TODO.md) has the full checklist.
-
-## Commands
-
-Every dev and CI step is a target; run `make help` for the full list.
-
-| Task                           | Command                                                                        |
-| ------------------------------ | ------------------------------------------------------------------------------ |
-| Check tools / first-time setup | `make doctor` / `make setup`                                                   |
-| Run the app                    | `make dev`                                                                     |
-| Format and autofix / verify    | `make fmt` / `make lint-check`                                                 |
-| Types, unit tests, build       | `make typecheck`, `make test`, `make build`                                    |
-| End-to-end tests, agent evals  | `make e2e`, `make eval`                                                        |
-| Everything CI runs on a PR     | `make ci`                                                                      |
-| Release artifacts              | `make pack`                                                                    |
-| Test the repo's own automation | `make selftest`                                                                |
-| Validate skills / instructions | `make agents-check`                                                            |
-| Secrets                        | `make env-init`, `env-check`, `secrets-scan`, `secrets-push`, `secrets-doctor` |
-| Versions and releases          | `make bump-info`, `next-version`, `changelog`, `cut-release`                   |
-| Repo settings                  | `make settings-apply`, `labels`, `rulesets-apply`, `dependabot`                |
-
-Override any task for any stack: `make test TEST_CMD="pytest -x"`. Force the stack list with
-`STACKS="python node"`. Monorepos: only root manifests are detected, so set the overrides.
-
-### Stack detection
-
-| Stack            | Detected by                    | `lint` / `typecheck`                | `test` / `e2e`                                     |
-| ---------------- | ------------------------------ | ----------------------------------- | -------------------------------------------------- |
-| Python (uv)      | `pyproject.toml`               | ruff; mypy, pyright or ty           | pytest; `tests/e2e/`, evals in `tests/evals/`      |
-| TypeScript/React | `package.json`                 | package scripts `lint`, `typecheck` | `test`; `test:e2e` or Playwright                   |
-| Expo             | `expo` dependency              | as above                            | Maestro flows in `.maestro/`                       |
-| Rust + GPUI      | `Cargo.toml`                   | `cargo fmt`, `clippy -D warnings`   | `cargo test`/nextest; `tests/e2e.rs`               |
-| SwiftUI          | `Package.swift` / `.xcodeproj` | SwiftLint, swift-format             | `swift test` / `xcodebuild`; `XCODE_UITEST_TARGET` |
-
-The package manager comes from the lockfile (bun, pnpm, yarn, npm). Swift and GPUI run on macOS runners; set the
-`CI_RUNNERS` variable to change that.
-
-## Branching and releases
+## How the pieces fit
 
 ```text
-<type>/<slug> --squash--> dev --promote--> next --cut--> release/vX.Y.Z --draft PR--> main --> vX.Y.Z
+TEI XML ──> Python acquisition and reading policy ──> Text-Fabric .tf files
+                   │       │
+                   │       └── Rust structural, purpose, and spelling checks
+                   └── original source and repair record
+
+EPUB ──> Rust archive/OPF/XHTML check ──> Python export ──> .tf + assets
+  └────────────────────── original archive ────────────────────────┘
+
+PDF ──> Rust extraction + local OCR ──> page elements, scores, and QA site
+
+.tf bundle ──> Text-Fabric / Context-Fabric loader ──> QA HTML
+                                                   └── optional AI proposal
+                                                       and reviewed derived text
 ```
 
-- Branch from `dev` as `<type>/<slug>` (`feat/123-add-parser`); types: `feat fix chore docs ci refactor test perf build style revert ai`.
-- The **PR title** must be a Conventional Commit (`feat(scope)!: summary`). It becomes the squash commit and sets
-  the bump: `!` or `BREAKING CHANGE` major, `feat` minor, anything else patch.
-- `dev` is promoted to `next` nightly or on demand; a push to `next` cuts `release/vX.Y.Z` with version files and
-  a changelog section and opens a draft PR into `main`; merging it tags and publishes the release.
+Rust decides whether checked source structures are valid under a stated policy.
+Python acquires sources and writes conversion bundles. TF stores the text and its
+annotations. Context-Fabric loads TF for runtime use; its caches are runtime
+data, not part of an exported bundle. AI suggestions cannot approve inconsistent
+IDs or silently rewrite the archived wording.
 
-Details: [policy](.github/BRANCH-AND-RELEASE-POLICY.md), [stages](.github/LIFECYCLE.md),
-[operations and troubleshooting](.github/WORKFLOW.md).
+## Get started
 
-## Secrets
+Use Rust **1.91 or newer** for the full workspace, Python **3.13 or newer** for
+the converter packages, Node **22 or newer** for the optional hosted quality
+bridge, and Swift **5.9 or newer** for the generated Swift package. `make doctor`
+reports missing local tools. `make setup` installs project dependencies, hooks,
+and local configuration; hosted AI credentials are optional for offline work.
 
-Credentials must never reach a commit. Three layers:
-
-1. **`.env` is gitignored**; commit `.env.example` with `REPLACE_ME` placeholders. `make env-init` creates `.env`
-   with mode 600 and `make env-check` diffs the keys.
-2. **gitleaks pre-commit hook** (`make setup` installs it). It is advisory: `--no-verify` skips it, so never use it.
-3. **`Secret Scan` workflow** is the real gate. `Detect hardcoded secrets` is a required check on `dev`, `next`
-   and `main`; GitHub push protection and secret scanning are switched on by `make settings-apply`.
-
-If a secret leaks: rotate it first, then remove it. To load values into CI use
-`make secrets-push ENV_FILE=.env.ci ENVIRONMENT=preview` (names are shown for confirmation, values never printed).
-`.gitleaks.toml` allowlists only template placeholders; keep it narrow.
-
-## Testing
-
-- `make test` runs fast unit and integration tests. End-to-end suites (`make e2e`) and agent evals (`make eval`)
-  are separate on purpose.
-- CI runs e2e on PRs into `next` or `main`, on PRs labelled `run-e2e`, on pushes to `next`, and nightly.
-- `make selftest` covers this repository's own scripts (`tests/template/`); it runs inside `make ci`.
-
-## AI agents
-
-| File                              | Role                                                                              |
-| --------------------------------- | --------------------------------------------------------------------------------- |
-| `AGENTS.md`                       | Canonical rules for every agent; edit this first                                  |
-| `CLAUDE.md`                       | Imports `AGENTS.md`, adds Claude Code specifics                                   |
-| `.github/copilot-instructions.md` | Short form for GitHub Copilot                                                     |
-| `.github/skills/*/SKILL.md`       | Task skills: dev cycle, release flow, secrets, e2e, one per stack, agent building |
-
-`make agents-link` symlinks `.claude/skills` and `.agents/skills` to `.github/skills` (local only);
-`make agents-check` validates skills and keeps `CLAUDE.md` importing `AGENTS.md`. Keep these files aligned with
-the automation: change them in the same PR.
-
-## Repository layout
-
-```text
-.
-├── makefile                  one entry point for dev and CI
-├── scripts/                  stack runner, versioning, release, secrets, agent assets
-├── tests/template/           tests for scripts/ (make selftest)
-├── .github/
-│   ├── workflows/            pr, secret-scan, security, promote, next, release, publish, matrix, ...
-│   ├── actions/setup/        detects stacks, installs only their toolchains
-│   ├── rulesets/ settings.yml  branch protection and repo settings as code
-│   ├── scripts/              bootstrap-repo, apply-settings, apply-rulesets
-│   ├── skills/               agent skills
-│   ├── ISSUE_TEMPLATE/ PULL_REQUEST_TEMPLATE.md CODEOWNERS
-│   └── WORKFLOW.md LIFECYCLE.md BRANCH-AND-RELEASE-POLICY.md
-├── .devcontainer/            Codespaces and dev containers
-├── AGENTS.md CLAUDE.md
-├── CONTRIBUTING.md SECURITY.md CODE_OF_CONDUCT.md LICENSE TODO.md CHANGELOG.md VERSION
-└── .env.example .gitmessage .pre-commit-config.yaml .gitleaks.toml
+```sh
+make doctor
+make setup
+make ci
 ```
 
-`VERSION` is the fallback version file while no stack manifest declares one; delete it once `pyproject.toml`,
-`Cargo.toml`, `package.json` or an Xcode project carries the version.
+Convert one local EPUB from the repository root:
 
-## Contributing and security
+```sh
+cargo build -p corpora-convert --bin corpora-epub-check
+uv run --project packages/epub-to-tf epub-to-tf book.epub output/book \
+  --checker target/debug/corpora-epub-check
+```
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) first. Report vulnerabilities privately as described in
-[SECURITY.md](SECURITY.md). Participation is governed by the [Code of Conduct](CODE_OF_CONDUCT.md).
-Licensed under the [MIT License](LICENSE).
+Convert one TEI file:
+
+```sh
+uv run --project packages/tei-to-tf tei-to-tf book.xml --output output/tei-book
+```
+
+Both commands require a **new** output directory. The package READMEs explain
+each flag, the supported inputs, the exported files, and how to load the result.
+
+## Project map
+
+| Path | What is ready today |
+| --- | --- |
+| [`crates/corpora-core`](crates/corpora-core/README.md) | Shared diagnostics, XML/TEI checks, language selection, and optional spelling. |
+| [`crates/corpora-convert`](crates/corpora-convert/README.md) | Reusable EPUB validator and `corpora-epub-check` JSON CLI. |
+| [`crates/corpora-pdf`](crates/corpora-pdf/README.md) | Reusable local PDF text/OCR and semantic-candidate extraction library and `corpora-pdf-extract` JSON CLI. |
+| [`crates/corpora-typegen`](crates/corpora-typegen/README.md) | Schema reader and Rust/TypeScript/Swift/SQL emitters. |
+| [`crates/corpora-fabric`](crates/corpora-fabric/README.md), [`crates/corpora-source`](crates/corpora-source/README.md), [`crates/corpora-agent`](crates/corpora-agent/README.md) | Reserved Rust crates; their builder, connector, and runtime APIs are not implemented yet. |
+| [`packages/tei-to-tf`](packages/tei-to-tf/README.md) | TEI acquisition, reading policy, TF export, optional quality passes. |
+| [`packages/epub-to-tf`](packages/epub-to-tf/README.md) | EPUB export, semantic TF features, asset copying, visual QA. |
+| [`packages/pdf-to-tf`](packages/pdf-to-tf/README.md) | Score-gated PDF → TEI → TF, page/line/word mapping, located issue report. |
+| [`packages/tf-ai-resolver`](packages/tf-ai-resolver/README.md) | Exact TF selection, expert proposal, reviewed derived reading, loopback browser service. |
+| [`packages/quality-ai`](packages/quality-ai/README.md) | Optional hosted model bridge for TEI quality review. |
+| [`crates/corpora-core/schema`](crates/corpora-core/schema/README.md), [`packages/corpora-types`](packages/corpora-types/README.md), `generated/`, `Package.swift` | Shared schema, generated types, and SwiftPM library. |
+| [`agent/text-fabric-expert`](agent/text-fabric-expert/README.md) | Agent prompt, tools, and evaluation instructions. |
+
+## Public API at a glance
+
+These are the main entry points. Their own READMEs give runnable examples and
+parameter tables.
+
+| API | Simple purpose |
+| --- | --- |
+| `corpora_core::structural::check_xml` / `check_xml_with_options` | Check decoded XML and return exact source locations. |
+| `corpora_core::purpose::validate_tei_metadata` | Check TEI dates and IDs according to an explicit caller policy. |
+| `corpora_core::language::detect_language` | Select a supported language and dictionary hint. |
+| `corpora_core::spellcheck::SpellEngine` | Optionally check spelling with installed, pinned dictionaries. |
+| `corpora_convert::epub::validate_epub` / `validate_epub_with_slot_limit` | Check local EPUB bytes and return a reading projection or blockers. |
+| `corpora_pdf::extract_pdf` | Extract PDF pages, OCR scans, and return positioned elements with evidence scores. |
+| `tei_to_tf.convert` / `epub_to_tf.convert` | Export a new TF bundle from a supported source. |
+| `tf_ai_resolver.inspect_selection` / `resolve` / `apply_resolution` | Pin TF text, propose a change, and write a reviewed derived reading. |
+| `corpora_typegen::Schema` and target `emit` functions | Read the model schema and generate language-specific types. |
+
+## Development and tests
+
+Work on a `<type>/<slug>` branch and open a Conventional Commit PR into `dev`.
+The release path is `dev → next → release/vX.Y.Z → main`; see the
+[workflow guide](.github/WORKFLOW.md) and
+[branch policy](.github/BRANCH-AND-RELEASE-POLICY.md). Do not edit generated
+versions or changelog entries by hand. Keep source, tests, and the matching
+README in the same change. The code and agent rules are in [AGENTS.md](AGENTS.md).
+
+```sh
+make fmt          # format root Rust and Swift sources
+make ci           # root lint, types, tests, and build
+make agents-check # agent instructions and skills
+```
+
+Root `make ci` does **not** discover nested Python and Node packages. Run their
+own checks when you change them:
+
+```sh
+make -C packages/tei-to-tf check build
+uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/tests
+uv run --project packages/tf-ai-resolver pytest -q packages/tf-ai-resolver/tests
+cargo build -p corpora-pdf --bin corpora-pdf-extract
+make -C packages/pdf-to-tf check build
+npm ci --prefix packages/quality-ai
+npm run check --prefix packages/quality-ai
+npm test --prefix packages/quality-ai
+```
+
+The [TEI package workflow](.github/workflows/tei-converter.yml),
+[PDF converter workflow](.github/workflows/pdf-converter.yml) and
+[EPUB/resolver workflow](.github/workflows/epub-resolver.yml) run their nested
+checks on relevant PRs. See each package README for its complete locked check
+command and real-loader verification.
+
+## Contributing and license
+
+Start with [AGENTS.md](AGENTS.md), change only the relevant module, and add a
+test when behavior changes. Keep secrets out of code, examples, and commits;
+see the [workflow guide](.github/WORKFLOW.md) for local setup and PR rules.
+The repository is licensed under **MIT OR Apache-2.0**.
+
+For a new Rust crate, run `cargo new crates/corpora-mycrate --lib`, inherit the
+workspace package fields and lints in its `Cargo.toml`, add a focused README,
+and verify it with `make ci`. Reserved crate names in the project map are not
+working APIs until code and tests are added.
+
+## Publishing
+
+Release automation handles versions and tags. `PUBLISH_CRATES=true` opts the
+tagged release into crates.io publishing when `CARGO_REGISTRY_TOKEN` is
+configured in the `crates` environment. `PUBLISH_GITHUB_PACKAGES=true` opts
+into generated TypeScript package publishing; the release also carries Cargo
+artifacts, and the root `Package.swift` exposes generated Swift types. Follow
+the [branch and release policy](.github/BRANCH-AND-RELEASE-POLICY.md) before
+changing publishing settings.
+
+The PDF QA builder renders source pages to PNG at the extraction coordinate scale,
+so the internal browser does not need a PDF plugin. Findings are collapsed by
+default and script findings link to their extracted element. Original PDFs and
+raw JSON remain available; the viewer never applies OCR candidates.
+
+The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
+Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.
+It preserves source text and emits review-required candidates; hosted recognition
+requires explicit provider selection and a request cap. Use `--provider vercel`
+with `AI_GATEWAY_API_KEY` (preferred), or `--provider mistral` with `MISTRAL_API_KEY`.
+Gateway requests preserve reported token usage, exclude reference text and have no
+client retries; cached candidates remain subject to image review. The first cache
+miss checks authenticated model eligibility before inference. Use `--gateway-model`
+for explicit model selection; the tool respects existing team provider allowlists.
+Direct Mistral OCR also retains validated `usage_info` page/byte counters and
+the reported OCR model in successful caches and rejected-response reports.
+Missing usage stays unknown; cached counters describe the original request.
+Rejected JSON responses retain sanitized finish reasons and token usage when supplied,
+including reasoning-token counts; partial text is rejected and is never cached as a candidate.
+`--gateway-reasoning-effort low|high` explicitly selects a catalog-supported effort
+for Vercel and separates its cache; omitting it preserves the existing request defaults.
+`--gateway-max-tokens N` (1–32768, default 1024) sets the Vercel output cap; a non-default
+cap must fit the catalog's advertised model limit and uses a separate cache.

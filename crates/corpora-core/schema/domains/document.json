@@ -1,0 +1,349 @@
+{
+  "description": "Canonical document model (serialization format, not database tables).",
+  "types": {
+    "Property": {
+      "description": "Ordered, repeatable descriptive property.",
+      "table": false,
+      "fields": {
+        "key": {
+          "type": "String",
+          "description": "Namespaced property key."
+        },
+        "value": {
+          "type": "String",
+          "description": "Textual descriptive value; structured analysis belongs in typed annotations."
+        }
+      }
+    },
+    "Metadata": {
+      "description": "Bibliographic and descriptive metadata.",
+      "table": false,
+      "fields": {
+        "title": {
+          "type": "String?",
+          "description": "Bibliographic title."
+        },
+        "creators": {
+          "type": "String[]",
+          "description": "Ordered creator names as supplied by the source."
+        },
+        "language": {
+          "type": "String?",
+          "description": "Language identifier as supplied; no normalization is imposed."
+        },
+        "publisher": {
+          "type": "String?",
+          "description": "Publisher name."
+        },
+        "date": {
+          "type": "String?",
+          "description": "Publication date, preserving uncertain or partial dates."
+        },
+        "description": {
+          "type": "String?",
+          "description": "Descriptive summary."
+        },
+        "identifier": {
+          "type": "String?",
+          "description": "External bibliographic identifier; distinct from domain identity."
+        },
+        "rights": {
+          "type": "String?",
+          "description": "Rights or licence statement."
+        },
+        "subjects": {
+          "type": "String[]",
+          "description": "Subject terms."
+        },
+        "properties": {
+          "type": "Property[]",
+          "description": "Ordered, repeatable descriptive properties."
+        }
+      }
+    },
+    "Source": {
+      "description": "Reference to external evidence; never fetched by this crate.",
+      "table": false,
+      "fields": {
+        "locator": {
+          "type": "String",
+          "description": "Opaque source locator."
+        },
+        "description": {
+          "type": "String?",
+          "description": "Human-readable source description."
+        },
+        "format": {
+          "type": "String?",
+          "description": "Source format label, such as tei or epub; extensible, not a parser registry."
+        }
+      }
+    },
+    "TextRange": {
+      "description": "Unicode scalar range within a block's text.",
+      "table": false,
+      "fields": {
+        "start": {
+          "type": "u32",
+          "description": "Start offset, inclusive."
+        },
+        "end": {
+          "type": "u32",
+          "description": "End offset, exclusive."
+        }
+      }
+    },
+    "Reference": {
+      "description": "Cross-reference to another corpus location.",
+      "table": false,
+      "fields": {
+        "corpus": {
+          "type": "CorpusId",
+          "description": "Target corpus."
+        },
+        "document": {
+          "type": "DocumentId",
+          "description": "Target document."
+        },
+        "node": {
+          "type": "NodeId?",
+          "description": "Target node, or the whole document."
+        },
+        "range": {
+          "type": "TextRange?",
+          "description": "Optional Unicode scalar range; requires a block node."
+        }
+      }
+    },
+    "Provenance": {
+      "description": "Origin and transformation history of a value.",
+      "table": false,
+      "fields": {
+        "method": {
+          "type": "String",
+          "description": "Namespaced derivation method, for example source:transcription or ai:inference."
+        },
+        "agent": {
+          "type": "String?",
+          "description": "Responsible person, software, or model and version."
+        },
+        "sources": {
+          "type": "Source[]",
+          "description": "Evidence consulted."
+        },
+        "derived_from": {
+          "type": "Reference[]",
+          "description": "Inputs from which this value was derived."
+        }
+      }
+    },
+    "Token": {
+      "description": "A single token with its exact trailing separator.",
+      "table": false,
+      "fields": {
+        "text": {
+          "type": "String",
+          "description": "Token text without normalization."
+        },
+        "after": {
+          "type": "String",
+          "description": "Exact following whitespace or punctuation."
+        }
+      }
+    },
+    "InlineMarkup": {
+      "description": "Neutral representation of source inline markup.",
+      "table": false,
+      "fields": {
+        "kind": {
+          "type": "InlineKind",
+          "description": "Neutral semantic classification of source inline markup."
+        },
+        "attributes": {
+          "type": "Property[]",
+          "description": "Source attributes with namespace-qualified keys; values are not resolved."
+        }
+      }
+    },
+    "Block": {
+      "description": "Leaf content node carrying canonical text.",
+      "table": false,
+      "fields": {
+        "id": {
+          "type": "NodeId",
+          "description": "Identity within the document."
+        },
+        "kind": {
+          "type": "String",
+          "description": "Namespaced semantic role, such as text:paragraph or manuscript:line."
+        },
+        "text": {
+          "type": "String",
+          "description": "Canonical text to which byte offsets apply."
+        },
+        "metadata": {
+          "type": "Metadata",
+          "description": "Descriptive properties."
+        }
+      }
+    },
+    "Section": {
+      "description": "Structural node containing ordered children.",
+      "table": false,
+      "fields": {
+        "id": {
+          "type": "NodeId",
+          "description": "Identity within the document."
+        },
+        "kind": {
+          "type": "String",
+          "description": "Namespaced semantic role, such as bible:chapter or paper:section."
+        },
+        "title": {
+          "type": "String?",
+          "description": "Optional display title."
+        },
+        "children": {
+          "type": "Node[]",
+          "description": "Ordered nested sections and blocks."
+        },
+        "metadata": {
+          "type": "Metadata",
+          "description": "Descriptive properties."
+        }
+      }
+    },
+    "Document": {
+      "description": "A single document within a corpus.",
+      "table": false,
+      "fields": {
+        "id": {
+          "type": "DocumentId",
+          "description": "Identity within its corpus."
+        },
+        "title": {
+          "type": "String?",
+          "description": "Optional display title."
+        },
+        "children": {
+          "type": "Node[]",
+          "description": "Ordered document content."
+        },
+        "metadata": {
+          "type": "Metadata",
+          "description": "Descriptive properties."
+        },
+        "provenance": {
+          "type": "Provenance[]",
+          "description": "Origin and transformations of this document."
+        }
+      }
+    },
+    "CorpusDescriptor": {
+      "description": "Discovery metadata from corpus manifests.",
+      "table": false,
+      "fields": {
+        "name": {
+          "type": "String?",
+          "description": "Manifest display name."
+        },
+        "description": {
+          "type": "String?",
+          "description": "Manifest description."
+        },
+        "language": {
+          "type": "String?",
+          "description": "Manifest language identifier."
+        },
+        "kind": {
+          "type": "CorpusType?",
+          "description": "Extensible manifest type."
+        },
+        "version": {
+          "type": "String?",
+          "description": "Source corpus version; distinct from crate version."
+        },
+        "licence": {
+          "type": "String?",
+          "description": "Manifest licence statement."
+        }
+      }
+    },
+    "Corpus": {
+      "description": "A collection of related documents.",
+      "table": false,
+      "fields": {
+        "id": {
+          "type": "CorpusId",
+          "description": "Corpus identity."
+        },
+        "documents": {
+          "type": "Document[]",
+          "description": "Ordered documents."
+        },
+        "metadata": {
+          "type": "Metadata",
+          "description": "Descriptive properties."
+        },
+        "descriptor": {
+          "type": "CorpusDescriptor",
+          "description": "Discovery metadata from corpus manifests."
+        }
+      }
+    },
+    "CorpusTocSection": {
+      "description": "One toc.yml section row (mirrors corpus-archive's CorpusSection).",
+      "table": false,
+      "fields": {
+        "title": {
+          "type": "String",
+          "description": "Section title."
+        },
+        "nodes": {
+          "type": "i64?",
+          "description": "Node count."
+        },
+        "words": {
+          "type": "i64?",
+          "description": "Word count."
+        }
+      }
+    },
+    "InlineAnnotation": {
+      "description": "An inline markup annotation anchored to a corpus location, with provenance.",
+      "table": false,
+      "fields": {
+        "target": {
+          "type": "Reference",
+          "description": "Anchored corpus location; requires a block node and range."
+        },
+        "value": {
+          "type": "InlineMarkup",
+          "description": "The inline markup payload."
+        },
+        "provenance": {
+          "type": "Provenance",
+          "description": "Origin of this annotation."
+        }
+      }
+    },
+    "AnnotatedCorpus": {
+      "description": "Corpus with an inline annotation layer.",
+      "table": false,
+      "fields": {
+        "format_version": {
+          "type": "String",
+          "description": "Envelope version; supported version is ANNOTATED_CORPUS_VERSION."
+        },
+        "corpus": {
+          "type": "Corpus",
+          "description": "Complete corpus tree."
+        },
+        "annotations": {
+          "type": "InlineAnnotation[]",
+          "description": "Inline layer including its original provenance."
+        }
+      }
+    }
+  }
+}

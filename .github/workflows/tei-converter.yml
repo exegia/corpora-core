@@ -1,0 +1,31 @@
+name: TEI converter
+on:
+  pull_request:
+    paths:
+      - 'packages/tei-to-tf/**'
+      - 'packages/quality-ai/**'
+      - 'crates/corpora-core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/tei-converter.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+      - run: npm ci --prefix packages/quality-ai
+      - run: npm run check --prefix packages/quality-ai
+      - run: npm test --prefix packages/quality-ai
+      - run: cargo build --locked -p corpora-core --features spellcheck --bin corpora-text-check
+      - run: python3 crates/corpora-core/tools/install_dictionaries.py --dictionary en_US --dictionary fr_FR --output target/cspell-dictionaries
+      - run: make -C packages/tei-to-tf check build
+        env:
+          CORPORA_TEXT_CHECK: ${{ github.workspace }}/target/debug/corpora-text-check
+          CSPELL_DICTIONARIES: ${{ github.workspace }}/target/cspell-dictionaries

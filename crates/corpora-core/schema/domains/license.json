@@ -1,0 +1,108 @@
+{
+  "description": "Licence catalog and project attachments (Postgres tables).",
+  "types": {
+    "License": {
+      "description": "Licence catalog entry.",
+      "table": "licences",
+      "fields": {
+        "id": {
+          "type": "String",
+          "primary_key": true,
+          "description": "SPDX or custom identifier."
+        },
+        "title": {
+          "type": "String",
+          "description": "Licence title."
+        },
+        "url": {
+          "type": "String?",
+          "description": "Reference URL."
+        },
+        "domain_content": {
+          "type": "bool",
+          "default": false,
+          "description": "Applies to content."
+        },
+        "domain_data": {
+          "type": "bool",
+          "default": false,
+          "description": "Applies to data."
+        },
+        "domain_software": {
+          "type": "bool",
+          "default": false,
+          "description": "Applies to software."
+        },
+        "family": {
+          "type": "String?",
+          "description": "Licence family (CC, GPL, ...)."
+        },
+        "maintainer": {
+          "type": "String?",
+          "description": "Maintaining organization."
+        },
+        "status": {
+          "type": "LicenseStatus",
+          "default": "active",
+          "description": "Lifecycle status."
+        },
+        "is_generic": {
+          "type": "bool",
+          "default": false,
+          "description": "Generic licence flag."
+        },
+        "legacy_ids": {
+          "type": "String[]?",
+          "description": "Previous identifiers."
+        },
+        "od_conformance": {
+          "type": "LicenseConformance?",
+          "description": "Open Definition conformance."
+        },
+        "osd_conformance": {
+          "type": "LicenseConformance?",
+          "description": "Open Source Definition conformance."
+        },
+        "full_text": {
+          "type": "String?",
+          "description": "Downloaded or edited licence text, null until first fetched."
+        },
+        "created_at": {
+          "type": "Timestamp",
+          "description": "Creation time."
+        },
+        "updated_at": {
+          "type": "Timestamp?",
+          "description": "Last update time."
+        }
+      }
+    },
+    "ProjectLicense": {
+      "description": "Licence attached to a project. agreed_at pairs with agreed_by_user_id under a check constraint; pending exactly when agreed_at is null.",
+      "table": "project_licences",
+      "fields": {
+        "project_id": {
+          "type": "Uuid",
+          "references": "Project.id",
+          "primary_key": true,
+          "description": "Project."
+        },
+        "licence_id": {
+          "type": "String",
+          "references": "License.id",
+          "primary_key": true,
+          "description": "Licence."
+        },
+        "agreed_at": {
+          "type": "Timestamp?",
+          "description": "Agreement timestamp; null while pending."
+        },
+        "agreed_by_user_id": {
+          "type": "Uuid?",
+          "references": "User.id",
+          "description": "Agreeing user; null together with agreed_at."
+        }
+      }
+    }
+  }
+}

@@ -42,12 +42,6 @@ repos:
     hooks:
       - id: gitleaks
 
-  - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
-    hooks:
-      - id: shellcheck
-        args: ["-S", "warning", "-x"]
-
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.7
     hooks:
@@ -55,6 +49,16 @@ repos:
 
   - repo: local
     hooks:
+      # Use the pinned PyPI wheel instead of rebuilding the Git checkout, which
+      # downloads ShellCheck from GitHub during environment installation.
+      - id: shellcheck
+        name: shellcheck
+        entry: shellcheck
+        language: python
+        additional_dependencies: [shellcheck-py==0.11.0.1]
+        types: [shell]
+        require_serial: true
+        args: ["-S", "warning", "-x"]
       - id: conventional-commit
         name: conventional commit message
         entry: scripts/check-commit-msg.sh
