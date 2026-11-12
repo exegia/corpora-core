@@ -4,9 +4,11 @@
 #   scripts/changelog.sh section VERSION [TO]   print a section for latest-tag..TO (default origin/next)
 #   scripts/changelog.sh update  VERSION [TO]   insert or replace that section in CHANGELOG.md
 #   scripts/changelog.sh extract VERSION        print the body of VERSION's section (release notes)
+#   scripts/changelog.sh tidy                   normalize blank lines in CHANGELOG.md
 #
 # `update` is idempotent: re-running it for the same VERSION replaces the section,
-# which is what a refreshed release branch needs.
+# which is what a refreshed release branch needs. Every write leaves one blank line
+# before each `## [` heading and none at the end of the file.
 
 set -euo pipefail
 
@@ -82,10 +84,33 @@ cmd_update() {
     skipping { next }
     { print }
     END { if (!done) dump() }
-  ' "$CHANGELOG" > "$tmp"
+  ' "$CHANGELOG" | normalize > "$tmp"
   cat "$tmp" > "$CHANGELOG"
   rm -f "$sec" "$tmp"
   ok "$CHANGELOG has a section for $ver"
+}
+
+# normalize: stdin to stdout with a blank line before every `## [` heading after the
+# first line and no blank lines at the end. Blank lines are held back until a non-blank
+# line follows, so trailing ones are never printed.
+normalize() {
+  awk '
+    /^[[:space:]]*$/ { blanks++; next }
+    {
+      if (/^## \[/ && NR > 1 && blanks == 0) blanks = 1
+      for (; blanks > 0; blanks--) print ""
+      print
+    }
+  '
+}
+
+cmd_tidy() {
+  local tmp
+  [ -f "$CHANGELOG" ] || return 0
+  tmp="$(mktemp)"
+  normalize < "$CHANGELOG" > "$tmp"
+  cat "$tmp" > "$CHANGELOG"; rm -f "$tmp"
+  ok "$CHANGELOG tidied"
 }
 
 cmd_extract() {
@@ -110,7 +135,8 @@ main() {
     section) cmd_section "$@" ;;
     update)  cmd_update "$@" ;;
     extract) cmd_extract "$@" ;;
-    *) sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 2 ;;
+    tidy)    cmd_tidy ;;
+    *) sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; [ -z "$cmd" ] || exit 2 ;;
   esac
 }
 
