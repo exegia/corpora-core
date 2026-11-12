@@ -93,6 +93,10 @@ other TEI conversions are unchanged:
 - `--milestones pages`: each `pb` becomes a TF `page` node, running to the next `pb`.
 - `--facsimile zones`: `@facs` resolves to integer `facs_ulx/uly/lrx/lry` features.
 
+pdf-to-tf also runs `tei-to-tf` with its existing `--notes include` option, so
+footnote lines stay in the TF text where they are printed and every extracted
+line can be verified.
+
 ## Feature mapping
 
 | PDF extraction | TEI | Text-Fabric |
@@ -100,10 +104,13 @@ other TEI conversions are unchanged:
 | Page | `pb@n` + `facsimile/surface` | `page` node: `page`, `facs_surface`, `facs_*` |
 | Line / word bounds | `zone` via `@facs` | `facs_ulx`, `facs_uly`, `facs_lrx`, `facs_lry` (int) |
 | Heading h1–h4 | `div[@type=section]/head[@type=hN]` | `element`, `tei_tag=head`, `parent` edges |
-| Paragraph line | `p/seg[@type=line]` | `element`, `tei_tag=seg` (and `p`) |
+| Paragraph line | `p[@n]/seg[@type=line]`; `@n` is the paragraph number, repeated when a paragraph continues on the next page | `element`, `tei_tag=seg` (and `p`) |
 | List item | `list/item` | `element`, `tei_tag=item` |
-| Reference | `listBibl/bibl` | `element`, `tei_tag=bibl` |
+| Reference line | `listBibl/bibl[@n]/seg[@type=line]`; one `bibl` per bibliography entry, `@n` repeated when an entry continues on the next page. Extractions without entry numbers get one `bibl` per line | `element`, `tei_tag=seg` (and `bibl`) |
 | Citation | `ab[@type=citation]` | `element`, `tei_tag=ab` |
+| Footnote line | `note[@place=foot]/seg[@type=line]`, one `note` per note number | `element`, `tei_tag=seg` (and `note`) |
+| Running header / footer | `fw[@type=header]` / `fw[@type=footer]` | `element`, `tei_tag=fw` |
+| Journal title, title, author, affiliation, publication metadata, abstract, keywords | `ab[@type=journal-title\|title\|author\|...]/seg[@type=line]` | `element`, `tei_tag=seg` (and `ab`) |
 | Table cell | `table/row/cell` | `element`, `tei_tag=cell` |
 | OCR word + confidence | `w[@cert]` | `element`, `tei_tag=w`, `attr_cert_*` |
 | Bold / italic / link | `hi[@rend]` / `ref[@target]` | `element`, `tei_tag=hi` / `ref` |

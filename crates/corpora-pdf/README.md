@@ -104,15 +104,82 @@ Within a block, repeated aligned wide gaps in neighboring rows can separate
 short table cells; a single wide space is insufficient. Word order within cells,
 including right-to-left recognition order and combining marks, is preserved.
 Section ancestry is assigned after grouping in the final reading order.
+
+On text-layer pages, Poppler starts a new text fragment at every font change, so
+one printed line can arrive in pieces (a small-caps heading, an italic word, a
+footnote number). Fragments that share most of their height and are no further
+apart than a word space (0.8 line heights) are joined into one line element, in
+either order, so the line keeps its text, marks and a single bounding box. Page
+columns and table columns sit further apart and stay separate. Text that the PDF
+draws twice at the same place (an overprint) is kept once, as `pdftotext` does.
+A text-layer table needs rows of two or more non-blank cells, at least one of
+them no wider than four line heights, with neighboring rows that start their
+cells at the same places; two prose columns that share baselines are not a table.
 These layout rules remain heuristic: they do not establish correct reading order
 for every PDF, reconstruct complex tables, or repair an OCR model's script errors.
+
+Once every page is extracted, a document pass adds labels that need more than one
+line. Blank lines are dropped after it runs.
+
+- `running_header` / `running_footer`: a line in the top or bottom 10% of the
+  page whose letters repeat in that band on another page, or a bare page number.
+  It must be the page's outermost text: a line with a title above it is body
+  text. A page number at the foot needs space above it, so a wrapped note line
+  such as "243." stays a footnote; a standalone page number below the footnote
+  rule is still a `running_footer`. A heading set larger than 1.15 times the body
+  text is never page furniture; a running head set in bold capitals at body size
+  is. A linked source notice set apart at the foot of a page (for example a
+  repository notice on a cover page) is also a `running_footer`.
+- `footnote`: every line below the footnote rule (a long blank, underlined run in
+  the lower half of the page). Without a rule, a run of smaller lines at the foot
+  of the page that starts with a note number followed by note text.
+- Section labels such as "Abstract", "Keywords", "Recommended Citation" and
+  "Cover Page Footnote" become `h2` headings, and the lines right under them
+  become `abstract`, `keywords`, `citation` or `footnote`. A centred line in
+  capitals ("INTRODUCTION") or a centred section number ("2.", "IV") is an `h2`
+  when body text with lowercase letters follows within five line heights, so a
+  cover page set in capitals and table cells in scripts without case stay body
+  text. Every line under "Bibliography", "References" or "Works Cited" is a
+  `reference` until the next heading of the same or a higher level, across pages;
+  subheadings such as "Primary" and "Secondary" do not end it.
+- Front matter, only on the first two pages, before any running header, and only
+  when a page shows issue details ("Volume 1", "October 2010") or an abstract,
+  keywords or citation label: large lines above the issue details are the
+  `journal_title`, large lines below them the `title`; the name line after the
+  title is the `author`, followed by `affiliation` lines; issue details are
+  `publication_metadata`.
+- `paragraph` lines carry a `paragraph` number, counted through the document, so
+  the lines of one visual paragraph share it. A paragraph starts at a line
+  indented past the line above it, after a gap larger than the page's usual line
+  spacing plus a third of a line (at least half and at most 0.6 of a line, so
+  uneven spacing on a scan stays one paragraph and double-spaced table rows stay
+  apart), or after anything that is not body text (a heading, list, image). A
+  full-width last line at the foot of one column continues at the top of the next
+  column when that line is not indented and only page furniture lies between them
+  in Poppler's order. Lines are linked
+  by position, not by Poppler's output order, and each paragraph's lines are put
+  together, top to bottom, where its first line was extracted: Poppler can emit
+  the end of a paragraph after the next paragraph's lines. Pages where two
+  paragraph lines share a row (page columns, or a printed line Poppler left in
+  pieces) keep Poppler's order. A paragraph keeps its number on the
+  next page when the page's last body line is full width and the next page's first
+  body line is not indented.
+- `reference` lines carry an `entry` number, counted through the document, so
+  the lines of one bibliography entry share it. A line flush with the left edge of
+  its column starts an entry; a line with a hanging indent continues the entry
+  above it, also at the top of the next page. An indent wider than a fifth of the
+  column (a centred subheading such as "Secondary") is not a hanging indent and
+  stands alone. A bibliography set without hanging indents gets one entry per line.
+- A numbered list item needs a space and text after its marker, so a DOI
+  ("10.70623/NAJW4433.") or a continued page number ("243.") is not a list item.
+  A citation needs a bracketed number (`[1]`, `[2, 5]`), not any bracketed word.
 
 ### What the labels and score mean
 
 - On text-layer pages, `h1`–`h4` use relative font size plus bold evidence.
   On OCR pages, heading candidates use line height and short-line cues.
-  `section_path` records heading ancestry. List, citation, reference, and table-cell labels use
-  layout/text cues. They are candidates to review, not guaranteed source tags.
+  `section_path` records heading ancestry. List, citation, reference, table-cell,
+  page furniture, footnote and front-matter labels use layout/text cues. They are candidates to review, not guaranteed source tags.
 - `bold`, `italic`, and `link` marks come from Poppler's XML output. Link
   targets remain attached to the marked text. A table is exposed through cells
   with a shared `table_id`; complex spanning tables are not reconstructed.
@@ -149,12 +216,22 @@ or Aramaic recognition; measure those against image-based references.
 The test-only builder writes a dark, side-by-side site. The left pane shows the
 original page rendered to PNG at 108 DPI (the extraction coordinate scale), with
 a link to the unchanged PDF. This works without an embedded PDF plugin.
-The right pane shows element types, text, positions, marks,
+The middle pane shows element types, text, positions, marks,
 scores, and findings. Findings start collapsed; script findings link to their
 numbered extracted element. The generic viewer in `tests/browser/` consumes
 `review.json` units; the PDF builder is a format adapter and also retains the
 raw engine `result.json`. Existing TEI and EPUB QA generators keep their
 current output contracts.
+
+A third column, "TEI rendering", shows the page as `pdf-to-tf` would encode it.
+The builder runs `pdf-to-tf`'s TEI builder (`uv run --project packages/pdf-to-tf`)
+on `result.json`, writes `document.tei.xml`, and the page renders it as HTML:
+section headings, numbered paragraphs, footnotes, running headers and footers,
+front-matter blocks, bibliography and tables, each labelled with its type ("Show
+types" hides the labels). Lines keep their `p{page}e{index}` ids, so the column
+shows only the current page and clicking a line jumps to its element card. Pass
+`--no-tei` to build without it. Script and style URLs carry a content hash, so a
+reload after a rebuild never runs a cached copy.
 
 ```sh
 python3 tests/browser/build_pdf_review.py path/to/book.pdf /tmp/pdf-review --languages eng

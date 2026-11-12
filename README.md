@@ -23,8 +23,8 @@ The optional [quality AI bridge](packages/quality-ai/README.md) helps the TEI
 quality pipeline review bounded findings. The [Text-Fabric expert bundle](agent/text-fabric-expert/README.md)
 contains the agent instructions and evaluation setup.
 
-When the PDF crate is present, PR tests install Poppler and Tesseract before
-`make ci`, then run the PDF benchmark, review-browser and OCR candidate Python suites.
+When the PDF crate is present, PR tests install Poppler, Tesseract and uv (for
+the review page's TEI column) before `make ci`, then run the PDF benchmark, review-browser and OCR candidate Python suites.
 The [PDF OCR skill](crates/corpora-pdf/skills/pdf-ocr/SKILL.md) and
 [proposal](crates/corpora-pdf/agent/PROPOSAL.md) define specialist recognition,
 optional paid fallback and location-linked review findings for historical scripts.
@@ -181,6 +181,8 @@ The PDF QA builder renders source pages to PNG at the extraction coordinate scal
 so the internal browser does not need a PDF plugin. Findings are collapsed by
 default and script findings link to their extracted element. Original PDFs and
 raw JSON remain available; the viewer never applies OCR candidates.
+A third column renders the TEI that `pdf-to-tf` builds from the same extraction
+as HTML, labelled by semantic type; `--no-tei` skips it (it needs `uv`).
 
 The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
 Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.

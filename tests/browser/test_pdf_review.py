@@ -6,6 +6,7 @@ import struct
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
+from xml.etree import ElementTree
 from pathlib import Path
 
 
@@ -30,8 +31,9 @@ class PdfReviewTest(unittest.TestCase):
             MODULE.subprocess, "run", return_value=Mock(stdout=json.dumps(output))
         ), patch.object(MODULE, "render_page", return_value="mock-page.png"):
             site = Path(directory)
-            MODULE.build(source, site, "eng")
+            MODULE.build(source, site, "eng", tei=False)
             review = json.loads((site / "review.json").read_text())
+            self.assertIsNone(review["tei_url"])
             self.assertEqual(review["units"][0]["findings"], [])
             self.assertEqual(review["units"][1]["findings"], [finding])
             self.assertIsNone(review["units"][1]["findings"][0]["missing_marks"])
@@ -57,6 +59,16 @@ class PdfReviewTest(unittest.TestCase):
                 self.assertAlmostEqual(height, page["height"], delta=1)
             self.assertEqual(extraction["pages"][1]["method"], "ocr")
             self.assertIn("Original source", (site / "index.html").read_text())
+            index = (site / "index.html").read_text()
+            self.assertIn("TEI rendering", index)
+            self.assertRegex(index, r'src="review\.js\?v=[0-9a-f]{12}"')
+            # The TEI is pdf-to-tf's, built from this extraction: line ids match the cards.
+            self.assertEqual(review["tei_url"], "document.tei.xml")
+            tei = ElementTree.parse(site / "document.tei.xml").getroot()
+            ns = {"t": "http://www.tei-c.org/ns/1.0", "xml": "http://www.w3.org/XML/1998/namespace"}
+            head = tei.find(".//t:head[@xml:id='p1e0']", ns)
+            self.assertIsNotNone(head)
+            self.assertEqual("".join(head.itertext()), "Sample Document")
             self.assertIn("color-scheme:dark", (site / "review.css").read_text())
 
 
