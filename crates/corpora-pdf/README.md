@@ -198,12 +198,22 @@ or Aramaic recognition; measure those against image-based references.
 The test-only builder writes a dark, side-by-side site. The left pane shows the
 original page rendered to PNG at 108 DPI (the extraction coordinate scale), with
 a link to the unchanged PDF. This works without an embedded PDF plugin.
-The right pane shows element types, text, positions, marks,
+The middle pane shows element types, text, positions, marks,
 scores, and findings. Findings start collapsed; script findings link to their
 numbered extracted element. The generic viewer in `tests/browser/` consumes
 `review.json` units; the PDF builder is a format adapter and also retains the
 raw engine `result.json`. Existing TEI and EPUB QA generators keep their
 current output contracts.
+
+A third column, "TEI rendering", shows the page as `pdf-to-tf` would encode it.
+The builder runs `pdf-to-tf`'s TEI builder (`uv run --project packages/pdf-to-tf`)
+on `result.json`, writes `document.tei.xml`, and the page renders it as HTML:
+section headings, numbered paragraphs, footnotes, running headers and footers,
+front-matter blocks, bibliography and tables, each labelled with its type ("Show
+types" hides the labels). Lines keep their `p{page}e{index}` ids, so the column
+shows only the current page and clicking a line jumps to its element card. Pass
+`--no-tei` to build without it. Script and style URLs carry a content hash, so a
+reload after a rebuild never runs a cached copy.
 
 ```sh
 python3 tests/browser/build_pdf_review.py path/to/book.pdf /tmp/pdf-review --languages eng
