@@ -70,7 +70,8 @@ function render() {
     const meta = document.createElement("div");
     meta.className = "meta";
     const r = element.bounds;
-    meta.textContent = `Element ${index} · ${label(element.kind)} · x ${Math.round(r.x)}, y ${Math.round(r.y)} · ${percent(element.extraction_score)}`;
+    const kind = element.paragraph ? `${label(element.kind)} ${element.paragraph}` : label(element.kind);
+    meta.textContent = `Element ${index} · ${kind} · x ${Math.round(r.x)}, y ${Math.round(r.y)} · ${percent(element.extraction_score)}`;
     card.append(meta, contentFor(element));
     if (element.section_path.length) {
       const path = document.createElement("div");

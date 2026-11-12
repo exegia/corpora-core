@@ -104,15 +104,64 @@ Within a block, repeated aligned wide gaps in neighboring rows can separate
 short table cells; a single wide space is insufficient. Word order within cells,
 including right-to-left recognition order and combining marks, is preserved.
 Section ancestry is assigned after grouping in the final reading order.
+
+On text-layer pages, Poppler starts a new text fragment at every font change, so
+one printed line can arrive in pieces (a small-caps heading, an italic word, a
+footnote number). Fragments that share most of their height and are no further
+apart than a word space (0.8 line heights) are joined into one line element, in
+either order, so the line keeps its text, marks and a single bounding box. Page
+columns and table columns sit further apart and stay separate. Text that the PDF
+draws twice at the same place (an overprint) is kept once, as `pdftotext` does.
+A text-layer table needs rows of two or more non-blank cells, at least one of
+them no wider than four line heights, with neighboring rows that start their
+cells at the same places; two prose columns that share baselines are not a table.
 These layout rules remain heuristic: they do not establish correct reading order
 for every PDF, reconstruct complex tables, or repair an OCR model's script errors.
+
+Once every page is extracted, a document pass adds labels that need more than one
+line. Blank lines are dropped after it runs.
+
+- `running_header` / `running_footer`: a line in the top 8.5% or bottom 7% of the
+  page whose letters repeat in that band on another page, or a bare page number.
+  A line already labelled as a heading is never page furniture. A linked source
+  notice set apart at the foot of a page (for example a repository notice on a
+  cover page) is also a `running_footer`.
+- `footnote`: every line below the footnote rule (a long blank, underlined run in
+  the lower half of the page). Without a rule, a run of smaller lines at the foot
+  of the page that starts with a note number.
+- Section labels such as "Abstract", "Keywords", "Recommended Citation" and
+  "Cover Page Footnote" become `h2` headings, and the lines right under them
+  become `abstract`, `keywords`, `citation` or `footnote`. A centred line in
+  capitals ("INTRODUCTION") is an `h2`. Every line under "Bibliography",
+  "References" or "Works Cited" is a `reference` until the next heading, across
+  pages.
+- Front matter, only on the first two pages, before any running header, and only
+  when a page shows issue details ("Volume 1", "October 2010") or an abstract,
+  keywords or citation label: large lines above the issue details are the
+  `journal_title`, large lines below them the `title`; the name line after the
+  title is the `author`, followed by `affiliation` lines; issue details are
+  `publication_metadata`.
+- `paragraph` lines carry a `paragraph` number, counted through the document, so
+  the lines of one visual paragraph share it. A paragraph starts at a line
+  indented past the line above it, after more than half a line of extra space, or
+  after anything that is not body text (a heading, list, image). Lines are linked
+  by position, not by Poppler's output order, and each paragraph's lines are put
+  together, top to bottom, where its first line was extracted: Poppler can emit
+  the end of a paragraph after the next paragraph's lines. Pages where two
+  paragraph lines share a row (page columns, or a printed line Poppler left in
+  pieces) keep Poppler's order. A paragraph keeps its number on the
+  next page when the page's last body line is full width and the next page's first
+  body line is not indented.
+- A numbered list item needs a space and text after its marker, so a DOI
+  ("10.70623/NAJW4433.") or a continued page number ("243.") is not a list item.
+  A citation needs a bracketed number (`[1]`, `[2, 5]`), not any bracketed word.
 
 ### What the labels and score mean
 
 - On text-layer pages, `h1`–`h4` use relative font size plus bold evidence.
   On OCR pages, heading candidates use line height and short-line cues.
-  `section_path` records heading ancestry. List, citation, reference, and table-cell labels use
-  layout/text cues. They are candidates to review, not guaranteed source tags.
+  `section_path` records heading ancestry. List, citation, reference, table-cell,
+  page furniture, footnote and front-matter labels use layout/text cues. They are candidates to review, not guaranteed source tags.
 - `bold`, `italic`, and `link` marks come from Poppler's XML output. Link
   targets remain attached to the marked text. A table is exposed through cells
   with a shared `table_id`; complex spanning tables are not reconstructed.

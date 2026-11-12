@@ -21,7 +21,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
+mod native;
 pub mod review;
+mod semantics;
 
 /// Limits and installed OCR language data used by [`extract_pdf`].
 #[derive(Clone, Debug)]
@@ -134,6 +136,12 @@ pub struct Element {
     pub section_path: Vec<String>,
     /// Shared row-group identifier for cells inferred to be in one table.
     pub table_id: Option<usize>,
+    /// One-based number of the visual paragraph a `paragraph` line belongs to,
+    /// counted through the document. Lines of one paragraph share it, including a
+    /// paragraph that continues on the next page. `None` for other labels; older
+    /// serialized results may omit this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub paragraph: Option<usize>,
     /// Element-specific visual estimate when one is available.
     pub extraction_score: Option<ExtractionScore>,
     /// OCR words in recognition order, retaining individual geometry and confidence.
@@ -154,8 +162,10 @@ pub struct Word {
 }
 
 /// Semantic labels. Heuristic labels are never presented as source PDF tags.
+/// New labels may be added, so match with a wildcard arm.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[non_exhaustive]
 pub enum ElementKind {
     /// First-level heading candidate.
     H1,
@@ -179,6 +189,28 @@ pub enum ElementKind {
     Image,
     /// Possible graph based on image placement and nearby caption.
     GraphCandidate,
+    /// Footnote line: below the page's footnote rule, or under a "cover page
+    /// footnote" label.
+    Footnote,
+    /// Repeated text (or a page number) in the top margin band.
+    RunningHeader,
+    /// Repeated text (or a page number) in the bottom margin band, or a block set
+    /// apart at the foot of the page.
+    RunningFooter,
+    /// Document title on a front-matter page.
+    Title,
+    /// Author line under the title on a front-matter page.
+    Author,
+    /// Institution or contact line under the author.
+    Affiliation,
+    /// Journal or series title above the issue details on a front-matter page.
+    JournalTitle,
+    /// Volume, issue, article number or date on a front-matter page.
+    PublicationMetadata,
+    /// Line under an "Abstract" label.
+    Abstract,
+    /// Line under a "Keywords" label.
+    Keywords,
 }
 
 /// A source-observed inline mark.
@@ -352,6 +384,7 @@ pub fn extract_pdf(
 
     let mut findings = Vec::new();
     let mut pages = Vec::with_capacity(count);
+    let mut layouts = Vec::with_capacity(count);
     for (index, page_node) in xml_pages.into_iter().enumerate() {
         let number = index + 1;
         let width = attribute_f32(page_node, "width")?;
@@ -361,7 +394,10 @@ pub fn extract_pdf(
             .filter(|n| n.has_tag_name("fontspec"))
             .filter_map(|n| Some((n.attribute("id")?, n.attribute("size")?.parse().ok()?)))
             .collect();
-        let mut elements = parse_elements(page_node, &font_sizes)?;
+        let (mut elements, mut line_styles): (Vec<Element>, Vec<native::LineStyle>) =
+            native::parse_elements(page_node, &font_sizes)?
+                .into_iter()
+                .unzip();
         if elements.len() > options.max_elements_per_page {
             return Err(PdfError::Limit(format!(
                 "page {number} has {} elements (max {})",
@@ -425,6 +461,10 @@ pub fn extract_pdf(
                 // TSV block/paragraph/line order carries Tesseract's column layout.
                 // A global y/x sort interleaves columns and invalidates section paths.
                 classify(&mut text_elements, false);
+                line_styles.extend(text_elements.iter().map(|e| native::LineStyle {
+                    size: e.bounds.height,
+                    emphasized: false,
+                }));
                 elements.extend(text_elements);
                 let score = mean_ocr_confidence(&words);
                 if let Some(ref value) = score {
@@ -462,6 +502,7 @@ pub fn extract_pdf(
                 message: "image or possible graph content needs human review".to_owned(),
             });
         }
+        layouts.push(line_styles);
         pages.push(Page {
             number,
             width,
@@ -473,6 +514,7 @@ pub fn extract_pdf(
             extraction_score: score,
         });
     }
+    semantics::label_document(&mut pages, &mut layouts);
     let script_review = review::assess(&hash, &pages);
     Ok(PdfExtraction {
         source_path: path,
@@ -528,117 +570,13 @@ fn attribute_f32(node: roxmltree::Node<'_, '_>, name: &str) -> Result<f32, PdfEr
         .ok_or_else(|| PdfError::Layout(format!("missing or invalid {name} attribute")))
 }
 
-fn parse_elements(
-    page: roxmltree::Node<'_, '_>,
-    font_sizes: &HashMap<&str, f32>,
-) -> Result<Vec<Element>, PdfError> {
-    let mut elements = Vec::new();
-    for node in page.children().filter(roxmltree::Node::is_element) {
-        if node.has_tag_name("text") {
-            let text = node
-                .descendants()
-                .filter_map(|n| n.text().filter(|_| n.is_text()))
-                .collect::<String>();
-            let marks = node
-                .descendants()
-                .filter(roxmltree::Node::is_element)
-                .filter_map(|n| {
-                    let kind = match n.tag_name().name() {
-                        "b" => MarkKind::Bold,
-                        "i" => MarkKind::Italic,
-                        "a" => MarkKind::Link,
-                        _ => return None,
-                    };
-                    let marked = n
-                        .descendants()
-                        .filter_map(|t| t.text().filter(|_| t.is_text()))
-                        .collect::<String>();
-                    Some(InlineMark {
-                        kind,
-                        text: marked,
-                        target: n.attribute("href").map(ToOwned::to_owned),
-                    })
-                })
-                .collect();
-            let bounds = Rect {
-                x: attribute_f32(node, "left")?,
-                y: attribute_f32(node, "top")?,
-                width: attribute_f32(node, "width")?,
-                height: attribute_f32(node, "height")?,
-            };
-            let font_size = node
-                .attribute("font")
-                .and_then(|id| font_sizes.get(id))
-                .copied()
-                .unwrap_or(bounds.height);
-            elements.push((
-                Element {
-                    kind: ElementKind::Paragraph,
-                    text,
-                    bounds,
-                    marks,
-                    section_path: Vec::new(),
-                    table_id: None,
-                    extraction_score: None,
-                    words: Vec::new(),
-                },
-                font_size,
-            ));
-        } else if node.has_tag_name("image") {
-            elements.push((
-                Element {
-                    kind: ElementKind::Image,
-                    text: String::new(),
-                    bounds: Rect {
-                        x: attribute_f32(node, "left")?,
-                        y: attribute_f32(node, "top")?,
-                        width: attribute_f32(node, "width")?,
-                        height: attribute_f32(node, "height")?,
-                    },
-                    marks: Vec::new(),
-                    section_path: Vec::new(),
-                    table_id: None,
-                    extraction_score: None,
-                    words: Vec::new(),
-                },
-                0.0,
-            ));
-        }
-    }
-    let mut sizes: Vec<f32> = elements
-        .iter()
-        .filter(|(e, _)| !e.text.trim().is_empty())
-        .map(|(_, size)| *size)
-        .collect();
-    sizes.sort_by(f32::total_cmp);
-    let body_size = sizes.get(sizes.len() / 2).copied().unwrap_or(1.0).max(1.0);
-    for (element, size) in &mut elements {
-        if element.text.trim().is_empty() {
-            continue;
-        }
-        let ratio = *size / body_size;
-        let bold = element.marks.iter().any(|m| m.kind == MarkKind::Bold);
-        element.kind = if ratio >= 1.45 && bold {
-            ElementKind::H1
-        } else if ratio >= 1.28 && bold {
-            ElementKind::H2
-        } else if ratio >= 1.13 && bold {
-            ElementKind::H3
-        } else if ratio >= 1.08 && bold {
-            ElementKind::H4
-        } else {
-            ElementKind::Paragraph
-        };
-    }
-    Ok(elements.into_iter().map(|(element, _)| element).collect())
-}
-
 fn classify(elements: &mut [Element], infer_native_tables: bool) {
     let mut headings: Vec<String> = Vec::new();
     let mut reference_section = false;
     let mut rows: Vec<(f32, Vec<usize>)> = Vec::new();
     for (index, element) in elements.iter().enumerate() {
-        if !element.text.is_empty() {
+        // Whitespace-only fragments (indents, trailing spaces) are never table cells.
+        if !element.text.trim().is_empty() {
             if let Some((_, row)) = rows
                 .iter_mut()
                 .find(|(y, _)| (*y - element.bounds.y).abs() < 1.0)
@@ -696,7 +634,7 @@ fn classify(elements: &mut [Element], infer_native_tables: bool) {
             element.kind = ElementKind::ListItem;
         } else if reference_section && trimmed.starts_with('[') {
             element.kind = ElementKind::Reference;
-        } else if trimmed.contains('[') && trimmed.contains(']') {
+        } else if has_numeric_citation(trimmed) {
             element.kind = ElementKind::Citation;
         }
         element.section_path.clone_from(&headings);
@@ -721,10 +659,34 @@ fn table_groups(rows: &mut [(f32, Vec<usize>)], elements: &[Element]) -> HashMap
         }
         group.clear();
     };
-    for row in rows.iter().filter(|(_, cells)| cells.len() >= 2) {
+    // As on OCR pages: a table row has at least one short cell, and consecutive rows
+    // have the same number of cells starting at the same places. Two prose columns
+    // that happen to share baselines have neither.
+    let short_cell = |row: &[usize]| {
+        row.iter().any(|&i| {
+            let bounds = &elements[i].bounds;
+            bounds.width <= bounds.height.max(1.0) * 4.0
+        })
+    };
+    let lefts = |row: &[usize]| {
+        let mut lefts: Vec<f32> = row.iter().map(|&i| elements[i].bounds.x).collect();
+        lefts.sort_by(f32::total_cmp);
+        lefts
+    };
+    let aligned = |a: &[usize], b: &[usize], height: f32| {
+        a.len() == b.len()
+            && lefts(a)
+                .iter()
+                .zip(lefts(b))
+                .all(|(x, y)| (x - y).abs() <= height * 1.5)
+    };
+    for row in rows
+        .iter()
+        .filter(|(_, cells)| cells.len() >= 2 && short_cell(cells))
+    {
         if let Some(previous) = group.last() {
             let height = elements[previous.1[0]].bounds.height.max(1.0);
-            if row.0 - previous.0 > height * 2.5 {
+            if row.0 - previous.0 > height * 2.5 || !aligned(&previous.1, &row.1, height) {
                 flush(&mut group, &mut ids, &mut next_id);
             }
         }
@@ -739,8 +701,27 @@ fn is_list_item(text: &str) -> bool {
     if text.starts_with("• ") || text.starts_with("- ") {
         return true;
     }
+    // A numbered marker is followed by a space and more text: "1. First", not a
+    // DOI such as "10.70623/NAJW4433." or a lone continued page number "243.".
     let digits = text.bytes().take_while(u8::is_ascii_digit).count();
-    digits > 0 && digits < 4 && matches!(text.as_bytes().get(digits), Some(b'.' | b')'))
+    digits > 0
+        && digits < 4
+        && matches!(text.as_bytes().get(digits), Some(b'.' | b')'))
+        && text[digits + 1..].starts_with(char::is_whitespace)
+        && !text[digits + 1..].trim().is_empty()
+}
+
+/// A bracketed numeric citation such as `[1]`, `[2, 5]` or `[3-7]`. Brackets that
+/// hold words (an editorial `[it]`) are not citations.
+fn has_numeric_citation(text: &str) -> bool {
+    text.split('[').skip(1).any(|rest| {
+        rest.split_once(']').is_some_and(|(inside, _)| {
+            inside.chars().any(|c| c.is_ascii_digit())
+                && inside
+                    .chars()
+                    .all(|c| c.is_ascii_digit() || matches!(c, ',' | '-' | '–' | ' '))
+        })
+    })
 }
 
 #[derive(Clone, Debug)]
@@ -982,7 +963,9 @@ fn aligned_cells(first: &[Vec<&OcrWord>], second: &[Vec<&OcrWord>]) -> bool {
     // Keep their marker attached so semantic classification can recognize it.
     let list_lead = |cells: &[Vec<&OcrWord>]| {
         let lead = cells[0][0].text.as_str();
-        is_list_item(lead) || matches!(lead, "•" | "-" | "–")
+        let digits = lead.bytes().take_while(u8::is_ascii_digit).count();
+        let numbered = (1..4).contains(&digits) && matches!(&lead[digits..], "." | ")");
+        numbered || is_list_item(lead) || matches!(lead, "•" | "-" | "–")
     };
     if list_lead(first) || list_lead(second) {
         return false;
@@ -1037,6 +1020,7 @@ fn ocr_element(row: &[&OcrWord]) -> Element {
         marks: Vec::new(),
         section_path: Vec::new(),
         table_id: None,
+        paragraph: None,
         extraction_score: Some(ExtractionScore {
             value: score,
             basis: ScoreBasis::OcrWordConfidence,
@@ -1058,7 +1042,11 @@ fn ocr_element(row: &[&OcrWord]) -> Element {
 }
 
 #[cfg(test)]
+mod native_layout_tests;
+#[cfg(test)]
 mod ocr_layout_tests;
+#[cfg(test)]
+mod semantics_tests;
 
 #[allow(clippy::cast_precision_loss)] // Confidence is an approximate mean.
 fn mean_ocr_confidence(words: &[OcrWord]) -> Option<ExtractionScore> {

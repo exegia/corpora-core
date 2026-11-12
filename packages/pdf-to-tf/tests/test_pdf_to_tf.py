@@ -163,6 +163,77 @@ def test_words_that_do_not_join_to_line_text_are_not_split():
     assert not etree.fromstring(built.xml).xpath("//t:w", namespaces=NS)
 
 
+def semantic_page() -> dict:
+    """A journal page: running header, front matter, abstract, body and footnotes."""
+    return extraction(
+        [
+            page(
+                1,
+                [
+                    el("running_header", "60 Triadic to Trinitarian", 20),
+                    el("title", "Triadic to", 50, h=20),
+                    el("title", "Trinitarian", 72, h=20),
+                    el("author", "Joshua C. Stone", 100),
+                    el("affiliation", "Liberty University", 114),
+                    el("h2", "Abstract", 140),
+                    el("abstract", "An argument", 156),
+                    el("abstract", "in two lines.", 170),
+                    el("paragraph", "Body text.1", 200),
+                    el("footnote", "1 A note that runs", 400, h=10),
+                    el("footnote", "243 lines on.", 411, h=10),
+                    el("footnote", "2 Second note.", 422, h=10),
+                    el("running_footer", "62", 480),
+                ],
+            )
+        ]
+    )
+
+
+def test_semantic_labels_map_to_tei_structures():
+    root = tree(semantic_page())
+    header = by_id(root, "p1e0")
+    assert (etree.QName(header).localname, header.get("type")) == ("fw", "header")
+    assert by_id(root, "p1e12").get("type") == "footer"
+    title = by_id(root, "p1e1").getparent()
+    assert (etree.QName(title).localname, title.get("type")) == ("ab", "title")
+    assert [seg.text for seg in title] == ["Triadic to", "Trinitarian"]
+    assert by_id(root, "p1e3").getparent().get("type") == "author"
+    assert by_id(root, "p1e6").getparent() is by_id(root, "p1e7").getparent()
+    notes = root.xpath("//t:note[@place='foot']", namespaces=NS)
+    # "243" is not the next note number, so that line continues note 1.
+    assert [[seg.text for seg in note] for note in notes] == [
+        ["1 A note that runs", "243 lines on."],
+        ["2 Second note."],
+    ]
+
+
+def test_numbered_paragraphs_group_lines_into_p_with_n():
+    lines = [
+        ("First paragraph,", 100, 1),
+        ("its second line.", 113, 1),
+        ("Second paragraph without a gap.", 126, 2),
+    ]
+    elements = []
+    for text, y, number in lines:
+        element = el("paragraph", text, y)
+        element["paragraph"] = number
+        elements.append(element)
+    root = tree(extraction([page(1, elements)]))
+    paragraphs = root.xpath("//t:body//t:p", namespaces=NS)
+    assert [p.get("n") for p in paragraphs] == ["1", "2"]
+    assert [len(p) for p in paragraphs] == [2, 1]
+
+
+def test_footnotes_and_running_heads_stay_in_tf_text(tmp_path):
+    report = run(tmp_path, semantic_page())
+    assert report["verification"]["mismatches"] == 0
+    tf_dir = tmp_path / "out/tei-to-tf/tf"
+    api = Fabric(locations=str(tf_dir), silent="deep").load("page", silent="deep")
+    text = api.T.text(next(iter(api.F.otype.s("page"))))
+    assert text.startswith("60 Triadic to Trinitarian\n")
+    assert "1 A note that runs\n243 lines on.\n2 Second note.\n" in text
+
+
 # -- pipeline -------------------------------------------------------------------
 
 

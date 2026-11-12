@@ -23,6 +23,13 @@ XML_LANG = f"{{{XML_NS}}}lang"
 ZONE_SCALE = 10  # zone units per Poppler 108-DPI layout unit
 HEADINGS = {"h1": 1, "h2": 2, "h3": 3, "h4": 4}
 PARAGRAPH_GAP = 0.6  # vertical gap, in median line heights, that starts a new paragraph
+# Front matter and labelled blocks: consecutive lines become one ab[@type] of line segs.
+LINE_BLOCKS = {
+    "journal_title", "publication_metadata", "title", "author", "affiliation",
+    "abstract", "keywords",
+}  # fmt: skip
+PAGE_FURNITURE = {"running_header": "header", "running_footer": "footer"}
+NOTE_NUMBER = re.compile(r"\s*(\d{1,3})(?!\d)")
 # whatlang ISO 639-3 codes -> BCP 47 primary subtags; unmapped codes are not guessed.
 BCP47 = {
     "ara": "ar", "ces": "cs", "dan": "da", "deu": "de", "ell": "el", "eng": "en",
@@ -277,15 +284,13 @@ class Builder:
                     "list_item",
                     "reference",
                     "table_cell",
+                    "footnote",
+                    *LINE_BLOCKS,
                 }
             ):
-                if kind == "paragraph":
-                    last = previous[1][-1][1]["bounds"]
-                    here = element["bounds"]
-                    gap = here["y"] - (last["y"] + last["height"])
-                    if here["y"] < last["y"] or gap > PARAGRAPH_GAP * line:
-                        out.append((key, [(index, element)]))
-                        continue
+                if kind == "paragraph" and new_paragraph(previous[1][-1][1], element, line):
+                    out.append((key, [(index, element)]))
+                    continue
                 previous[1].append((index, element))
             else:
                 out.append((key, [(index, element)]))
@@ -316,8 +321,9 @@ class Builder:
             "Each extracted line is one element with xml:id p{page}e{index}; OCR words are "
             "w elements p{page}e{index}w{word} with @cert = OCR word confidence.",
             "Added separators only: newline between lines and blocks, tab between table cells.",
-            "Headings, lists, references, citations, tables and paragraph grouping are "
-            "layout heuristics from corpora-pdf, not source PDF tags.",
+            "Headings, lists, references, citations, tables, footnotes (note[@place=foot]), "
+            "running headers and footers (fw), front matter (ab[@type]) and paragraph "
+            "grouping are layout heuristics from corpora-pdf, not source PDF tags.",
             f"Facsimile coordinates are integer tenths of Poppler 108-DPI layout units "
             f"(scale {ZONE_SCALE}), origin top-left of the rendered MediaBox.",
         ):
@@ -353,6 +359,20 @@ class Builder:
                 sub(usage, "language", {"ident": lang}).text = lang
         xml = etree.tostring(root, xml_declaration=True, encoding="UTF-8")
         return TeiBuild(xml, self.mapped, self.issues, languages)
+
+    def lines(
+        self,
+        parent: etree._Element,
+        members: list[tuple[int, dict[str, Any]]],
+        page: dict[str, Any],
+        surface: etree._Element,
+    ) -> None:
+        """One seg[@type=line] per extracted line, newline-separated."""
+        for position, (index, element) in enumerate(members):
+            seg = sub(parent, "seg", {"type": "line"})
+            self.fill(seg, surface, page, index, element)
+            if position + 1 < len(members):
+                seg.tail = "\n"
 
     def block(
         self,
@@ -440,9 +460,29 @@ class Builder:
             "list_item": ("list", "item", {}),
             "reference": ("listBibl", "bibl", {}),
         }
+        if kind in PAGE_FURNITURE:
+            for index, element in texted:
+                fw = sub(parent, "fw", {"type": PAGE_FURNITURE[kind]})
+                self.fill(fw, surface, page, index, element)
+                fw.tail = "\n"
+            return
+        if kind == "footnote":
+            for note_lines in footnotes(texted):
+                note = sub(parent, "note", {"place": "foot"})
+                self.lines(note, note_lines, page, surface)
+                note.tail = "\n"
+            return
+        if kind in LINE_BLOCKS:
+            ab = sub(parent, "ab", {"type": kind.replace("_", "-")})
+            self.lines(ab, texted, page, surface)
+            ab.tail = "\n"
+            return
         if kind in wrappers:
             outer_tag, inner_tag, attrib = wrappers[kind]
-            outer = sub(parent, outer_tag)
+            number = texted[0][1].get("paragraph")
+            outer = sub(
+                parent, outer_tag, {"n": str(number)} if kind == "paragraph" and number else {}
+            )
             for position, (index, element) in enumerate(texted):
                 inner = sub(outer, inner_tag, dict(attrib))
                 self.fill(inner, surface, page, index, element)
@@ -454,6 +494,37 @@ class Builder:
             ab = sub(parent, "ab", {"type": kind.replace("_", "-")})
             self.fill(ab, surface, page, index, element)
             ab.tail = "\n"
+
+
+def new_paragraph(last: dict[str, Any], here: dict[str, Any], line: float) -> bool:
+    """Whether ``here`` starts a new ``p`` after ``last``. corpora-pdf numbers visual
+    paragraphs; older extractions without numbers fall back to a vertical gap."""
+    if last.get("paragraph") and here.get("paragraph"):
+        return bool(last["paragraph"] != here["paragraph"])
+    a, b = last["bounds"], here["bounds"]
+    return bool(b["y"] < a["y"] or b["y"] - (a["y"] + a["height"]) > PARAGRAPH_GAP * line)
+
+
+def footnotes(
+    lines: list[tuple[int, dict[str, Any]]],
+) -> list[list[tuple[int, dict[str, Any]]]]:
+    """Split a page's footnote lines into notes. A note starts at a line opening with
+    the next note number; a line opening with any other number (a page or year in a
+    wrapped reference) continues the current note. Lines before the first numbered
+    line continue a note from the previous page."""
+    notes: list[list[tuple[int, dict[str, Any]]]] = []
+    expected: int | None = None
+    for item in lines:
+        match = NOTE_NUMBER.match(item[1]["text"])
+        number = int(match.group(1)) if match else None
+        if number is not None and (expected is None or number == expected):
+            notes.append([item])
+            expected = number + 1
+        elif notes:
+            notes[-1].append(item)
+        else:
+            notes.append([item])
+    return notes
 
 
 def build_tei(extraction: dict[str, Any], title: str, tools: dict[str, str]) -> TeiBuild:

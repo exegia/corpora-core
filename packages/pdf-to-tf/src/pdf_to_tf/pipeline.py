@@ -171,7 +171,7 @@ def convert(
         manifest = tei_convert(
             [],
             stage / "tei-to-tf",
-            Policy(milestones="pages", facsimile="zones"),
+            Policy(milestones="pages", facsimile="zones", notes="include"),
             schema=schema,
             sources=[Source(tei_path.name, tei_path.as_uri(), built.xml)],
         )
