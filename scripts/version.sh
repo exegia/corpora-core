@@ -11,7 +11,8 @@
 # Manifests, in priority order:
 #   pyproject.toml ([project] / [tool.poetry]) · Cargo.toml ([package] /
 #   [workspace.package]) · package.json · app.json (expo.version) · *.xcodeproj
-#   (MARKETING_VERSION). The VERSION file is the fallback while none of those
+#   (MARKETING_VERSION). Cargo path dependencies in the root [workspace.dependencies]
+#   table follow the workspace version. The VERSION file is the fallback while none of those
 #   declares a version; delete it once one does.
 #
 # Root-level manifests only. Monorepos with per-package versions should run their
@@ -51,11 +52,47 @@ CARGO_SECTIONS='^[[](package|workspace[.]package)[]]$'
 
 pbxproj_files() { ls -d ./*.xcodeproj/project.pbxproj 2>/dev/null || true; }
 
+# Workspace crates that depend on each other go through one-line entries in the root
+# `[workspace.dependencies]` table with a `path`. `cargo package` needs a version on
+# each, equal to the workspace version, so they are read and written with it.
+# cargo_path_deps <file>: "<name>\t<version>" per path dependency ("" when unversioned).
+cargo_path_deps() {
+  awk '
+    /^\[/ { s = $0; gsub(/[[:space:]]/, "", s); insec = (s == "[workspace.dependencies]"); next }
+    insec && /^[A-Za-z0-9_-]+[[:space:]]*=[[:space:]]*\{.*path[[:space:]]*=/ {
+      name = $0; sub(/[[:space:]]*=.*/, "", name); v = ""
+      if (match($0, /version[[:space:]]*=[[:space:]]*"[^"]*"/)) {
+        v = substr($0, RSTART, RLENGTH); sub(/^[^"]*"/, "", v); sub(/"$/, "", v)
+      }
+      print name "\t" v
+    }
+  ' "$1"
+}
+
+cargo_path_deps_set() { # cargo_path_deps_set <file> <version>
+  local tmp; tmp="$(mktemp)"
+  awk -v ver="$2" '
+    /^\[/ { s = $0; gsub(/[[:space:]]/, "", s); insec = (s == "[workspace.dependencies]") }
+    insec && /^[A-Za-z0-9_-]+[[:space:]]*=[[:space:]]*\{.*path[[:space:]]*=/ {
+      if (!sub(/version[[:space:]]*=[[:space:]]*"[^"]*"/, "version = \"" ver "\""))
+        sub(/\{[[:space:]]*/, "{ version = \"" ver "\", ")
+    }
+    { print }
+  ' "$1" > "$tmp"
+  cat "$tmp" > "$1"; rm -f "$tmp"
+}
+
 # Emit "<label>\t<version>" for each stack manifest that declares one.
 read_manifests() {
   local v f
   if [ -f pyproject.toml ]; then v="$(toml_get pyproject.toml "$PY_SECTIONS")"; [ -n "$v" ] && printf 'pyproject.toml\t%s\n' "$v"; fi
-  if [ -f Cargo.toml ]; then v="$(toml_get Cargo.toml "$CARGO_SECTIONS")"; [ -n "$v" ] && printf 'Cargo.toml\t%s\n' "$v"; fi
+  if [ -f Cargo.toml ]; then
+    v="$(toml_get Cargo.toml "$CARGO_SECTIONS")"
+    if [ -n "$v" ]; then
+      printf 'Cargo.toml\t%s\n' "$v"
+      cargo_path_deps Cargo.toml | awk -F'\t' '{ printf "Cargo.toml (%s)\t%s\n", $1, ($2 == "" ? "unversioned" : $2) }'
+    fi
+  fi
   if [ -f package.json ] && have jq; then
     v="$(jq -r '.version // empty' package.json)"; [ -n "$v" ] && printf 'package.json\t%s\n' "$v"
   fi
@@ -103,7 +140,10 @@ cmd_set() {
 
   [ -f VERSION ] && printf '%s\n' "$v" > VERSION
   [ -f pyproject.toml ] && [ -n "$(toml_get pyproject.toml "$PY_SECTIONS")" ] && toml_set pyproject.toml "$PY_SECTIONS" "$v"
-  [ -f Cargo.toml ] && [ -n "$(toml_get Cargo.toml "$CARGO_SECTIONS")" ] && toml_set Cargo.toml "$CARGO_SECTIONS" "$v"
+  if [ -f Cargo.toml ] && [ -n "$(toml_get Cargo.toml "$CARGO_SECTIONS")" ]; then
+    toml_set Cargo.toml "$CARGO_SECTIONS" "$v"
+    cargo_path_deps_set Cargo.toml "$v"
+  fi
 
   if [ -f package.json ] && [ -n "$(jq -r '.version // empty' package.json 2>/dev/null)" ]; then
     tmp="$(mktemp)"

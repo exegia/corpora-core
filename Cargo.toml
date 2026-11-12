@@ -36,6 +36,10 @@ missing_errors_doc = "allow"
 missing_panics_doc = "allow"
 
 [workspace.dependencies]
+# Workspace crates. `scripts/version.sh set` keeps each version equal to the
+# workspace version; `cargo package` needs it on every path dependency.
+corpora-core = { path = "crates/corpora-core", version = "0.1.0" }
+
 # Error handling
 thiserror = "2"
 anyhow = "1"

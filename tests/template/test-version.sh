@@ -77,6 +77,25 @@ assert_fail "mismatched release branch" "$V" branch-matches release/v1.2.4
 
 # ── input validation ──
 assert_fail "set rejects non-semver" "$V" set 1.2
+# ── Cargo workspace: path dependencies follow the workspace version ──
+new_repo
+cat > Cargo.toml <<'EOF'
+[workspace.package]
+version = "0.1.0"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+demo-core = { path = "crates/demo-core", version = "0.1.0" }
+demo-util = { path = "crates/demo-util" }
+EOF
+assert_fail "check flags an unversioned path dependency" "$V" check
+"$V" set 0.2.0 >/dev/null 2>&1
+assert_contains "$(cat Cargo.toml)" 'demo-core = { path = "crates/demo-core", version = "0.2.0" }' "versioned path dep bumped"
+assert_contains "$(cat Cargo.toml)" 'demo-util = { version = "0.2.0", path = "crates/demo-util" }' "unversioned path dep gains the version"
+assert_contains "$(cat Cargo.toml)" 'serde = { version = "1", features = ["derive"] }' "registry dependency untouched"
+assert_ok "workspace and path deps agree" "$V" check
+assert_eq "0.2.0" "$("$V" get)" "get still reads [workspace.package]"
+
 assert_fail "get fails with no manifest" bash -c "cd \"$(mktemp -d)\" && git init -q && '$V' get"
 
 finish
