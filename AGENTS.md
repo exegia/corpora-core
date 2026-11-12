@@ -79,6 +79,10 @@ runners. Each stack has a skill with the conventions and pitfalls.
   `release/vX.Y.Z` (version files + `CHANGELOG.md`) and opens a draft PR into `main`.
 - Merging that PR tags `vX.Y.Z`, publishes the GitHub Release, which triggers `publish.yml`.
 - Required checks: `guard`, `check`, `Detect hardcoded secrets`.
+- Workspace crates that depend on each other use one-line `path` entries with a `version` in the root
+  `[workspace.dependencies]`; `scripts/version.sh set` keeps those versions equal to the workspace version,
+  because `cargo package` rejects unversioned path dependencies. `scripts/changelog.sh tidy` repairs the
+  changelog layout (one blank line before each section, none at the end).
 
 If this file and the automation disagree, `.github/BRANCH-AND-RELEASE-POLICY.md` (rules),
 `.github/LIFECYCLE.md` (stages) and `.github/WORKFLOW.md` (operations) win.

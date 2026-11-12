@@ -113,6 +113,8 @@ make cleanup-local              # prune local branches whose remote is gone
 | Tag exists but `publish.yml` did not run    | The tag was pushed with `GITHUB_TOKEN`; create it as the App                                              |
 | Scheduled workflows not firing              | They run from the default branch; make sure `dev` has the files                                           |
 | `guard` says manifests disagree             | `scripts/version.sh check` lists them; delete the stale `VERSION` file once a real manifest has a version |
+| Publish: path dependency has no version     | Move it to a one-line `path` + `version` entry in root `[workspace.dependencies]`; `version.sh set` bumps it |
+| `hygiene` fails on `CHANGELOG.md` layout    | Run `scripts/changelog.sh tidy`; releases cut after the layout fix already write it correctly            |
 | Cut-release cannot push workflow changes    | Grant the App **Workflows: write**                                                                        |
 | Hook fired on a secret                      | Remove it, rotate it, never `--no-verify`; see `skills/secrets-hygiene`                                   |
 
