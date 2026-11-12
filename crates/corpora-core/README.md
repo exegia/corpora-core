@@ -1,10 +1,66 @@
 # corpora-core: reusable text checks
 
-This Rust crate checks XML/TEI structure, TEI metadata, and language. With an
-optional feature it also checks spelling. Imagine a teacher marking problems
-on a copy of a page: the crate reports **where** and **why**, but never changes
-the page itself. The [TEI converter](../../packages/tei-to-tf/README.md) uses
-these checks while deciding whether a new TF bundle is safe to publish.
+Give this Rust crate text. It gives you a report saying **what needs attention**
+and **where it is**. It never changes the text. Other crates can use it to check
+XML/TEI structure, TEI metadata, and language; spelling is optional. The
+[TEI converter](../../packages/tei-to-tf/README.md) uses these checks before
+exporting a Text-Fabric bundle.
+
+## Requirements and installation
+
+- Rust **1.91+** for this crate; pass already-decoded UTF-8 text to its APIs.
+- No server, API key, or dictionary is needed for XML, metadata, or language checks.
+- For spelling, enable the `spellcheck` feature and install dictionary data separately.
+
+In this repository, the root `Cargo.toml` already declares `corpora-core` in
+`[workspace.dependencies]`. Add this to the **consuming crate's** `Cargo.toml`:
+
+```toml
+[dependencies]
+corpora-core = { workspace = true }
+```
+
+For a crate in another workspace, use a path to this checkout instead, for
+example `corpora-core = { path = "../corpora-core/crates/corpora-core" }`.
+Add `features = ["serde"]` when serializing reports, or
+`features = ["spellcheck"]` for spelling and the CLI.
+
+```mermaid
+flowchart LR
+    A[Your Rust crate] -->|passes decoded text| B[corpora-core]
+    B --> C[XML and TEI structure]
+    B --> D[TEI dates and IDs]
+    B --> E[Language selection]
+    B --> F[Spelling, optional]
+    C & D & F --> G[Source-bound diagnostics]
+    E --> H[Language evidence]
+    G -->|caller decides what to do| A
+    H --> A
+```
+
+## Try it from another Rust crate
+
+```rust
+use corpora_core::structural::{check_xml_with_options, StructuralOptions};
+
+fn main() -> corpora_core::Result<()> {
+    let xml = "<TEI xmlns='http://www.tei-c.org/ns/1.0'/>";
+    let report = check_xml_with_options(
+        "book.xml",
+        xml,
+        StructuralOptions { tei: true, ..Default::default() },
+    )?;
+    for issue in &report.diagnostics {
+        eprintln!("{}: {}", issue.code, issue.message);
+    }
+    println!("passed these checks: {}", report.passed());
+    Ok(())
+}
+```
+
+`book.xml` is the identity you assign to this exact input. `passed()` means
+**these selected checks** found no blocker; it does not mean full TEI schema
+validation or that conversion will succeed.
 
 ## Pick a check
 
@@ -28,21 +84,6 @@ set `tei: true` for additional TEI checks. `allow_no_namespace` defaults to
 `false`. `TextRole` has `Corpus`, `Metadata`, `Frontmatter`, `Footnote`,
 `Additional`, and `Heading` variants. The spelling feature requires Rust 1.91
 and separately installed dictionaries.
-
-```rust
-use corpora_core::structural::{check_xml_with_options, StructuralOptions};
-
-fn main() -> corpora_core::Result<()> {
-    let xml = "<TEI xmlns='http://www.tei-c.org/ns/1.0'/>";
-    let report = check_xml_with_options(
-        "book.xml",
-        xml,
-        StructuralOptions { tei: true, ..Default::default() },
-    )?;
-    println!("safe under these checks: {}", report.passed());
-    Ok(())
-}
-```
 
 Enable `serde` to serialize shared types; enable `spellcheck` for the Matchum
 spelling engine and the `corpora-text-check` JSON-lines executable. The basic
@@ -129,11 +170,6 @@ orchestration still live in Python and can migrate independently.
 cargo test --locked -p corpora-core --no-default-features
 cargo test --locked -p corpora-core --all-features
 ```
-
-## License
-
-MIT OR Apache-2.0
-
 
 ## Language and spelling
 
@@ -240,8 +276,36 @@ case sensitivity, forbidden-word policy, and replacement maps. It does not claim
 full cspell CLI/config or weighted-suggestion parity. Only the 15 requested
 resources are allowed; Canadian config references outside that list are not loaded.
 
-The JSON-lines executable accepts one request per line on stdin and writes one
-response per line. Default requests without a dictionary directory detect only.
+## CLI: one JSON request per line
+
+`corpora-core` has **no HTTP endpoints**. The optional `corpora-text-check` CLI
+is its process boundary for Python or other non-Rust callers. It reads one JSON
+object per line from standard input and writes one JSON object per line to
+standard output.
+
+| CLI argument | Meaning |
+| --- | --- |
+| No argument | Structure, purpose, and language detection work without dictionaries. |
+| `[DICTIONARY_DIR]` | Optional first positional path, such as `target/cspell-dictionaries`; enables spelling for ordinary text requests. |
+
+```sh
+cargo build --locked -p corpora-core --features spellcheck --bin corpora-text-check
+printf '%s\n' '{"operation":"structure","source_id":"book.xml","text":"<root/>"}' \
+  | target/debug/corpora-text-check
+```
+
+| `operation` in JSON | Required and useful fields | Output |
+| --- | --- | --- |
+| `"structure"` | `text`; optional `source_id` | `DiagnosticReport` from `check_xml` with default limits. |
+| `"purpose"` | `text`; optional `source_id`, `expected_document_id`, `allow_no_namespace` | `PurposeReport` for TEI dates and primary ID. |
+| Omitted | `text`; optional `locale`, `role`, `detect_only`, `supplements` | Language evidence; with a dictionary directory, spelling findings unless `detect_only` is true. |
+
+`text` is always required. `source_id` defaults to `<input>`. The CLI's structure
+operation uses `check_xml`, so call the Rust library when you need custom
+`StructuralOptions` such as `tei: true`. Errors are JSON objects with `error`;
+check each line before using it.
+
+An ordinary text request without a dictionary directory detects language only.
 With the directory argument it lazily loads the selected language dictionary:
 
 ```json
@@ -296,3 +360,7 @@ and pinned upstream attribution are retained in `tools/MATCHUM-LICENSE` and sour
 The adapter is limited to these three resources and rejects unsupported compound
 or suggestion metadata; other dictionaries use Matchum's
 published loaders, configuration maps and suggestion implementation.
+
+## License
+
+MIT OR Apache-2.0
