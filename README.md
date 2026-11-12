@@ -169,7 +169,9 @@ working APIs until code and tests are added.
 
 Release automation handles versions and tags. `PUBLISH_CRATES=true` opts the
 tagged release into crates.io publishing when `CARGO_REGISTRY_TOKEN` is
-configured in the `crates` environment. `PUBLISH_GITHUB_PACKAGES=true` opts
+configured in the `crates` environment. Workspace crates depend on each other
+through versioned `path` entries in the root `[workspace.dependencies]`, which
+the release version bump keeps in step, so `cargo package` can publish them. `PUBLISH_GITHUB_PACKAGES=true` opts
 into generated TypeScript package publishing; the release also carries Cargo
 artifacts, and the root `Package.swift` exposes generated Swift types. Follow
 the [branch and release policy](.github/BRANCH-AND-RELEASE-POLICY.md) before
