@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.package]
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 rust-version = "1.85"
 authors = ["Exegia <team@exegia.com>"]
@@ -38,7 +38,7 @@ missing_panics_doc = "allow"
 [workspace.dependencies]
 # Workspace crates. `scripts/version.sh set` keeps each version equal to the
 # workspace version; `cargo package` needs it on every path dependency.
-corpora-core = { path = "crates/corpora-core", version = "0.1.0" }
+corpora-core = { path = "crates/corpora-core", version = "0.1.1" }
 
 # Error handling
 thiserror = "2"
