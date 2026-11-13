@@ -173,6 +173,8 @@ For new or changed shared conversion/model contracts, edit
 outputs with the schema. `make ci` includes the generated freshness check and
 offline agent tests. Missing, changed or extra generated files fail CI; CI does
 not rewrite or commit them. All package-publishing jobs wait for the same check.
+The Text-Fabric expert's [local conversion guide](agent/text-fabric-expert/knowledge/local-conversion.md)
+covers the implemented TEI, EPUB and PDF routes and independent validation gates.
 
 Root `make ci` does **not** discover nested Python and Node packages. Run their
 own checks when you change them:
