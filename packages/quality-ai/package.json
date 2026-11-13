@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "tsc --allowJs --checkJs --noEmit --module nodenext --target es2022 bridge.mjs --types node",
-    "test": "node --test bridge.test.mjs"
+    "check": "tsc --noEmit",
+    "build": "tsc",
+    "prepare": "npm run build",
+    "test": "npm run build && node --test dist/bridge.test.js"
   },
   "dependencies": {
     "ai": "7.0.164",
