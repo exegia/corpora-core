@@ -35,6 +35,15 @@ Targets detect the stack from `pyproject.toml`, `package.json`, `Cargo.toml` or 
 - **Skills:** `.github/skills/<name>/SKILL.md`, frontmatter `name` equal to the directory and a one-line
   `description`. `make agents-check` enforces it.
 
+## Shared models and agent checks
+
+Shared conversion/model contracts start in `crates/corpora-core/schema`. Run
+`make types` then `make types-check` to regenerate/check Rust, TypeScript, Swift
+and SQL together; never hand-edit outputs or create parallel shared models.
+`make ci` includes read-only `types-check` and offline `agents-test`; these skip
+when their component is absent. Conversion workflows and package publishing check
+generated freshness too. Commit schema, outputs, tests and agent guidance together.
+
 ## Secrets
 
 - Never commit credentials, tokens or keys, including in tests, fixtures, docs and examples.

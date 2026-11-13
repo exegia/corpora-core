@@ -27,11 +27,19 @@ serialization); decode with `JSONDecoder.dateDecodingStrategy = .iso8601`;
 SQL stays a single file because `CREATE TABLE` ordering follows foreign-key
 dependencies across domains.
 
-Regenerate after editing the schema:
+For new or changed shared conversion/model contracts, edit this schema first and
+regenerate **all four targets** from the repository root:
 
 ```sh
-cargo run -p corpora-typegen
+make types
+make types-check
 ```
+
+`make ci`, the conversion workflows and package publishing run `types-check`.
+It invokes `corpora-typegen --check` and fails on missing, changed or extra
+outputs without modifying them. Commit the schema and regenerated files together;
+CI never silently rewrites or commits models. TypeScript-only runtime validation
+schemas remain local unless they define a shared cross-language contract.
 
 ## Why JSON source, generated SQL (not `.sql` source files)
 
