@@ -14,7 +14,8 @@
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
         "owner_scoped_drafts",
-        "version_journal"
+        "version_journal",
+        "mutation_deployment_flag"
       ],
       "source_module": "src/corpora_py/ai/router.py",
       "openapi_operation_pointer": "#/paths/~1ai~1changes/get",
@@ -26,9 +27,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        501,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "POST",
@@ -40,7 +46,8 @@
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
         "owner_scoped_drafts",
-        "version_journal"
+        "version_journal",
+        "mutation_deployment_flag"
       ],
       "source_module": "src/corpora_py/ai/router.py",
       "openapi_operation_pointer": "#/paths/~1ai~1changes~1{change_id}~1undo/post",
@@ -58,9 +65,16 @@
         "503"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        423,
+        501,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "POST",
@@ -92,7 +106,9 @@
         401,
         501
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -116,9 +132,13 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "POST",
@@ -131,7 +151,8 @@
       "state_dependencies": [
         "owner_scoped_drafts",
         "hosted_storage",
-        "legacy_conversion_jobs"
+        "legacy_conversion_jobs",
+        "mutation_deployment_flag"
       ],
       "source_module": "src/corpora_py/ai/draft_router.py",
       "openapi_operation_pointer": "#/paths/~1ai~1drafts/post",
@@ -143,9 +164,17 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        423,
+        501,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -169,9 +198,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -195,9 +229,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -221,9 +260,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -247,9 +291,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -273,9 +322,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -299,9 +353,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -325,9 +384,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -351,9 +415,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -363,9 +432,7 @@
       "domain": "ai_curation",
       "ticket": "15",
       "legacy_auth": "supabase_jwt_when_auth_required",
-      "state_dependencies": [
-        "provider_configuration"
-      ],
+      "state_dependencies": [],
       "source_module": "src/corpora_py/ai/router.py",
       "openapi_operation_pointer": "#/paths/~1ai~1providers/get",
       "documented_response_statuses": [
@@ -375,7 +442,9 @@
       "runtime_error_statuses": [
         401
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "POST",
@@ -387,7 +456,8 @@
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
         "owner_scoped_drafts",
-        "version_journal"
+        "version_journal",
+        "mutation_deployment_flag"
       ],
       "source_module": "src/corpora_py/ai/router.py",
       "openapi_operation_pointer": "#/paths/~1ai~1suggestions~1{suggestion_id}~1apply/post",
@@ -409,9 +479,18 @@
         "503"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        423,
+        428,
+        501,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "POST",
@@ -422,8 +501,7 @@
       "ticket": "19",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_drafts",
-        "version_journal"
+        "owner_scoped_thread_store"
       ],
       "source_module": "src/corpora_py/ai/router.py",
       "openapi_operation_pointer": "#/paths/~1ai~1suggestions~1{suggestion_id}~1reject/post",
@@ -435,9 +513,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_required"
     },
     {
       "method": "GET",
@@ -460,9 +544,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_or_local_sqlite"
     },
     {
       "method": "POST",
@@ -485,9 +574,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        413,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_or_local_sqlite"
     },
     {
       "method": "GET",
@@ -510,9 +606,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_or_local_sqlite"
     },
     {
       "method": "GET",
@@ -535,9 +636,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_or_local_sqlite"
     },
     {
       "method": "POST",
@@ -560,9 +666,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        413,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_or_local_sqlite"
     },
     {
       "method": "POST",
@@ -585,9 +698,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        413,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_or_local_sqlite"
     },
     {
       "method": "GET",
@@ -610,9 +730,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "verified_owner_or_local_sqlite"
     },
     {
       "method": "POST",
@@ -623,7 +748,7 @@
       "ticket": "15",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "src/corpora_py/ai/router.py",
       "openapi_operation_pointer": "#/paths/~1ai~1validate/post",
@@ -647,7 +772,9 @@
       "runtime_error_statuses": [
         401
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-curation",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -657,7 +784,9 @@
       "domain": "platform",
       "ticket": "03",
       "legacy_auth": "public",
-      "state_dependencies": [],
+      "state_dependencies": [
+        "deployment_settings:AUTH_REQUIRED|HF_READ_ONLY"
+      ],
       "source_module": "src/corpora_py/app.py",
       "openapi_operation_pointer": "#/paths/~1capabilities/get",
       "documented_response_statuses": [
@@ -665,7 +794,9 @@
       ],
       "documented_error_statuses": [],
       "runtime_error_statuses": [],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-api",
+      "route_identity_policy": "none"
     },
     {
       "method": "GET",
@@ -683,7 +814,9 @@
       ],
       "documented_error_statuses": [],
       "runtime_error_statuses": [],
-      "target_status": "existing"
+      "target_status": "existing",
+      "proposed_owner": "corpora-api",
+      "route_identity_policy": "none"
     },
     {
       "method": "POST",
@@ -707,9 +840,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        413,
+        429,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-source",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -732,9 +870,13 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        404,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-source",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -757,9 +899,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        404,
+        409,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-source",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "POST",
@@ -770,8 +917,10 @@
       "ticket": "12",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization",
+        "linking_inventory"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1browser-selection/post",
@@ -783,9 +932,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -796,8 +951,9 @@
       "ticket": "14",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1conversion-events/post",
@@ -809,9 +965,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -822,7 +984,9 @@
       "ticket": "13",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "space_ledger"
+        "linking_runtime",
+        "space_ledger",
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1discoveries/post",
@@ -834,9 +998,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "GET",
@@ -847,7 +1017,9 @@
       "ticket": "13",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "space_ledger"
+        "linking_runtime",
+        "space_ledger",
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1discoveries~1{discovery_id}/get",
@@ -859,9 +1031,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -872,7 +1051,9 @@
       "ticket": "13",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "space_ledger"
+        "linking_runtime",
+        "space_ledger",
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1discoveries~1{discovery_id}~1{action}/post",
@@ -884,9 +1065,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -897,8 +1085,9 @@
       "ticket": "12",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1export/post",
@@ -910,9 +1099,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -923,8 +1118,10 @@
       "ticket": "14",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization",
+        "linking_inventory"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1export-cusx/post",
@@ -936,9 +1133,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -949,8 +1152,9 @@
       "ticket": "14",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1import/post",
@@ -962,9 +1166,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -975,8 +1185,9 @@
       "ticket": "14",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1import-plan/post",
@@ -988,9 +1199,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -1001,8 +1218,9 @@
       "ticket": "12",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1publication~1{reference_id}~1{action}/post",
@@ -1014,9 +1232,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -1027,7 +1251,9 @@
       "ticket": "11",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "space_ledger"
+        "linking_runtime",
+        "space_ledger",
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1references/post",
@@ -1039,9 +1265,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "GET",
@@ -1052,7 +1284,9 @@
       "ticket": "11",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "space_ledger"
+        "linking_runtime",
+        "space_ledger",
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1references~1{reference_id}/get",
@@ -1064,9 +1298,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -1077,7 +1318,9 @@
       "ticket": "11",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "space_ledger"
+        "linking_runtime",
+        "space_ledger",
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1references~1{reference_id}~1{action}/post",
@@ -1089,9 +1332,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -1102,8 +1352,10 @@
       "ticket": "12",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization",
+        "linking_inventory"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1retrieve/post",
@@ -1115,9 +1367,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -1128,8 +1386,9 @@
       "ticket": "14",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
+        "linking_runtime",
         "space_ledger",
-        "owner_scoped_archives"
+        "space_authorization"
       ],
       "source_module": "src/corpora_py/linking_api.py",
       "openapi_operation_pointer": "#/paths/~1linking~1{space_id}~1scholarly-conversion-events/post",
@@ -1141,9 +1400,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        409,
+        422,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "proposed:corpora-linking",
+      "route_identity_policy": "bearer_required_even_if_global_auth_disabled"
     },
     {
       "method": "POST",
@@ -1154,7 +1419,7 @@
       "ticket": "10",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/reference_api.py",
       "openapi_operation_pointer": "#/paths/~1refs/post",
@@ -1166,9 +1431,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        400,
+        401,
+        404,
+        409,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1179,7 +1451,7 @@
       "ticket": "10",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/reference_api.py",
       "openapi_operation_pointer": "#/paths/~1refs~1resolve/get",
@@ -1191,9 +1463,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        400,
+        401,
+        404,
+        409,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1204,7 +1483,7 @@
       "ticket": "10",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/reference_api.py",
       "openapi_operation_pointer": "#/paths/~1refs~1shortcode/get",
@@ -1216,9 +1495,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        400,
+        401,
+        404,
+        409,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "POST",
@@ -1229,7 +1515,7 @@
       "ticket": "10",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/reference_api.py",
       "openapi_operation_pointer": "#/paths/~1refs~1shortcode/post",
@@ -1241,9 +1527,16 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        400,
+        401,
+        404,
+        409,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1254,7 +1547,7 @@
       "ticket": "06",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/storage_api.py",
       "openapi_operation_pointer": "#/paths/~1storage/get",
@@ -1263,9 +1556,14 @@
       ],
       "documented_error_statuses": [],
       "runtime_error_statuses": [
-        401
+        401,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-source",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "POST",
@@ -1276,7 +1574,7 @@
       "ticket": "07",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives",
+        "archive_storage_backend_dependent_scope",
         "legacy_conversion_jobs"
       ],
       "source_module": "packages/admin/src/admin/services/storage_api.py",
@@ -1289,9 +1587,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        409,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-source",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "DELETE",
@@ -1302,7 +1606,7 @@
       "ticket": "07",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/storage_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}/delete",
@@ -1314,9 +1618,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-source",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1327,7 +1637,7 @@
       "ticket": "06",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/storage_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}/get",
@@ -1339,9 +1649,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-source",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1352,7 +1667,7 @@
       "ticket": "08",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}~1content/get",
@@ -1364,9 +1679,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1377,7 +1698,7 @@
       "ticket": "06",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/storage_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}~1download/get",
@@ -1389,9 +1710,14 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-source",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1402,7 +1728,7 @@
       "ticket": "08",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}~1index/get",
@@ -1414,9 +1740,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1427,7 +1759,7 @@
       "ticket": "08",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}~1manifest/get",
@@ -1439,9 +1771,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "PATCH",
@@ -1452,7 +1790,7 @@
       "ticket": "09",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives",
+        "archive_storage_backend_dependent_scope",
         "corpus_versions"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
@@ -1465,9 +1803,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1478,7 +1822,7 @@
       "ticket": "08",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}~1nodes~1{node}/get",
@@ -1490,9 +1834,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "PATCH",
@@ -1503,7 +1853,7 @@
       "ticket": "09",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives",
+        "archive_storage_backend_dependent_scope",
         "corpus_versions"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
@@ -1516,9 +1866,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "POST",
@@ -1529,8 +1885,8 @@
       "ticket": "09",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives",
-        "corpus_versions"
+        "read_only_policy",
+        "not_implemented"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}~1restore/post",
@@ -1542,9 +1898,13 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        501
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1555,7 +1915,7 @@
       "ticket": "08",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives"
+        "archive_storage_backend_dependent_scope"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
       "openapi_operation_pointer": "#/paths/~1storage~1{filename}~1sections/get",
@@ -1567,9 +1927,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "GET",
@@ -1580,7 +1946,7 @@
       "ticket": "09",
       "legacy_auth": "supabase_jwt_when_auth_required",
       "state_dependencies": [
-        "owner_scoped_archives",
+        "archive_storage_backend_dependent_scope",
         "corpus_versions"
       ],
       "source_module": "packages/admin/src/admin/services/corpus_detail_api.py",
@@ -1593,9 +1959,15 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        403,
+        404,
+        502,
+        503
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     },
     {
       "method": "POST",
@@ -1605,7 +1977,10 @@
       "domain": "validation",
       "ticket": "04",
       "legacy_auth": "supabase_jwt_when_auth_required",
-      "state_dependencies": [],
+      "state_dependencies": [
+        "one_of:conversion_jobs|local_server_path|loaded_corpus",
+        "real_loader"
+      ],
       "source_module": "packages/admin/src/admin/services/validation_api.py",
       "openapi_operation_pointer": "#/paths/~1validate/post",
       "documented_response_statuses": [
@@ -1616,9 +1991,13 @@
         "422"
       ],
       "runtime_error_statuses": [
-        401
+        401,
+        404,
+        409
       ],
-      "target_status": "proposed"
+      "target_status": "proposed",
+      "proposed_owner": "corpora-fabric",
+      "route_identity_policy": "middleware_only"
     }
   ],
   "excluded_operations": [
@@ -1692,5 +2071,7 @@
       "path": "/convert/{job_id}/versions",
       "operation_id": "get_job_versions_convert__job_id__versions_get"
     }
-  ]
+  ],
+  "source_repo": "exegia/corpora-py",
+  "source_revision": "d9c6e3d32b825eb7a5ac75114eaeb249821df2a2"
 }
