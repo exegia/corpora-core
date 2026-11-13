@@ -98,8 +98,19 @@ pack: ## Produce release artifacts in $(DIST_DIR)/ (PACK_CMD=... to override).
 selftest: ## Test this repo's own automation scripts (tests/template).
 	@bash tests/template/run.sh
 
+.PHONY: types types-check
+types: ## Regenerate shared Rust, TypeScript, Swift and SQL models (when configured).
+	@if [ -f crates/corpora-typegen/Cargo.toml ]; then \
+	  cargo run --locked -p corpora-typegen; \
+	else echo " -- skip no corpora-typegen crate"; fi
+
+types-check: ## Reject stale/missing/extra generated models without modifying files.
+	@if [ -f crates/corpora-typegen/Cargo.toml ]; then \
+	  cargo run --locked -p corpora-typegen -- --check; \
+	else echo " -- skip no corpora-typegen crate"; fi
+
 .PHONY: ci
-ci: install selftest agents-check lint-check typecheck test build ## Everything CI runs on a pull request.
+ci: install selftest agents-check agents-test types-check lint-check typecheck test build ## Everything CI runs on a pull request.
 
 .PHONY: clean
 clean: ## Remove caches and build artifacts (keeps dependencies and lockfiles).
@@ -251,6 +262,12 @@ dependabot: ## Regenerate .github/dependabot.yml from the detected stacks.
 .PHONY: agents-check
 agents-check: ## Validate AGENTS.md, CLAUDE.md, copilot instructions and skills.
 	@$(SCRIPTS)/agent-assets.sh check
+
+.PHONY: agents-test
+agents-test: ## Run offline tests for bundled agents (when present).
+	@if [ -d agent/text-fabric-expert/tests ]; then \
+	  python3 -m unittest discover -s agent/text-fabric-expert/tests -v; \
+	else echo " -- skip no Text-Fabric agent tests"; fi
 
 .PHONY: agents-link
 agents-link: ## Symlink .claude/skills and .agents/skills to .github/skills (local only).

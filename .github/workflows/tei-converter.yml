@@ -5,6 +5,11 @@ on:
       - 'packages/tei-to-tf/**'
       - 'packages/quality-ai/**'
       - 'crates/corpora-core/**'
+      - "crates/corpora-typegen/**"
+      - "generated/**"
+      - "agent/text-fabric-expert/**"
+      - ".github/skills/text-fabric-expert/**"
+      - "makefile"
       - 'Cargo.toml'
       - 'Cargo.lock'
       - '.github/workflows/tei-converter.yml'
@@ -20,7 +25,9 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '22'
-      - run: npm ci --prefix packages/quality-ai
+      - run: make types-check
+      - name: Install and compile quality AI bridge
+        run: npm ci --prefix packages/quality-ai
       - run: npm run check --prefix packages/quality-ai
       - run: npm test --prefix packages/quality-ai
       - run: cargo build --locked -p corpora-core --features spellcheck --bin corpora-text-check

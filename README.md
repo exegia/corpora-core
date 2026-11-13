@@ -163,7 +163,16 @@ README in the same change. The code and agent rules are in [AGENTS.md](AGENTS.md
 make fmt          # format root Rust and Swift sources
 make ci           # root lint, types, tests, and build
 make agents-check # agent instructions and skills
+make agents-test  # offline Text-Fabric agent contract/config tests
+make types        # regenerate shared Rust, TypeScript, Swift and SQL models
+make types-check  # verify generated files without modifying them
 ```
+
+For new or changed shared conversion/model contracts, edit
+`crates/corpora-core/schema` first, run `make types`, and commit all generated
+outputs with the schema. `make ci` includes the generated freshness check and
+offline agent tests. Missing, changed or extra generated files fail CI; CI does
+not rewrite or commit them. All package-publishing jobs wait for the same check.
 
 Root `make ci` does **not** discover nested Python and Node packages. Run their
 own checks when you change them:
@@ -183,8 +192,9 @@ npm test --prefix packages/quality-ai
 The [TEI package workflow](.github/workflows/tei-converter.yml),
 [PDF converter workflow](.github/workflows/pdf-converter.yml) and
 [EPUB/resolver workflow](.github/workflows/epub-resolver.yml) run their nested
-checks on relevant PRs. See each package README for its complete locked check
-command and real-loader verification.
+checks on relevant PRs, including shared schema/generator, generated output and
+Text-Fabric agent/skill changes. See each package README for its complete locked
+check command and real-loader verification.
 
 ## Contributing and license
 

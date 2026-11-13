@@ -88,6 +88,23 @@ gh pr ready                                # starts hygiene, test, check
 Squash-merge into `dev`. Everything after that is automatic until the release PR: review the draft PR into
 `main`, mark it ready, merge it with a merge commit.
 
+### Shared model and conversion gates
+
+For new or changed shared conversion/model contracts, edit
+`crates/corpora-core/schema`, run `make types` then `make types-check`, and commit
+Rust, TypeScript, Swift and SQL outputs together. `make ci` runs read-only
+`types-check` and offline `agents-test`, so required PR checks reject model drift
+and agent contract/config regressions. These targets skip absent components in
+template-derived repositories. The three conversion workflows also run
+`types-check` and trigger on schema/generator, generated output and Text-Fabric
+agent/skill changes. `packages.yml` gates every publishing job on generated
+freshness before copying TypeScript files or checking SwiftPM.
+
+`quality-ai` compiles automatically on `npm ci`/`npm install` through `prepare`;
+its tests rebuild too. The TEI workflow installs and compiles it before converter
+checks. Rebuild explicitly after source edits or with disabled lifecycle scripts.
+Agent unit tests do not establish per-corpus fidelity or live model quality.
+
 ## 4. Manual operations
 
 ```bash

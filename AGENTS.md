@@ -34,6 +34,15 @@ With no stack detected every task is a clean no-op.
 | Scan for secrets                            | `make secrets-scan`                         |
 | Release artifacts                           | `make pack`                                 |
 
+Shared conversion/model contracts start in `crates/corpora-core/schema`. After any
+shared contract change, run `make types` to regenerate Rust, TypeScript, Swift and
+SQL together, then `make types-check`. Never hand-edit generated models or add a
+parallel one-language shared contract. `make ci` runs the read-only freshness check
+and `make agents-test` (offline Text-Fabric agent tests); both skip when the
+corresponding generator/bundle is absent. Missing, changed and extra generated
+files fail CI. Commit schema, outputs, converter tests and agent guidance together.
+The conversion workflows also check freshness; package publishing is gated on it.
+
 Override any task for any stack with `<TASK>_CMD` (`make test TEST_CMD="pytest -x"`); force the stack list
 with `STACKS="python node"`. Monorepos: only root manifests are detected, so set the overrides.
 
