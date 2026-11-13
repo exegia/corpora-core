@@ -179,7 +179,8 @@ See the core and converter READMEs for the policy, setup, and diagnostic contrac
 Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
 and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.
-Use `--ai-bridge packages/quality-ai/bridge.mjs` with `AI_GATEWAY_API_KEY` in the
+Build with `npm run build --prefix packages/quality-ai` if install scripts are disabled.
+Use `--ai-bridge packages/quality-ai/dist/bridge.js` with `AI_GATEWAY_API_KEY` in the
 process environment. Never put credentials in reports or browser assets. See
 `packages/quality-ai/README.md` for model selection, request budgets and limitations.
 

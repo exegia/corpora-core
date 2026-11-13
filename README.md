@@ -50,7 +50,9 @@ operations, and the spelling setup.
 | A shared model in another language | [type generator](crates/corpora-typegen/README.md) | Generates Rust, TypeScript, Swift, and SQL from one schema. |
 
 The optional [quality AI bridge](packages/quality-ai/README.md) helps the TEI
-quality pipeline review bounded findings. The [Text-Fabric expert bundle](agent/text-fabric-expert/README.md)
+quality pipeline review bounded findings. Build its TypeScript source before
+passing `packages/quality-ai/dist/bridge.js` to the converter.
+The [Text-Fabric expert bundle](agent/text-fabric-expert/README.md)
 contains the agent instructions and evaluation setup.
 
 When the PDF crate is present, PR tests install Poppler, Tesseract and uv (for
@@ -174,6 +176,7 @@ cargo build -p corpora-pdf --bin corpora-pdf-extract
 make -C packages/pdf-to-tf check build
 npm ci --prefix packages/quality-ai
 npm run check --prefix packages/quality-ai
+npm run build --prefix packages/quality-ai
 npm test --prefix packages/quality-ai
 ```
 
