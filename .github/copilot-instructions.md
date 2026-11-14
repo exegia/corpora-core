@@ -69,6 +69,7 @@ Use `--tessdata-dir` for isolated multilingual models; reports retain model hash
 and missing requested languages fail rather than silently falling back.
 The PR test job installs Poppler, Tesseract and uv (for the review page's TEI column)
 when the PDF crate is present, and runs the benchmark, PDF review-browser and OCR candidate Python suites after `make ci`.
+The Matrix test job also installs Poppler and Tesseract before `make ci`.
 The crate-owned skill is `crates/corpora-pdf/skills/pdf-ocr/SKILL.md`, discovered
 through `.github/skills/pdf-ocr`. Its prompt and proposal are in the crate's
 `agent/` directory. Exact missing marks require image-verified evidence; script

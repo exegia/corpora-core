@@ -79,6 +79,7 @@ runners. Each stack has a skill with the conventions and pitfalls.
   `release/vX.Y.Z` (version files + `CHANGELOG.md`) and opens a draft PR into `main`.
 - Merging that PR tags `vX.Y.Z`, publishes the GitHub Release, which triggers `publish.yml`.
 - Required checks: `guard`, `check`, `Detect hardcoded secrets`.
+- The PR and Matrix test jobs install Poppler and Tesseract before PDF crate tests.
 - Workspace crates that depend on each other use one-line `path` entries with a `version` in the root
   `[workspace.dependencies]`; `scripts/version.sh set` keeps those versions equal to the workspace version,
   because `cargo package` rejects unversioned path dependencies. `scripts/changelog.sh tidy` repairs the
