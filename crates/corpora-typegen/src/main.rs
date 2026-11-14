@@ -4,14 +4,14 @@
 //! corpora-typegen [--schema <dir-or-file>] [--out <dir>] [--check]
 //! ```
 //!
-//! Manages `rust/`, `typescript/`, `swift/` and `sql/` under the output
+//! Manages `rust/`, `typescript/`, `swift/`, `python/src/` and `sql/` under the output
 //! directory (default `generated/`). Check mode compares bytes without writing.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use anyhow::Context as _;
-use corpora_typegen::{Schema, rust, sql, swift, typescript};
+use corpora_typegen::{Schema, python, rust, sql, swift, typescript};
 
 const HELP: &str = "Usage: corpora-typegen [--schema DIR_OR_FILE] [--out DIR] [--check]
 
@@ -21,7 +21,7 @@ const HELP: &str = "Usage: corpora-typegen [--schema DIR_OR_FILE] [--out DIR] [-
   -h, --help            Show this help
 
 Generation overwrites expected files but never deletes extras.
-Check mode manages all files under rust/, typescript/, swift/ and sql/;
+Check mode manages all files under rust/, typescript/, swift/, python/src/ and sql/;
 other output paths are ignored. Review/remove extra files manually.";
 
 fn main() -> anyhow::Result<()> {
@@ -56,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     }
     .context("loading schema")?;
 
-    let outputs = render_outputs(&schema);
+    let outputs = render_outputs(&schema)?;
     if check {
         check_outputs(&outputs, &out_dir).with_context(|| {
             format!(
@@ -83,7 +83,7 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn render_outputs(schema: &Schema) -> BTreeMap<PathBuf, String> {
+fn render_outputs(schema: &Schema) -> anyhow::Result<BTreeMap<PathBuf, String>> {
     let mut outputs = BTreeMap::new();
     for (language, files) in [
         ("rust", rust::emit(schema)),
@@ -95,12 +95,18 @@ fn render_outputs(schema: &Schema) -> BTreeMap<PathBuf, String> {
         }
     }
     outputs.insert(PathBuf::from("sql/schema.sql"), sql::emit(schema));
+    for (name, content) in python::emit(schema)? {
+        outputs.insert(Path::new("python").join(name), content);
+    }
     // Match repository EOF hygiene so regeneration and whitespace hooks agree.
     for content in outputs.values_mut() {
+        if content.is_empty() {
+            continue;
+        }
         content.truncate(content.trim_end_matches('\n').len());
         content.push('\n');
     }
-    outputs
+    Ok(outputs)
 }
 
 fn shell_quote(path: &Path) -> String {
@@ -109,7 +115,7 @@ fn shell_quote(path: &Path) -> String {
 
 fn check_outputs(outputs: &BTreeMap<PathBuf, String>, out_dir: &Path) -> anyhow::Result<()> {
     let mut existing = BTreeMap::new();
-    for language in ["rust", "typescript", "swift", "sql"] {
+    for language in ["rust", "typescript", "swift", "python/src", "sql"] {
         collect_files(out_dir, Path::new(language), &mut existing)?;
     }
 
@@ -149,6 +155,16 @@ fn collect_files(
     relative_path: &Path,
     files: &mut BTreeMap<PathBuf, bool>,
 ) -> anyhow::Result<()> {
+    if relative_path.starts_with("python/src")
+        && (relative_path
+            .file_name()
+            .is_some_and(|name| name == "__pycache__")
+            || relative_path
+                .extension()
+                .is_some_and(|extension| extension == "pyc"))
+    {
+        return Ok(());
+    }
     let path = out_dir.join(relative_path);
     let metadata = match std::fs::symlink_metadata(&path) {
         Ok(metadata) => metadata,

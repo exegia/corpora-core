@@ -1,9 +1,9 @@
-# corpora-typegen: one model, four languages
+# corpora-typegen: one schema, five targets
 
 The [JSON schema](../corpora-core/schema/README.md) describes Corpora's shared
-data shapes once. This crate turns it into matching Rust, TypeScript, Swift, and
-SQL files. For example, a `Project` field in JSON can become a Rust field, a
-TypeScript property, a Swift property, and a SQL column.
+data shapes once. This crate emits Rust, TypeScript, Swift, Python, and SQL
+files. Python starts with the reviewed `TextRange` value object; the other
+targets cover the full schema.
 
 ## Generate files
 
@@ -18,7 +18,7 @@ cargo run --locked -p corpora-typegen -- --check
 | Parameter | Default | Purpose |
 | --- | --- | --- |
 | `--schema DIR_OR_FILE` | `crates/corpora-core/schema` | Read `model.json` plus `domains/*.json`, or one combined JSON file. |
-| `--out DIR`            | `generated`                  | Generate or check `rust/`, `typescript/`, `swift/`, and `sql/schema.sql` below this directory. |
+| `--out DIR`            | `generated`                  | Generate or check `rust/`, `typescript/`, `swift/`, `python/src/`, and `sql/schema.sql` below this directory. |
 | `--check`              | Off                          | Compare expected outputs with disk without creating, updating or deleting anything.            |
 | `-h`, `--help`         | —                            | Show usage without loading a schema or touching outputs.                                       |
 
@@ -99,7 +99,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 | `TypeDef::fields()` | No parameters → field iterator | Read field names and definitions in declaration order. |
 | `TableSpec::name()` | No parameters → optional table name | Tell a database table from a JSON value object. |
 | `FieldType::parse(expr)` / `.named()` | `T?`, `T[]`, `Map<K,V>` text → parsed/named types | Understand field type expressions. |
-| `rust::emit`, `typescript::emit`, `swift::emit` | `&Schema` → `(filename, content)` pairs | Generate language files without writing to disk. |
+| `rust::emit`, `typescript::emit`, `swift::emit`, `python::emit` | `&Schema` → `(filename, content)` pairs | Generate language files without writing to disk. |
 | `sql::emit` | `&Schema` → SQL string | Generate the database shape. |
 
 `SchemaError` distinguishes file/JSON errors from unknown types and broken
