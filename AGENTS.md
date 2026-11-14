@@ -34,6 +34,15 @@ With no stack detected every task is a clean no-op.
 | Scan for secrets                            | `make secrets-scan`                         |
 | Release artifacts                           | `make pack`                                 |
 
+Shared conversion/model contracts start in `crates/corpora-core/schema`. After any
+shared contract change, run `make types` to regenerate Rust, TypeScript, Swift and
+SQL together, then `make types-check`. Never hand-edit generated models or add a
+parallel one-language shared contract. `make ci` runs the read-only freshness check
+and `make agents-test` (offline Text-Fabric agent tests); both skip when the
+corresponding generator/bundle is absent. Missing, changed and extra generated
+files fail CI. Commit schema, outputs, converter tests and agent guidance together.
+The conversion workflows also check freshness; package publishing is gated on it.
+
 Override any task for any stack with `<TASK>_CMD` (`make test TEST_CMD="pytest -x"`); force the stack list
 with `STACKS="python node"`. Monorepos: only root manifests are detected, so set the overrides.
 
@@ -206,7 +215,8 @@ See the core and converter READMEs for the policy, setup, and diagnostic contrac
 Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
 and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.
-Use `--ai-bridge packages/quality-ai/bridge.mjs` with `AI_GATEWAY_API_KEY` in the
+Build with `npm run build --prefix packages/quality-ai` if install scripts are disabled.
+Use `--ai-bridge packages/quality-ai/dist/bridge.js` with `AI_GATEWAY_API_KEY` in the
 process environment. Never put credentials in reports or browser assets. See
 `packages/quality-ai/README.md` for model selection, request budgets and limitations.
 

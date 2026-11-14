@@ -3,6 +3,26 @@
 Inspected 2026-11-06. Pins record research, not installed versions. Code was not
 vendored. Dataset licensing remains separate. See sources.json for machine-readable evidence.
 
+## Local implementation evidence
+
+For current local routes, package sources take precedence over historical sibling
+checkout assumptions. See [local-conversion.md](local-conversion.md) for commands
+checked against package READMEs and actual CLI help:
+
+- `packages/tei-to-tf`: TEI policy, source retention, character-slot export and quality loop.
+- `crates/corpora-convert` with `packages/epub-to-tf`: implemented EPUB validation,
+  repair boundaries and source/display TF projections, not placeholder crates.
+- `crates/corpora-pdf` with `packages/pdf-to-tf`: extraction, strict score gate,
+  TEI/TF line/word/page verification and image-review limits.
+- `packages/quality-ai`: optional TypeScript compiled to `dist/bridge.js`.
+- `packages/tf-ai-resolver`: exact selection, proposals and reviewed derived readings.
+- `crates/corpora-core/schema`: shared model source for Rust/TypeScript/Swift/SQL;
+  regeneration/check commands are `make types` then `make types-check`.
+
+These local references are not new upstream pins in `sources.json`. Recheck current
+README/CLI contracts after changes; inventory/tests are not live model acceptance.
+No hosted transmission is authorized by listing an integration here.
+
 ## Context-Fabric/context-fabric
 
 Revision `86431a325cb627a1c736ff5d3f4c491d78bb8464`; license: MIT.
