@@ -1,4 +1,5 @@
 import { generateText, Output } from 'ai';
+import type { LanguageModel, LanguageModelUsage } from 'ai';
 import { z } from 'zod';
 import { pathToFileURL } from 'node:url';
 
@@ -31,10 +32,12 @@ const requestSchema = z.object({
   issues: z.array(z.record(z.string(), z.unknown())).max(100),
 });
 
-/** @param {unknown} input
- * @param {import('ai').LanguageModel} [testModel]
- */
-export async function correct(input, testModel) {
+export type CorrectionResult = z.infer<typeof proposals> & {
+  model: string;
+  usage: LanguageModelUsage;
+};
+
+export async function correct(input: unknown, testModel?: LanguageModel): Promise<CorrectionResult> {
   const request = requestSchema.parse(input);
   if (!testModel && !process.env.AI_GATEWAY_API_KEY) throw new Error('not_configured');
   const result = await generateText({

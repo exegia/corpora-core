@@ -35,6 +35,15 @@ Targets detect the stack from `pyproject.toml`, `package.json`, `Cargo.toml` or 
 - **Skills:** `.github/skills/<name>/SKILL.md`, frontmatter `name` equal to the directory and a one-line
   `description`. `make agents-check` enforces it.
 
+## Shared models and agent checks
+
+Shared conversion/model contracts start in `crates/corpora-core/schema`. Run
+`make types` then `make types-check` to regenerate/check Rust, TypeScript, Swift
+and SQL together; never hand-edit outputs or create parallel shared models.
+`make ci` includes read-only `types-check` and offline `agents-test`; these skip
+when their component is absent. Conversion workflows and package publishing check
+generated freshness too. Commit schema, outputs, tests and agent guidance together.
+
 ## Secrets
 
 - Never commit credentials, tokens or keys, including in tests, fixtures, docs and examples.
@@ -67,8 +76,9 @@ the synthetic smoke command and local-only real-PDF manifest. Keep attachments,
 transcriptions and generated reports out of Git; retain reference review status.
 Use `--tessdata-dir` for isolated multilingual models; reports retain model hashes
 and missing requested languages fail rather than silently falling back.
-The PR test job installs Poppler and Tesseract when the PDF crate is present,
-and runs the benchmark, PDF review-browser and OCR candidate Python suites after `make ci`.
+The PR test job installs Poppler, Tesseract and uv (for the review page's TEI column)
+when the PDF crate is present, and runs the benchmark, PDF review-browser and OCR candidate Python suites after `make ci`.
+The Matrix test job also installs Poppler and Tesseract before `make ci`.
 The crate-owned skill is `crates/corpora-pdf/skills/pdf-ocr/SKILL.md`, discovered
 through `.github/skills/pdf-ocr`. Its prompt and proposal are in the crate's
 `agent/` directory. Exact missing marks require image-verified evidence; script
@@ -113,7 +123,8 @@ See the core and converter READMEs for the policy, setup, and diagnostic contrac
 Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
 and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.
-Use `--ai-bridge packages/quality-ai/bridge.mjs` with `AI_GATEWAY_API_KEY` in the
+Build with `npm run build --prefix packages/quality-ai` if install scripts are disabled.
+Use `--ai-bridge packages/quality-ai/dist/bridge.js` with `AI_GATEWAY_API_KEY` in the
 process environment. Never put credentials in reports or browser assets. See
 `packages/quality-ai/README.md` for model selection, request budgets and limitations.
 
@@ -131,6 +142,8 @@ The PDF QA builder renders source pages to PNG at the extraction coordinate scal
 so the internal browser does not need a PDF plugin. Findings are collapsed by
 default and script findings link to their extracted element. Original PDFs and
 raw JSON remain available; the viewer never applies OCR candidates.
+A third column renders the TEI that `pdf-to-tf` builds from the same extraction
+as HTML, labelled by semantic type; `--no-tei` skips it (it needs `uv`).
 
 The bounded PDF OCR candidate tool is `crates/corpora-pdf/tools/ocr_review.py`.
 Run its credential-free tests with `python3 -m unittest discover -s crates/corpora-pdf/tools -p 'test_*.py'`.

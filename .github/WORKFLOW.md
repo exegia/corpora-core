@@ -6,8 +6,9 @@ See `crates/corpora-pdf/benchmarks/README.md` for the synthetic end-to-end comma
 Private PDF manifests and results remain outside Git; no hosted service is used.
 The benchmark accepts `--tessdata-dir` for isolated language models and records
 their hashes. Missing or unloadable requested languages cannot silently fall back.
-When the PDF crate is present, the PR test job installs Poppler and Tesseract
-before `make ci`, then runs the benchmark, PDF review-browser and OCR candidate Python suites.
+When the PDF crate is present, the PR test job installs Poppler, Tesseract and uv
+(the review page renders its TEI column through pdf-to-tf) before `make ci`, then runs the benchmark, PDF review-browser and OCR candidate Python suites.
+The Matrix test job installs Poppler and Tesseract before `make ci` as well.
 PDF OCR guidance is owned by `crates/corpora-pdf/skills/pdf-ocr` and linked into
 `.github/skills/pdf-ocr`; its prompt/proposal are under `crates/corpora-pdf/agent`.
 
@@ -87,6 +88,23 @@ gh pr ready                                # starts hygiene, test, check
 
 Squash-merge into `dev`. Everything after that is automatic until the release PR: review the draft PR into
 `main`, mark it ready, merge it with a merge commit.
+
+### Shared model and conversion gates
+
+For new or changed shared conversion/model contracts, edit
+`crates/corpora-core/schema`, run `make types` then `make types-check`, and commit
+Rust, TypeScript, Swift and SQL outputs together. `make ci` runs read-only
+`types-check` and offline `agents-test`, so required PR checks reject model drift
+and agent contract/config regressions. These targets skip absent components in
+template-derived repositories. The three conversion workflows also run
+`types-check` and trigger on schema/generator, generated output and Text-Fabric
+agent/skill changes. `packages.yml` gates every publishing job on generated
+freshness before copying TypeScript files or checking SwiftPM.
+
+`quality-ai` compiles automatically on `npm ci`/`npm install` through `prepare`;
+its tests rebuild too. The TEI workflow installs and compiles it before converter
+checks. Rebuild explicitly after source edits or with disabled lifecycle scripts.
+Agent unit tests do not establish per-corpus fidelity or live model quality.
 
 ## 4. Manual operations
 
@@ -179,7 +197,8 @@ See the core and converter READMEs for the policy, setup, and diagnostic contrac
 Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
 and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.
-Use `--ai-bridge packages/quality-ai/bridge.mjs` with `AI_GATEWAY_API_KEY` in the
+Build with `npm run build --prefix packages/quality-ai` if install scripts are disabled.
+Use `--ai-bridge packages/quality-ai/dist/bridge.js` with `AI_GATEWAY_API_KEY` in the
 process environment. Never put credentials in reports or browser assets. See
 `packages/quality-ai/README.md` for model selection, request budgets and limitations.
 

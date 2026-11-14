@@ -22,8 +22,20 @@ permissions:
   contents: read
 
 jobs:
+  types:
+    name: generated-types
+    if: ${{ vars.PUBLISH_GITHUB_PACKAGES == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+        with:
+          install: "false"
+      - run: make types-check
+
   npm-github:
     name: npm-github
+    needs: types
     if: ${{ vars.PUBLISH_GITHUB_PACKAGES == 'true' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:
@@ -50,6 +62,7 @@ jobs:
 
   crate-assets:
     name: crate-assets
+    needs: types
     if: ${{ vars.PUBLISH_GITHUB_PACKAGES == 'true' && startsWith(github.ref, 'refs/tags/v') }}
     runs-on: ubuntu-latest
     permissions:
@@ -69,6 +82,7 @@ jobs:
 
   spm-check:
     name: spm-check
+    needs: types
     if: ${{ vars.PUBLISH_GITHUB_PACKAGES == 'true' }}
     runs-on: macos-latest
     steps:

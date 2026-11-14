@@ -18,11 +18,29 @@ make fmt       # apply formatters and autofix
 make ci        # same steps CI runs
 ```
 
-Then open the PR (see `branch-and-release`). `make ci` = install + selftest + agents-check + lint-check + typecheck + test + build.
+Then open the PR (see `branch-and-release`). `make ci` = install + selftest + agents-check + agents-test + types-check + lint-check + typecheck + test + build.
 
 Other targets: `make install`, `make lint-check`, `make typecheck`, `make test`, `make e2e`, `make eval`, `make build`, `make pack` (release artifacts into `dist/`), `make clean`, `make clean-all`.
 
 Every CI step is a make target, so a local green `make ci` predicts a green `check`.
+`make ci` installs dependencies but does not regenerate shared models.
+
+## Shared types and agent verification
+
+```sh
+make types        # regenerate shared Rust, TypeScript, Swift and SQL models
+make types-check  # reject stale/missing/extra generated files without modifying them
+make agents-test  # offline bundled-agent unit and knowledge/CLI drift tests
+make agents-check # validate canonical agent instructions and skills
+```
+
+For shared model changes edit `crates/corpora-core/schema` first, then run
+`make types` followed by `make types-check`; do not hand-edit generated files.
+`types` and `types-check` are optional template components: both skip when
+`crates/corpora-typegen/Cargo.toml` is absent. `agents-test` skips when
+`agent/text-fabric-expert/tests` is absent. These skips succeed; when present,
+failed generation/checks or tests fail the target. `make ci` includes `types-check`
+and `agents-test`, not `types`. Offline tests do not establish live model acceptance.
 
 ## Stack detection
 
@@ -42,7 +60,9 @@ scripts/stack.sh list
 scripts/stack.sh tags
 ```
 
-If no stack is detected, every task is a clean no-op (success, nothing run).
+If no stack is detected, stack-dispatched tasks are clean no-ops. Repository
+`selftest` and `agents-check` still run; optional `types`, `types-check` and
+`agents-test` use their own crate/bundle presence checks, not stack detection.
 
 ## Overrides
 
@@ -56,7 +76,7 @@ Detection reads root manifests only. For nested packages either add root-level s
 
 ## Pitfalls
 
-- A task silently skipping means no manifest at the repo root, or the package.json script is missing (`lint`, `typecheck`, `test`, `test:e2e`, `build`, `dev`, `eval`).
+- A stack task silently skipping means no root manifest or a missing package.json script (`lint`, `typecheck`, `test`, `test:e2e`, `build`, `dev`, `eval`). Optional type-generation/agent-test targets skip when their component is absent.
 - Run `make doctor` before blaming code; missing toolchains are the usual cause.
 - Do not run formatters ad hoc with different versions; use `make fmt`.
 - `make fmt` modifies files; `make lint-check` never does.
