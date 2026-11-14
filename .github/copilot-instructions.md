@@ -60,6 +60,13 @@ Text-Fabric work uses `.github/skills/text-fabric-expert/SKILL.md` and
 `agent/text-fabric-expert/SYSTEM.md`. Its source map, MCP configuration generator
 and verification instructions live in `agent/text-fabric-expert/README.md`.
 
+## Corpus archive validation package
+
+`packages/corpus-validate` validates bounded `.corpus`, TF `.zip`, `.ctei`, and
+`.cusx` archives. Run its locked Ruff, real-loader pytest, and build checks in
+the package directory. `.github/workflows/corpus-validation.yml` checks PRs.
+Do not pass client-provided server paths to the validator CLI.
+
 ## TEI conversion package
 
 `packages/tei-to-tf` provides the TEI acquisition/conversion CLI. Run
