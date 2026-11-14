@@ -164,6 +164,12 @@ pub struct FieldDef {
     /// Type expression: `T`, `T?`, `T[]`, `T[]?` or `Map<K, V>`.
     #[serde(rename = "type")]
     pub ty: String,
+    /// Exact serialized JSON key when it differs from the schema field name.
+    #[serde(default)]
+    pub wire_name: Option<String>,
+    /// Omit an absent optional field from serialized JSON.
+    #[serde(default)]
+    pub omit_if_none: bool,
     /// Human description.
     #[serde(default)]
     pub description: String,

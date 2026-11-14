@@ -202,18 +202,18 @@ fn emit_struct(out: &mut String, schema: &Schema, name: &str, def: &TypeDef) {
         let _ = writeln!(out, "    public var {property}: {ty}");
     }
 
-    if fields
-        .iter()
-        .any(|(field_name, _)| camel_case(field_name) != *field_name)
-    {
+    if fields.iter().any(|(field_name, field)| {
+        camel_case(field_name) != field.wire_name.as_deref().unwrap_or(field_name)
+    }) {
         let _ = writeln!(out);
         let _ = writeln!(out, "    private enum CodingKeys: String, CodingKey {{");
-        for (field_name, _) in &fields {
+        for (field_name, field) in &fields {
             let property = escape_keyword(&camel_case(field_name));
-            if camel_case(field_name) == *field_name {
+            let wire_name = field.wire_name.as_deref().unwrap_or(field_name);
+            if camel_case(field_name) == wire_name {
                 let _ = writeln!(out, "        case {property}");
             } else {
-                let _ = writeln!(out, "        case {property} = \"{field_name}\"");
+                let _ = writeln!(out, "        case {property} = \"{wire_name}\"");
             }
         }
         let _ = writeln!(out, "    }}");
