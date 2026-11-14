@@ -135,8 +135,15 @@ fn emit_fields(out: &mut String, schema: &Schema, def: &TypeDef) {
     for (field_name, field) in def.fields() {
         let _ = writeln!(out, "    /// {}", field.description);
         let rust_name = escape_keyword(field_name);
-        if rust_name != field_name {
-            let _ = writeln!(out, "    #[serde(rename = \"{field_name}\")]");
+        let wire_name = field.wire_name.as_deref().unwrap_or(field_name);
+        if field.omit_if_none {
+            let _ = writeln!(
+                out,
+                "    #[serde(skip_serializing_if = \"Option::is_none\")]"
+            );
+        }
+        if rust_name != wire_name {
+            let _ = writeln!(out, "    #[serde(rename = \"{wire_name}\")]");
         }
         let ty = rust_type(schema, &FieldType::parse(&field.ty));
         let _ = writeln!(out, "    pub {rust_name}: {ty},");

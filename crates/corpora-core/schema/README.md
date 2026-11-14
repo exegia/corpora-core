@@ -112,6 +112,7 @@ TypeScript emitter converts them to `camelCase`, SQL keeps them as columns.
 - **license** — licence catalog and project attachments (tables).
 - **conversion** — corpora-py conversion pipeline contract (wire types).
 - **explore** — corpus exploration API contract (wire types).
+- **ingest** — Context Fabric v1 `graph.json` envelope (wire type); entity JSON Schemas live in `contracts/context-fabric/v1`.
 
 Platform, license and conversion types mirror
 [`corpora-web`](https://github.com/exegia/corpora-web) `app/lib/**/types.ts`;
