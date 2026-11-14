@@ -48,6 +48,9 @@ jobs:
             test -n "$(find target/package -maxdepth 1 -name '*.crate' -type f -print -quit)"
             echo 'dir=target/package' >> "$GITHUB_OUTPUT"
           elif grep -Eq '^(python|node)$' <<< "$stacks"; then
+            if grep -qx node <<< "$stacks"; then
+              STACKS=node make install
+            fi
             make pack
             echo 'dir=dist' >> "$GITHUB_OUTPUT"
           else
