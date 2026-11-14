@@ -5,6 +5,7 @@ pub mod enums;
 pub mod conversion;
 pub mod document;
 pub mod explore;
+pub mod ingest;
 pub mod license;
 pub mod platform;
 
@@ -12,5 +13,6 @@ pub use enums::*;
 pub use conversion::*;
 pub use document::*;
 pub use explore::*;
+pub use ingest::*;
 pub use license::*;
 pub use platform::*;

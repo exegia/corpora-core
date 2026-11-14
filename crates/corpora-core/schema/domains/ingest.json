@@ -1,0 +1,42 @@
+{
+  "description": "Context Fabric v1 ingestion graph envelope; entity shapes are validated by the pinned JSON Schemas.",
+  "types": {
+    "CanonicalGraph": {
+      "description": "One parsed document as Context Fabric v1 entities, using legacy graph.json wire keys.",
+      "table": false,
+      "fields": {
+        "schema_version": {
+          "type": "String",
+          "wire_name": "schemaVersion",
+          "description": "Context Fabric schema version; currently 1.0.0."
+        },
+        "corpus": {
+          "type": "Map<String, Json>?",
+          "omit_if_none": true,
+          "description": "New corpus when no existing corpus ID was supplied."
+        },
+        "work": {
+          "type": "Map<String, Json>",
+          "description": "Work entity for the parsed document."
+        },
+        "edition": {
+          "type": "Map<String, Json>",
+          "description": "Edition entity for the parsed document."
+        },
+        "source_asset": {
+          "type": "Map<String, Json>",
+          "wire_name": "sourceAsset",
+          "description": "Source asset describing the uploaded document."
+        },
+        "nodes": {
+          "type": "Map<String, Json>[]",
+          "description": "Ordered content nodes."
+        },
+        "fragments": {
+          "type": "Map<String, Json>[]",
+          "description": "Ordered text fragments."
+        }
+      }
+    }
+  }
+}
