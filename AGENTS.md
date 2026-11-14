@@ -150,6 +150,16 @@ Text-Fabric work uses `.github/skills/text-fabric-expert/SKILL.md` and
 `agent/text-fabric-expert/SYSTEM.md`. Its source map, MCP configuration generator
 and verification instructions live in `agent/text-fabric-expert/README.md`.
 
+## Corpus archive validation package
+
+`packages/corpus-validate` checks bounded `.corpus`, raw TF `.zip`, `.ctei`, and
+`.cusx` uploads. The TF path runs real Text-Fabric and Context-Fabric cold/warm
+loads; a static WARP preflight is not a loader acceptance result. Run
+`uv sync --locked && uv run ruff check src tests && uv run pytest -q && uv build`
+from that package. Root stack detection does not discover it;
+`.github/workflows/corpus-validation.yml` runs the nested checks on PRs.
+Archive content is untrusted. Never pass arbitrary client paths to the CLI.
+
 ## TEI conversion package
 
 `packages/tei-to-tf` provides the TEI acquisition/conversion CLI. Run

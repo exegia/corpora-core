@@ -132,6 +132,7 @@ each flag, the supported inputs, the exported files, and how to load the result.
 | [`packages/epub-to-tf`](packages/epub-to-tf/README.md) | EPUB export, semantic TF features, asset copying, visual QA. |
 | [`packages/pdf-to-tf`](packages/pdf-to-tf/README.md) | Score-gated PDF → TEI → TF, page/line/word mapping, located issue report. |
 | [`packages/tf-ai-resolver`](packages/tf-ai-resolver/README.md) | Exact TF selection, expert proposal, reviewed derived reading, loopback browser service. |
+| [`packages/corpus-validate`](packages/corpus-validate/README.md) | Bounded corpus archive validation through real TF/CF loaders or CTEI/C-USX profile checks. |
 | [`packages/quality-ai`](packages/quality-ai/README.md) | Optional hosted model bridge for TEI quality review. |
 | [`crates/corpora-core/schema`](crates/corpora-core/schema/README.md), [`packages/corpora-types`](packages/corpora-types/README.md), `generated/`, `Package.swift` | Shared schema, generated types, and SwiftPM library. |
 | [`agent/text-fabric-expert`](agent/text-fabric-expert/README.md) | Agent prompt, tools, and evaluation instructions. |
@@ -188,6 +189,7 @@ uv run --project packages/epub-to-tf pytest -q packages/epub-to-tf/tests
 uv run --project packages/tf-ai-resolver pytest -q packages/tf-ai-resolver/tests
 cargo build -p corpora-pdf --bin corpora-pdf-extract
 make -C packages/pdf-to-tf check build
+uv run --project packages/corpus-validate pytest -q packages/corpus-validate/tests
 npm ci --prefix packages/quality-ai
 npm run check --prefix packages/quality-ai
 npm run build --prefix packages/quality-ai
@@ -196,7 +198,8 @@ npm test --prefix packages/quality-ai
 
 The [TEI package workflow](.github/workflows/tei-converter.yml),
 [PDF converter workflow](.github/workflows/pdf-converter.yml) and
-[EPUB/resolver workflow](.github/workflows/epub-resolver.yml) run their nested
+[EPUB/resolver workflow](.github/workflows/epub-resolver.yml) and
+[corpus validation workflow](.github/workflows/corpus-validation.yml) run their nested
 checks on relevant PRs, including shared schema/generator, generated output and
 Text-Fabric agent/skill changes. See each package README for its complete locked
 check command and real-loader verification.
