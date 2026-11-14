@@ -164,20 +164,21 @@ def _preflight_node_limit(root: Path) -> None:
         start = rows.index("") + 1
     except ValueError as error:
         raise ValueError("otype.tf has no metadata separator") from error
-    implicit = 0
+    current_node = 0
     for row in rows[start:]:
         if not row:
             continue
         parts = row.split("\t")
         if len(parts) == 1:
-            implicit += 1
-            if implicit > MAX_NODES:
+            current_node += 1
+            if current_node > MAX_NODES:
                 raise ValueError(f"otype.tf exceeds {MAX_NODES} nodes")
         elif len(parts) == 2:
             if not NODE_SPEC.fullmatch(parts[0]):
                 raise ValueError("otype.tf has an invalid node range")
             for span in parts[0].split(","):
-                if max(int(number) for number in span.split("-")) > MAX_NODES:
+                current_node = max(current_node, *(int(number) for number in span.split("-")))
+                if current_node > MAX_NODES:
                     raise ValueError(f"otype.tf exceeds {MAX_NODES} nodes")
         else:
             raise ValueError("otype.tf has an invalid node row")

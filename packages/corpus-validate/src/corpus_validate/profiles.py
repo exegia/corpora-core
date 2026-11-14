@@ -203,6 +203,17 @@ def _ctei_document(path: str) -> bool:
     return len(parts) == 2 and parts[0].startswith("version_") and parts[1].endswith(".xml")
 
 
+def _resolved_target(document: str, target: str) -> str:
+    parsed = urlsplit(target)
+    if parsed.scheme or parsed.netloc:
+        raise ValueError("CTEI resolved reference has an external target")
+    return (
+        str(PurePosixPath(document).parent / (parsed.path or PurePosixPath(document).name))
+        + "#"
+        + parsed.fragment
+    )
+
+
 def _ctei_history(data: bytes) -> None:
     root = _tei_xml(data)
     if root.tag != f"{{{CTEI_NS}}}history" or not len(root):
@@ -281,15 +292,7 @@ def validate_ctei(
             if any(not schema.validate(root) for schema in (upstream, profile, schematron)):
                 raise ValueError("CTEI reading document fails TEI schema: " + document)
             for ref in root.xpath("//t:ref[@type='resolved']", namespaces={"t": TEI_NS}):
-                parsed = urlsplit(ref.get("target"))
-                local_target(
-                    str(
-                        PurePosixPath(document).parent
-                        / (parsed.path or PurePosixPath(document).name)
-                    )
-                    + "#"
-                    + parsed.fragment
-                )
+                local_target(_resolved_target(document, ref.get("target")))
             for graphic in root.xpath("//t:graphic", namespaces={"t": TEI_NS}):
                 asset = graphic.get("url", "").removeprefix("../")
                 if asset not in files or not asset.startswith("assets/"):

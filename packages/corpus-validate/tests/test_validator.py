@@ -13,7 +13,7 @@ from cfabric.core import Fabric as ContextFabric
 from tf.fabric import Fabric
 
 from corpus_validate import UnsupportedFormat, validate_archive
-from corpus_validate.profiles import CUSX_PROFILE, CUSX_STREAM, _cusx_xml
+from corpus_validate.profiles import CUSX_PROFILE, CUSX_STREAM, _cusx_xml, _resolved_target
 
 
 def archive_bytes(root: Path, suffix: str) -> bytes:
@@ -125,6 +125,15 @@ def test_large_declared_node_range_is_rejected_before_loading() -> None:
     assert "1000000 nodes" in result["reasons"][0]
 
 
+def test_implicit_node_after_large_explicit_range_is_rejected() -> None:
+    stream = io.BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        archive.writestr("corpora/otype.tf", "@node\n\n1-1000000\tword\nbook\n")
+    result = validate_archive(stream.getvalue(), "oversized.zip")
+    assert result["valid"] is False
+    assert "1000000 nodes" in result["reasons"][0]
+
+
 def test_corrupt_compressed_member_is_a_failed_verdict() -> None:
     stream = io.BytesIO()
     with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -207,6 +216,13 @@ def test_ctei_tampered_reading_fails_hash_check() -> None:
 
     assert result["valid"] is False
     assert "hashes" in result["reasons"][0]
+
+
+def test_ctei_rejects_external_resolved_reference() -> None:
+    document = "version_1.0.0/d001.xml"
+    assert _resolved_target(document, "#n00001") == "version_1.0.0/d001.xml#n00001"
+    with pytest.raises(ValueError, match="external target"):
+        _resolved_target(document, "https://example.org#n00001")
 
 
 def test_cli_emits_one_json_result_for_real_loader(tf_root: Path, tmp_path: Path) -> None:
