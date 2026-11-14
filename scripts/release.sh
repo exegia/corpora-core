@@ -14,7 +14,7 @@
 #   cleanup-local       delete local feature/release branches whose remote is gone
 #   release-notes       print "- subject" lines for RANGE (default origin/main..HEAD)
 #
-# Environment: TRUNK (main), GH_REPO, VERSION, BUMP, BRANCH, RANGE,
+# Environment: TRUNK (main), GH_REPO, VERSION, BUMP, BRANCH, RANGE, RELEASE_ASSET_DIR,
 #              VERSION_CMD (replace `version.sh set`, e.g. for monorepos).
 
 set -euo pipefail
@@ -61,6 +61,9 @@ cmd_promote_pr() {
   : "${VERSION:?VERSION is required}"
   local bump="${BUMP:-patch}" ahead stat notes body num
   git fetch --quiet --force origin "+refs/heads/dev:refs/remotes/origin/dev" "+refs/heads/next:refs/remotes/origin/next"
+  if git diff --quiet origin/next origin/dev; then
+    echo "dev and next have the same tree: nothing to promote"; return 0
+  fi
   ahead="$(git rev-list --count origin/next..origin/dev)"
   if [ "$ahead" -eq 0 ]; then echo "dev is not ahead of next: nothing to promote"; return 0; fi
 
@@ -157,18 +160,29 @@ cmd_release_pr() {
 }
 
 cmd_tag_release() {
-  local version tag notes
+  local version tag notes asset draft asset_dir
+  local -a assets=()
   version="$("$SCRIPTS/version.sh" get)"
   tag="v$version"
-  if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
-    echo "$tag already exists: skipping"; return 0
+  asset_dir="${RELEASE_ASSET_DIR:-dist}"
+  for asset in "$asset_dir"/*; do
+    [ ! -f "$asset" ] || assets+=("$asset")
+  done
+  draft="$(gh release view "$tag" --json isDraft --jq .isDraft 2>/dev/null || true)"
+  if [ "$draft" = false ]; then
+    echo "$tag is already published: skipping"; return 0
+  fi
+  if [ "$draft" = true ]; then
+    if [ "${#assets[@]}" -gt 0 ]; then gh release upload "$tag" "${assets[@]}" --clobber; fi
+    gh release edit "$tag" --draft=false
+    echo "released $tag"; return 0
   fi
   notes="$(mktemp)"
   "$SCRIPTS/changelog.sh" extract "$version" > "$notes" 2>/dev/null || : > "$notes"
   if [ -s "$notes" ]; then
-    gh release create "$tag" --target "$(git rev-parse HEAD)" --title "$tag" --notes-file "$notes"
+    gh release create "$tag" "${assets[@]}" --target "$(git rev-parse HEAD)" --title "$tag" --notes-file "$notes"
   else
-    gh release create "$tag" --target "$(git rev-parse HEAD)" --title "$tag" --generate-notes
+    gh release create "$tag" "${assets[@]}" --target "$(git rev-parse HEAD)" --title "$tag" --generate-notes
   fi
   rm -f "$notes"
   echo "released $tag"

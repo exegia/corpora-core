@@ -1,13 +1,11 @@
 name: Packages
 
 # Publishes the generated types as packages when release.yml pushes a vX.Y.Z tag.
-# All jobs are opt-in through PUBLISH_GITHUB_PACKAGES=true.
+# Jobs below are opt-in through PUBLISH_GITHUB_PACKAGES=true. The release workflow
+# attaches Cargo archives before publication, independently of that variable.
 #
 #   ecosystem  job            where it lands
 #   npm        npm-github     @exegia/corpora-types on npm.pkg.github.com (GitHub Packages)
-#   cargo      crate-assets   .crate files attached to the GitHub Release
-#                             (GitHub Packages has no Cargo registry; crates.io
-#                             publishing stays in publish.yml)
 #   swiftpm    spm-check      validates Package.swift so the tag is consumable
 #                             with SwiftPM straight from git (no SPM registry)
 
@@ -59,26 +57,6 @@ jobs:
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  crate-assets:
-    name: crate-assets
-    needs: types
-    if: ${{ vars.PUBLISH_GITHUB_PACKAGES == 'true' && startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # upload release assets
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: ./.github/actions/setup
-        with:
-          install: "false"
-      - name: Package workspace crates
-        run: cargo package --workspace --locked --allow-dirty
-      - name: Attach .crate files to the release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
-        run: gh release upload "$TAG" target/package/*.crate --clobber
 
   spm-check:
     name: spm-check
