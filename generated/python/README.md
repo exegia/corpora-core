@@ -13,5 +13,9 @@ The separate `corpora-model` binding represents its
 own `TextRange` as a JSON pair and checks ordering. Convert explicitly between
 the two wire contracts rather than treating them as interchangeable.
 
-HTTP request and response wrappers remain in `corpora-api`; generated types
-contain only shared domain values.
+`CanonicalGraph` uses the legacy `graph.json` keys (`schemaVersion`,
+`sourceAsset`) and contains one work, edition, source asset, and ordered node
+and fragment lists. `validate_graph` checks every entity against the pinned
+Context Fabric v1 JSON Schemas packaged with this distribution. The envelope
+comes from the shared `ingest` domain schema; HTTP job wrappers remain in
+`corpora-api`.
