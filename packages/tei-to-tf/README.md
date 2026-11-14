@@ -405,8 +405,10 @@ nonblocking), **red 90** for other non-corpus spelling (blocking until corrected
 Scores are policy severity, not probabilities. Structural issues have no numeric score.
 The core's dictionary suggestions are not represented as AI suggestions.
 
-For hosted review, install `packages/quality-ai` and supply `--ai-bridge
-packages/quality-ai/bridge.mjs`. Configure `AI_GATEWAY_API_KEY` in the process environment.
+For hosted review, install `packages/quality-ai`, compile it with
+`npm run build --prefix packages/quality-ai`, and supply
+`--ai-bridge packages/quality-ai/dist/bridge.js`.
+Configure `AI_GATEWAY_API_KEY` in the process environment.
 See [hosted setup](../quality-ai/README.md). Without hosted AI, red findings stay blocked;
 no corpus word is automatically rewritten. `--corrections` supplies candidates but does
 not bypass AI review or dictionary validation.

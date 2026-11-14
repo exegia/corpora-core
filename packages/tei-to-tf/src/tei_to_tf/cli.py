@@ -63,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
         "--corrections", type=Path, help="JSON word-to-replacement map for non-corpus text"
     )
     parser.add_argument(
-        "--ai-bridge", type=Path, help="Path to quality-ai/bridge.mjs; enables hosted AI"
+        "--ai-bridge", type=Path, help="Path to built quality-ai/dist/bridge.js; enables hosted AI"
     )
     parser.add_argument("--ai-model", default="google/gemini-3.5-flash-lite")
     parser.add_argument("--ai-max-requests", type=int, default=100)

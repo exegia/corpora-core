@@ -46,18 +46,25 @@ CFR assertions apply only to an installed CFR-capable runtime; older CF uses .cf
 
 ## Convert and export
 
+For implemented local TEI/EPUB/PDF converters, exact build/test commands, quality-ai,
+reviewed resolver changes and shared schema generation, read
+[local-conversion.md](local-conversion.md). Read each package README and actual CLI
+help before executing. No hosted transmissions without explicit authorization.
+
 | Input/output | Route | Required fidelity checks |
 | --- | --- | --- |
 | TF → TF / annotations | Official Fabric.save for feature updates; walker CV or corpora-tf for structural rebuild | Preserve all untouched features, node-ID mapping, edge targets, feature metadata and source provenance; reload staged output |
 | TEI → TF | `uv run --project packages/tei-to-tf tei-to-tf SOURCE --output NEW_DIR`; text-fabric-factory for additional profiles | Namespaces, mixed content/tails, choices/apparatus policy, witnesses, standOff, overlap and Unicode scalar spans |
 | Generic XML / USX → TF | Explicit vocabulary mapping to source model then walker/exporter | XML is syntax, not schema; USX book/chapter/verse milestones, notes, bridges and empty verses require a USX adapter |
-| EPUB / Markdown → TF | Existing document parser → structure/text model → explicit slot/feature mapping | EPUB spine order, headings/sections, notes, links, whitespace and source locators |
+| EPUB → TF              | `packages/epub-to-tf` with the Rust `corpora-epub-check` validator                                                                                                    | Exact source versus display projection, spine, notes/noteref, links, assets and source/reading offsets; optional audited repair then revalidation          |
+| Markdown → TF          | Explicit document parser → source model → tested adapter                                                                                                              | Headings, whitespace, links and source locators; no bundled universal Markdown converter                                                                   |
 | PDF → TF | `packages/pdf-to-tf`: corpora-pdf extraction, score gate (> 95%), TEI with pages/zones, `tei-to-tf --milestones pages --facsimile zones`, line/word/page verification | Score is OCR evidence, not accuracy; page references, columns/reading order, headers, tables, glyph and mark loss; no claim of lossless PDF reconstruction |
 | DOC / DOCX → TF | Sandboxed office-format extractor → document model → exporter | Distinguish legacy binary DOC from DOCX ZIP/XML; preserve revisions, footnotes/tables where supported; report extraction losses |
 | TF → XML / SQL / graph | Explicit export schema, official runtime data access | Overlap needs stand-off XML, many-to-many membership tables, valued edges, metadata and reversible ID mapping |
 
-These are agent routing recipes, not newly implemented universal converters.
-Inspect adapter availability and help/API before use. If absent, implement and test
+TEI, EPUB and PDF have bounded implementations in this repository; other entries
+are routing recipes, not universal converters. Inspect adapter availability and
+help/API before use. If absent, implement and test
 a narrowly specified adapter within the authorized task or report the missing route.
 MetaBook DocumentAnalysisResponse is a structural/count comparison, not a text-bearing
 interchange format. Retain full source text and annotations separately. Its PDF
@@ -66,7 +73,9 @@ heuristics do not provide OCR or reliable tables. Keep schema version and error 
 For corpora-tf, the Plan/TfBuilder layer owns deterministic .tf serialization;
 Context-Fabric owns runtime/search/cache. Source metadata and annotations must survive
 remapping. Inspect scripts/compatibility.py and examples/export_json.rs in the actual
-sibling checkout before invoking them: this checkout's conversion crates are placeholders.
+sibling checkout before invoking those sibling-only tools. Here `corpora-convert`
+implements EPUB validation and `corpora-pdf` implements PDF extraction; use the local
+Python exporters rather than assuming these Rust components are universal TF writers.
 
 ## Edit/update protocol
 
@@ -92,5 +101,7 @@ one-level synthetic section fixture. This is not evidence that arbitrary section
 models pass; add corpus-specific section fixtures before asserting compatibility.
 The tested CF version was 0.5.8 with .cfm; no CFR acceptance is claimed here.
 
-The local TEI converter now has its own bounded, tested implementation. Read
-`packages/tei-to-tf/README.md` before use; its unsupported constructs fail explicitly.
+The local TEI/EPUB/PDF routes use character slots. The word-slot reconciler above
+is not their fidelity oracle: use exact text/span checks and both real loaders as
+specified in [local-conversion.md](local-conversion.md). Never insert separators or
+apply word-based patches merely to silence character-slot warnings.

@@ -5,7 +5,7 @@ XML findings. Think of it as asking a helper to propose corrections on a
 worksheet. The TEI converter checks each proposal and rechecks the complete
 candidate before export. The bridge cannot approve a broken ID or edit a file.
 
-This optional Node 22+ bridge gives the Python TEI converter structured correction
+This optional TypeScript bridge runs on Node 22+ and gives the Python TEI converter structured correction
 proposals using `generateText` and `Output.object`. The provider receives a portable JSON
 shape; strict bounds and nonempty-value checks run locally on the returned object.
 This avoids provider-specific schema constraint failures without relaxing validation. It needs no hosted web application
@@ -15,8 +15,16 @@ stay in the process environment and never enter browser assets or quality receip
 ```sh
 npm ci --prefix packages/quality-ai
 npm run check --prefix packages/quality-ai
+npm run build --prefix packages/quality-ai
 npm test --prefix packages/quality-ai
 ```
+
+`npm ci` and `npm install` automatically compile TypeScript through the `prepare`
+lifecycle. If lifecycle scripts are disabled, run `npm run build` explicitly.
+`check` strictly type-checks both TypeScript files. `build` compiles them to ESM
+JavaScript in the ignored `dist/` directory; `test` rebuilds before running the
+compiled tests. Rebuild after changing the source. The Python converter and plain
+Node callers use `dist/bridge.js`, so no TypeScript loader or runtime flags are needed.
 
 ## Request and response
 
@@ -24,7 +32,7 @@ The CLI reads **one JSON object** on standard input and writes one JSON result:
 
 ```sh
 printf '%s\n' '{"task":"spelling","model":"provider/model","context":"A short source excerpt","issues":[]}' \
-  | node packages/quality-ai/bridge.mjs
+  | node packages/quality-ai/dist/bridge.js
 ```
 
 Use an available `provider/model` and set `AI_GATEWAY_API_KEY` in the process
@@ -48,7 +56,7 @@ Zod schema for Node callers. `testModel` is for offline SDK tests; ordinary
 calls use the named Gateway model and process credential.
 
 ```js
-import { correct } from './packages/quality-ai/bridge.mjs';
+import { correct } from './packages/quality-ai/dist/bridge.js';
 
 const result = await correct({
   task: 'xml',
@@ -72,7 +80,7 @@ uv run --project packages/tei-to-tf tei-to-tf /path/to/tei \
   --output /new/quality-output \
   --quality-engine target/debug/corpora-text-check \
   --dictionaries target/cspell-dictionaries \
-  --ai-bridge packages/quality-ai/bridge.mjs \
+  --ai-bridge packages/quality-ai/dist/bridge.js \
   --ai-model google/gemini-3.5-flash-lite \
   --ai-max-requests 100 --repair-cycles 3
 ```

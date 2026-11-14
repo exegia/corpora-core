@@ -35,6 +35,15 @@ Targets detect the stack from `pyproject.toml`, `package.json`, `Cargo.toml` or 
 - **Skills:** `.github/skills/<name>/SKILL.md`, frontmatter `name` equal to the directory and a one-line
   `description`. `make agents-check` enforces it.
 
+## Shared models and agent checks
+
+Shared conversion/model contracts start in `crates/corpora-core/schema`. Run
+`make types` then `make types-check` to regenerate/check Rust, TypeScript, Swift
+and SQL together; never hand-edit outputs or create parallel shared models.
+`make ci` includes read-only `types-check` and offline `agents-test`; these skip
+when their component is absent. Conversion workflows and package publishing check
+generated freshness too. Commit schema, outputs, tests and agent guidance together.
+
 ## Secrets
 
 - Never commit credentials, tokens or keys, including in tests, fixtures, docs and examples.
@@ -114,7 +123,8 @@ See the core and converter READMEs for the policy, setup, and diagnostic contrac
 Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
 and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.
-Use `--ai-bridge packages/quality-ai/bridge.mjs` with `AI_GATEWAY_API_KEY` in the
+Build with `npm run build --prefix packages/quality-ai` if install scripts are disabled.
+Use `--ai-bridge packages/quality-ai/dist/bridge.js` with `AI_GATEWAY_API_KEY` in the
 process environment. Never put credentials in reports or browser assets. See
 `packages/quality-ai/README.md` for model selection, request budgets and limitations.
 

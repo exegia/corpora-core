@@ -12,9 +12,11 @@ This bundle does not implement a separate autonomous model runtime.
 ## Start
 
 ```sh
-make agents-link
 python3 agent/text-fabric-expert/configure.py doctor
 ```
+
+Use the canonical skill directly; creating host skill aliases is optional setup,
+not a prerequisite for conversion or validation.
 
 The canonical skill is `.github/skills/text-fabric-expert/SKILL.md`. The prompt
 routes operations to existing tools and records unsupported conversion boundaries.
@@ -79,17 +81,60 @@ The existing local text-fabric-validator skill is reused by reference because it
 redistribution license is unspecified. Set TF_VALIDATOR to its directory and follow
 `knowledge/workflows.md`. Its Python scripts cover static validation, document schema
 extraction, reconciliation and optional PDF QC. Missing tools must be installed or
-provided separately; the doctor never silently installs them.
+provided separately; the doctor never silently installs them. It inventories
+converter entrypoints, package manifests/locks, default debug/release Rust binaries,
+compiled quality-ai bridge and relevant executables. File existence is not freshness,
+a connected integration, installed OCR/dictionary data or conversion acceptance.
+Custom Cargo target paths are not inferred.
+
+## Local converters and reviewed corrections
+
+Read [knowledge/local-conversion.md](knowledge/local-conversion.md) for exact
+root-relative build/test commands, package working directories and bounded routes:
+
+- `packages/tei-to-tf`: explicit editorial policies, source retention and exact
+  character-slot fidelity; unsupported TEI constructs fail closed.
+- `packages/epub-to-tf`: implemented Rust `corpora-epub-check` validation followed
+  by TF export; spine, notes, links/assets and source/display projections survive.
+- `packages/pdf-to-tf`: implemented `corpora-pdf-extract`, strict score > 0.95,
+  then TEI/TF with every line/word/page verified against extraction. The score is
+  not measured transcription accuracy; rendered-page review remains necessary.
+- `packages/quality-ai`: optional Node 22+ TypeScript bridge, compiled to
+  `dist/bridge.js`; `npm install`/`npm ci` builds it automatically via
+  `prepare: npm run build` unless lifecycle scripts are disabled. Bounded proposals
+  receive local exact-span revalidation.
+- `packages/tf-ai-resolver`: pinned selection → proposal → exact reviewed apply
+  to `resolved_reading` in a new bundle, never a silent rewrite of source slots.
+
+Read each actual package README and CLI help before execution. Preserve independent
+static, real TF/CF loader and source-fidelity receipts. Word-slot reconciliation is
+not a character-slot oracle. Do not invent universal Markdown/USX/DOC/XML adapters.
+No hosted transmissions without explicit authorization, including selections sent
+by a local resolver UI. Explain data/provider/cost bounds; credentials are not consent.
+
+Shared model work starts in `crates/corpora-core/schema`, followed by `make types`
+and `make types-check` for all Rust, TypeScript, Swift and SQL outputs. Generation
+is explicit; the check rejects stale, missing or extra generated files without
+modifying them. Both targets skip when the type-generator crate is absent.
+Never edit generated files or substitute one-language checks. `make ci` includes
+`types-check` and `agents-test`.
 
 ## Verification
 
 ```sh
-python3 -m unittest discover -s agent/text-fabric-expert/tests -v
+make agents-test
 make agents-check
 uv run --python 3.13 --with cfabric-mcp==0.1.8 --with text-fabric==13.1.2 python agent/text-fabric-expert/tests/smoke_runtime.py
-make fmt
-make ci
 ```
+
+`make agents-test` is the official offline verification command: configuration/
+inventory behavior and deterministic knowledge/skill/CLI drift contracts. It runs
+the unittest suite when `agent/text-fabric-expert/tests` exists and otherwise skips.
+It does not run converters, loaders or models.
+`make agents-check` validates canonical agent assets; the explicit smoke command
+above is a separate live local runtime/MCP check and can resolve dependencies.
+Package conversion/build checks are listed in `knowledge/local-conversion.md`;
+run them when validating those implementations, not as proof of model behavior.
 
 `evals/cases.json` contains behavioral acceptance cases. Run them in the intended
 host with its configured tools; record model/version, date, tool versions, transcript,
