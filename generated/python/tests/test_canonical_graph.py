@@ -55,6 +55,21 @@ class CanonicalGraphTests(unittest.TestCase):
         with self.assertRaises(GraphValidationError):
             validate_graph(payload)
 
+    def test_rejects_invalid_datetime_format(self) -> None:
+        payload = graph_dict()
+        payload["edition"]["provenance"] = {
+            "parser": {"name": "test", "version": "1.0.0"},
+            "convertedAt": "definitely not a timestamp",
+        }
+        with self.assertRaises(GraphValidationError):
+            validate_graph(payload)
+
+    def test_rejects_invalid_uri_format(self) -> None:
+        payload = graph_dict()
+        payload["sourceAsset"]["uri"] = "not a uri with spaces"
+        with self.assertRaises(GraphValidationError):
+            validate_graph(payload)
+
 
 if __name__ == "__main__":
     unittest.main()
