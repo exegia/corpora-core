@@ -9,7 +9,7 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from cfabric.core import Fabric as ContextFabric
+from cfabric import Fabric as ContextFabric
 from tf.fabric import Fabric
 
 from corpus_validate import UnsupportedFormat, validate_archive
@@ -75,7 +75,7 @@ def test_real_text_fabric_and_context_fabric_round_trip(tf_root: Path) -> None:
 def test_shipped_cache_matches_fresh_compilation(tf_root: Path) -> None:
     api = ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
     assert api
-    assert (tf_root / ".cfm").is_dir()
+    assert (tf_root / ".cfr").is_dir()
 
     result = validate_archive(archive_bytes(tf_root, ".corpus"), "mini.corpus")
 
@@ -86,7 +86,7 @@ def test_shipped_cache_matches_fresh_compilation(tf_root: Path) -> None:
 
 def test_corrupt_shipped_cache_is_not_silently_recompiled(tf_root: Path) -> None:
     assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
-    cache_files = [path for path in (tf_root / ".cfm").rglob("*") if path.is_file()]
+    cache_files = [path for path in (tf_root / ".cfr").rglob("*") if path.is_file()]
     assert cache_files
     cache_files[0].write_bytes(b"corrupt cache")
 
