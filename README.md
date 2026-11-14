@@ -49,6 +49,9 @@ operations, and the spelling setup.
 | TF text to review with AI | [TF AI resolver](packages/tf-ai-resolver/README.md) | Pins a selection, asks the expert for a proposal, and applies an approved derived reading. |
 | A shared model in another language | [type generator](crates/corpora-typegen/README.md) | Generates Rust, TypeScript, Swift, and SQL from one schema. |
 
+CI installs Poppler and Tesseract before PDF crate tests in both the PR and
+Matrix workflows; the extraction tests need `pdfinfo` from Poppler.
+
 The optional [quality AI bridge](packages/quality-ai/README.md) helps the TEI
 quality pipeline review bounded findings. Build its TypeScript source before
 passing `packages/quality-ai/dist/bridge.js` to the converter.
