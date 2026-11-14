@@ -6,7 +6,7 @@ name: Publish
 #
 #   variable              job              secret / auth
 #   (always)              build            -
-#   (always)              release-assets   attaches dist/* to the GitHub Release
+# Release assets are attached by release.yml before publication so immutable releases stay complete.
 #   PUBLISH_PYPI=true     publish-pypi     PyPI trusted publishing (OIDC), environment `pypi`
 #   PUBLISH_NPM=true      publish-npm      NPM_TOKEN, environment `npm` (with provenance)
 #   PUBLISH_CRATES=true   publish-crates   CARGO_REGISTRY_TOKEN, environment `crates`
@@ -69,31 +69,6 @@ jobs:
           name: dist
           path: dist/
           if-no-files-found: ignore
-
-  release-assets:
-    name: release-assets
-    needs: build
-    if: ${{ startsWith(github.ref, 'refs/tags/v') }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: dist
-          path: dist
-        continue-on-error: true # no artifacts were produced
-      - name: Attach artifacts to the GitHub Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          if compgen -G "dist/*" >/dev/null; then
-            gh release upload "$TAG" dist/* --clobber
-          else
-            echo "No artifacts to attach."
-          fi
 
   publish-pypi:
     name: publish-pypi
