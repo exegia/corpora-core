@@ -106,6 +106,12 @@ its tests rebuild too. The TEI workflow installs and compiles it before converte
 checks. Rebuild explicitly after source edits or with disabled lifecycle scripts.
 Agent unit tests do not establish per-corpus fidelity or live model quality.
 
+`packages/corpus-validate` has a separate PR workflow because root stack
+detection skips nested Python packages. It runs real Text-Fabric and
+Context-Fabric loader tests, including a `.cfm` mmap reload, followed by a
+wheel build. The hosted API stages bounded uploads and invokes its CLI; legacy
+server paths and conversion job IDs are not accepted as upload targets.
+
 ## 4. Manual operations
 
 ```bash
