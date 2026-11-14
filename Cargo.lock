@@ -107,11 +107,11 @@ dependencies = [
 
 [[package]]
 name = "corpora-agent"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "corpora-convert"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "corpora-core",
  "roxmltree",
@@ -123,7 +123,7 @@ dependencies = [
 
 [[package]]
 name = "corpora-core"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "flate2",
  "insta",
@@ -140,11 +140,11 @@ dependencies = [
 
 [[package]]
 name = "corpora-fabric"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "corpora-pdf"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "roxmltree",
  "serde",
@@ -158,11 +158,11 @@ dependencies = [
 
 [[package]]
 name = "corpora-source"
-version = "0.2.0"
+version = "0.2.1"
 
 [[package]]
 name = "corpora-typegen"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "anyhow",
  "insta",
