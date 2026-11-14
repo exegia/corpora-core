@@ -119,7 +119,8 @@ make cleanup-local              # prune local branches whose remote is gone
 ```
 
 `promote-pr` skips matching `dev` and `next` trees. The release job uses `scripts/stack.sh list`:
-Rust workspaces package `.crate` files, Python or Node stacks run `make pack`, and other stacks
+Rust workspaces package `.crate` files, Node stacks install dependencies before `make pack`, Python
+stacks run `make pack`, and other stacks
 continue without binary assets. `make tag-release` attaches available files while creating the
 immutable GitHub Release.
 An already published release is skipped; a draft is retried by uploading assets and publishing it.
