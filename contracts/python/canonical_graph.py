@@ -8,7 +8,7 @@ from functools import cache
 from importlib import resources
 from typing import Any
 
-from jsonschema import Draft202012Validator
+from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, ConfigDict, Field
 from referencing import Registry, Resource
 
@@ -50,7 +50,11 @@ def _registry() -> Registry:
 
 @cache
 def _validator(schema_filename: str) -> Draft202012Validator:
-    return Draft202012Validator({"$ref": _SCHEMA_BASE + schema_filename}, registry=_registry())
+    return Draft202012Validator(
+        {"$ref": _SCHEMA_BASE + schema_filename},
+        registry=_registry(),
+        format_checker=FormatChecker(),
+    )
 
 
 def validate_graph(graph: CanonicalGraph | dict[str, Any]) -> CanonicalGraph:

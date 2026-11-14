@@ -49,6 +49,12 @@ class CanonicalGraphTests(unittest.TestCase):
         with self.assertRaises(GraphValidationError):
             validate_graph(payload)
 
+    def test_rejects_invalid_uuid_format(self) -> None:
+        payload = graph_dict()
+        payload["work"]["id"] = "not-a-uuid"
+        with self.assertRaises(GraphValidationError):
+            validate_graph(payload)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -131,7 +131,8 @@ fn emit_interface(out: &mut String, schema: &Schema, name: &str, def: &TypeDef) 
             .map_or_else(|| camel_case(field_name), str::to_owned);
         // Optional fields are `field: T | null` to match the corpora-web rows.
         if matches!(parsed, FieldType::Optional(_)) {
-            let _ = writeln!(out, "  {wire_name}: {ts} | null");
+            let optional = if field.omit_if_none { "?" } else { "" };
+            let _ = writeln!(out, "  {wire_name}{optional}: {ts} | null");
         } else {
             let _ = writeln!(out, "  {wire_name}: {ts}");
         }

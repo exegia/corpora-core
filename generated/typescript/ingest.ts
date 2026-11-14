@@ -9,7 +9,7 @@ export interface CanonicalGraph {
   /** Context Fabric schema version; currently 1.0.0. */
   schemaVersion: string
   /** New corpus when no existing corpus ID was supplied. */
-  corpus: Record<string, unknown> | null
+  corpus?: Record<string, unknown> | null
   /** Work entity for the parsed document. */
   work: Record<string, unknown>
   /** Edition entity for the parsed document. */
