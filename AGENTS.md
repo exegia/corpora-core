@@ -87,6 +87,9 @@ runners. Each stack has a skill with the conventions and pitfalls.
 - A schedule (22:00 UTC) or the **Promote to next** workflow opens `dev -> next`. A push to `next` cuts
   `release/vX.Y.Z` (version files + `CHANGELOG.md`) and opens a draft PR into `main`.
 - Merging that PR tags `vX.Y.Z`, publishes the GitHub Release, which triggers `publish.yml`.
+- Promotion skips matching `dev` and `next` trees. The release job detects the stacks, packages
+  Rust workspace crates when present, installs Node dependencies before Node packaging, and
+  attaches assets before immutability locks the release.
 - Required checks: `guard`, `check`, `Detect hardcoded secrets`.
 - The PR and Matrix test jobs install Poppler and Tesseract before PDF crate tests.
 - Workspace crates that depend on each other use one-line `path` entries with a `version` in the root

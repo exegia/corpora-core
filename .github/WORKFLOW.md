@@ -118,8 +118,13 @@ make cut-release VERSION=1.2.0  # normally run by next.yml
 make cleanup-local              # prune local branches whose remote is gone
 ```
 
-`make tag-release` is idempotent: an existing tag is skipped. Everything is parameterized on `TRUNK`
-(default `main`).
+`promote-pr` skips matching `dev` and `next` trees. The release job uses `scripts/stack.sh list`:
+Rust workspaces package `.crate` files, Node stacks install dependencies before `make pack`, Python
+stacks run `make pack`, and other stacks
+continue without binary assets. `make tag-release` attaches available files while creating the
+immutable GitHub Release.
+An already published release is skipped; a draft is retried by uploading assets and publishing it.
+Everything is parameterized on `TRUNK` (default `main`).
 
 ## 5. Troubleshooting
 

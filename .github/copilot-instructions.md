@@ -30,6 +30,8 @@ Targets detect the stack from `pyproject.toml`, `package.json`, `Cargo.toml` or 
   root `[workspace.dependencies]`; `scripts/version.sh set` bumps them with the workspace version.
 - **Workflows:** `.github/workflows/*.yml` are plain workflows; steps call `make` targets. Pin third-party
   actions to a commit SHA with a version comment. Keep jobs least-privilege.
+- **Release assets:** detect stacks, package Rust crates or install Node dependencies before Node packaging, and attach assets during release creation.
+  Skip promotion when `dev` and `next` have the same tree.
 - **Docs move with automation:** update `AGENTS.md`, `README.md`, and `.github/WORKFLOW.md` in the same PR.
 - **Template stays generic:** stack specifics go behind `scripts/stack.sh` or `.github/skills/`.
 - **Skills:** `.github/skills/<name>/SKILL.md`, frontmatter `name` equal to the directory and a one-line

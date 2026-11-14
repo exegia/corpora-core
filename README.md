@@ -215,6 +215,8 @@ working APIs until code and tests are added.
 
 ## Publishing
 
+Promotion skips branches with matching trees. The release job detects the stacks, packages workspace crates when Rust is present, installs Node dependencies before Node packaging, and attaches assets when it creates the GitHub Release; later tag-triggered jobs handle registries and generated packages.
+
 Release automation handles versions and tags. `PUBLISH_CRATES=true` opts the
 tagged release into crates.io publishing when `CARGO_REGISTRY_TOKEN` is
 configured in the `crates` environment. Workspace crates depend on each other
