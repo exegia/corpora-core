@@ -97,7 +97,7 @@ fn emit_graph(schema: &Schema) -> anyhow::Result<String> {
         };
         let _ = writeln!(graph_fields, "    {name}: {ty}{default}");
     }
-    Ok(include_str!("../../../contracts/python/canonical_graph.py")
+    Ok(include_str!("../assets/python/canonical_graph.py")
         .replace("    # <generated-fields>", graph_fields.trim_end()))
 }
 
@@ -109,51 +109,51 @@ fn emit_schemas() -> Vec<(String, String)> {
     for (name, content) in [
         (
             "annotation.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/annotation.schema.json"),
+            include_str!("../assets/context-fabric/v1/annotation.schema.json"),
         ),
         (
             "api-payloads.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/api-payloads.schema.json"),
+            include_str!("../assets/context-fabric/v1/api-payloads.schema.json"),
         ),
         (
             "common.defs.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/common.defs.schema.json"),
+            include_str!("../assets/context-fabric/v1/common.defs.schema.json"),
         ),
         (
             "content-node.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/content-node.schema.json"),
+            include_str!("../assets/context-fabric/v1/content-node.schema.json"),
         ),
         (
             "corpus.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/corpus.schema.json"),
+            include_str!("../assets/context-fabric/v1/corpus.schema.json"),
         ),
         (
             "edition.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/edition.schema.json"),
+            include_str!("../assets/context-fabric/v1/edition.schema.json"),
         ),
         (
             "physical-locator.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/physical-locator.schema.json"),
+            include_str!("../assets/context-fabric/v1/physical-locator.schema.json"),
         ),
         (
             "reference.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/reference.schema.json"),
+            include_str!("../assets/context-fabric/v1/reference.schema.json"),
         ),
         (
             "relationship.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/relationship.schema.json"),
+            include_str!("../assets/context-fabric/v1/relationship.schema.json"),
         ),
         (
             "source-asset.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/source-asset.schema.json"),
+            include_str!("../assets/context-fabric/v1/source-asset.schema.json"),
         ),
         (
             "text-fragment.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/text-fragment.schema.json"),
+            include_str!("../assets/context-fabric/v1/text-fragment.schema.json"),
         ),
         (
             "work.schema.json",
-            include_str!("../../../contracts/context-fabric/v1/work.schema.json"),
+            include_str!("../assets/context-fabric/v1/work.schema.json"),
         ),
     ] {
         output.push((

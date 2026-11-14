@@ -5,6 +5,12 @@ data shapes once. This crate emits Rust, TypeScript, Swift, Python, and SQL
 files. Python starts with the reviewed `TextRange` value object; the other
 targets cover the full schema.
 
+The Python emitter bundles copies of `contracts/python/canonical_graph.py` and
+`contracts/context-fabric/v1/*.schema.json` in `assets/` so the published crate
+can compile without the rest of this workspace. When those source contracts
+change, refresh the copies and run `cargo test -p corpora-typegen`; the
+`packaged_contracts` test checks their names and contents.
+
 ## Generate files
 
 Run from the repository root:
