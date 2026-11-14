@@ -2,7 +2,7 @@
 
 The schema is the project's shared drawing of its data. For example, it says
 what a `Project` contains once, and the generator makes matching types for
-Rust, TypeScript and Swift plus SQL tables. Edit this JSON first when the
+Rust, TypeScript, Swift and Python plus SQL tables. Edit this JSON first when the
 shared model changes; generated files are copies of the drawing.
 
 This directory is the **single source of truth** for the shared data model:
@@ -18,6 +18,7 @@ domain, plus barrels:
 | Rust       | `generated/rust/{mod,enums,<domain>}.rs`         | corpora-core crates               |
 | TypeScript | `generated/typescript/{index,enums,<domain>}.ts` | corpora-web and other TS apps     |
 | Swift      | `generated/swift/{Enums,Support,<Domain>}.swift` | SwiftUI apps (one SwiftPM target) |
+| Python     | `generated/python/src/corpora_schema_types/`    | `corpora-api` domain values      |
 | SQL        | `generated/sql/schema.sql`                       | Postgres (Supabase) migrations    |
 
 Swift notes: wire keys stay `snake_case` via `CodingKeys` (matching the Rust
@@ -28,7 +29,7 @@ SQL stays a single file because `CREATE TABLE` ordering follows foreign-key
 dependencies across domains.
 
 For new or changed shared conversion/model contracts, edit this schema first and
-regenerate **all four targets** from the repository root:
+regenerate **all five targets** from the repository root:
 
 ```sh
 make types
@@ -41,9 +42,16 @@ outputs without modifying them. Commit the schema and regenerated files together
 CI never silently rewrites or commits models. TypeScript-only runtime validation
 schemas remain local unless they define a shared cross-language contract.
 
+Python generation currently covers the reviewed `TextRange` value object. It
+uses a strict `u32` field mapping and the same object-shaped JSON as generated
+Rust. The standalone `corpora-model` binding has a tuple-shaped `TextRange`
+with an ordering invariant, so it cannot be substituted without conversion.
+The Python package in `generated/python` uses the schema version and adds no
+HTTP or storage fields. Its runtime round trip is checked in `corpora-api`.
+
 ## Why JSON source, generated SQL (not `.sql` source files)
 
-- **One format, four targets.** Relationships, optionality and docs are
+- **One format, five targets.** Relationships, optionality and docs are
   declared once; the SQL emitter derives `NOT NULL`, `REFERENCES`, `CHECK`
   and `PRIMARY KEY` from the same declarations that produce Rust `Option<T>`
   and TypeScript `| null`. Hand-written `.sql` would have to be re-parsed to
