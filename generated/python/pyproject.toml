@@ -1,0 +1,17 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "corpora-schema-types"
+dynamic = ["version"]
+description = "Generated Python value objects from the Corpora core schema"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["pydantic>=2.11,<3"]
+
+[tool.hatch.version]
+path = "src/corpora_schema_types/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/corpora_schema_types"]
