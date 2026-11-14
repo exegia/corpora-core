@@ -49,6 +49,18 @@ jobs:
       - uses: ./.github/actions/setup
         with:
           install: "false"
+      - name: Install PDF extraction tools
+        if: ${{ hashFiles('crates/corpora-pdf/Cargo.toml') != '' }}
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            macOS) brew install poppler tesseract ;;
+            Linux)
+              sudo apt-get update
+              sudo apt-get install -y poppler-utils tesseract-ocr tesseract-ocr-eng
+              ;;
+            *) echo "Unsupported PDF test runner: $RUNNER_OS" >&2; exit 1 ;;
+          esac
       - run: make ci
 
   e2e:
