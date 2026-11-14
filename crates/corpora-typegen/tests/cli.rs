@@ -7,7 +7,7 @@ use std::process::{Command, Output};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::SystemTime;
 
-use corpora_typegen::{Schema, rust, sql, swift, typescript};
+use corpora_typegen::{Schema, python, rust, sql, swift, typescript};
 
 static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -74,9 +74,19 @@ fn expected_outputs() -> BTreeMap<PathBuf, String> {
         }
     }
     files.insert(PathBuf::from("sql/schema.sql"), sql::emit(&schema));
+    for (name, content) in python::emit(&schema).unwrap() {
+        files.insert(Path::new("python").join(name), content);
+    }
     files
         .into_iter()
-        .map(|(path, content)| (path, format!("{}\n", content.trim_end_matches('\n'))))
+        .map(|(path, content)| {
+            let normalized = if content.is_empty() {
+                content
+            } else {
+                format!("{}\n", content.trim_end_matches('\n'))
+            };
+            (path, normalized)
+        })
         .collect()
 }
 
@@ -145,6 +155,10 @@ fn generation_should_match_all_emitters_and_include_every_target_domain() {
         assert!(expected.contains_key(&Path::new("swift").join(swift_name)));
     }
     assert!(expected[Path::new("sql/schema.sql")].contains("CREATE TABLE"));
+    assert!(
+        expected[Path::new("python/src/corpora_schema_types/document.py")]
+            .contains("class TextRange(BaseModel):")
+    );
 
     let before = snapshot(&fixture.out());
     let checked = fixture.run(&["--check"]);
@@ -213,6 +227,7 @@ fn check_should_report_extra_files_in_every_target_without_deleting_them() {
         "typescript/retired.ts",
         "swift/Retired.swift",
         "sql/retired.sql",
+        "python/src/corpora_schema_types/retired.py",
         "rust/nested/retired.rs",
         "typescript/notes.txt",
     ] {
@@ -229,6 +244,18 @@ fn check_should_report_extra_files_in_every_target_without_deleting_them() {
         );
         fs::remove_file(path).unwrap();
     }
+    assert_success(&fixture.run(&["--check"]));
+}
+
+#[test]
+fn check_ignores_python_bytecode_cache() {
+    let fixture = Fixture::new();
+    fixture.generate();
+    let cache = fixture
+        .out()
+        .join("python/src/corpora_schema_types/__pycache__");
+    fs::create_dir_all(&cache).unwrap();
+    fs::write(cache.join("document.cpython-313.pyc"), b"bytecode").unwrap();
     assert_success(&fixture.run(&["--check"]));
 }
 
