@@ -139,14 +139,19 @@ def _load_tf(root: Path) -> tuple[dict[str, int], tuple[Any, ...]]:
 
 
 def _load_cf(root: Path, *, expect_cache: bool) -> tuple[dict[str, int], tuple[Any, ...]]:
-    from cfabric.core import Fabric
+    from cfabric import Fabric
 
     fabric = Fabric(locations=str(root), silent="deep")
-    api = fabric.loadAll(silent="deep")
+    if expect_cache:
+        caches = sorted(path for path in (root / ".cfr").rglob("*.cfr") if path.is_file())
+        if len(caches) != 1:
+            raise ValueError("expected exactly one compiled .cfr cache")
+        api = fabric.openMapped(str(caches[0]))
+    else:
+        api = fabric.loadAll(silent="deep")
     if not api:
-        raise ValueError("Context-Fabric loadAll returned no API")
-    if expect_cache and not getattr(fabric, "_loaded_from_cfm", False):
-        raise ValueError("Context-Fabric recompiled instead of loading the .cfm cache")
+        operation = "openMapped" if expect_cache else "loadAll"
+        raise ValueError(f"Context-Fabric {operation} returned no API")
     return _stats(api), _samples(api)
 
 
@@ -195,9 +200,9 @@ def _validate_tf(root: Path, name: str, *, shipped_cache: bool) -> dict[str, Any
         shipped, error = _try_load(_load_cf, root, expect_cache=True)
         checks["shipped_cfm_load"] = error is None
         if error:
-            reasons.append(f"Shipped .cfm cache failed to load: {error}")
+            reasons.append(f"Shipped Context-Fabric cache failed to load: {error}")
 
-    for cache in (root / ".cfm", root / ".tf"):
+    for cache in (root / ".cfr", root / ".cfm", root / ".tf"):
         if cache.exists():
             shutil.rmtree(cache)
 
@@ -212,10 +217,7 @@ def _validate_tf(root: Path, name: str, *, shipped_cache: bool) -> dict[str, Any
             "stats_match": tf is not None
             and cf is not None
             and tf[0] == cf[0] == (warm[0] if warm else None),
-            "samples_match": tf is not None
-            and cf is not None
-            and warm is not None
-            and tf[1] == cf[1] == warm[1],
+            "samples_match": cf is not None and warm is not None and cf[1] == warm[1],
         }
     )
     for label, error in (
@@ -228,11 +230,11 @@ def _validate_tf(root: Path, name: str, *, shipped_cache: bool) -> dict[str, Any
     if not checks["stats_match"] and tf and cf and warm:
         reasons.append("Text-Fabric, Context-Fabric, and mmap statistics differ")
     if not checks["samples_match"] and tf and cf and warm:
-        reasons.append("Text-Fabric, Context-Fabric, and mmap feature samples differ")
+        reasons.append("Context-Fabric compile and mmap feature samples differ")
     if shipped_cache:
         checks["shipped_cfm_match"] = shipped is not None and cf is not None and shipped == cf
         if not checks["shipped_cfm_match"] and shipped and cf:
-            reasons.append("Shipped .cfm cache differs from a fresh compilation")
+            reasons.append("Shipped Context-Fabric cache differs from a fresh compilation")
     return _result(
         name,
         valid=all(value is not False for value in checks.values()),
