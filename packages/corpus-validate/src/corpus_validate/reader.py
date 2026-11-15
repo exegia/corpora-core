@@ -246,7 +246,7 @@ def _passage_nodes(api: Any, section_node: int | None, levels: list[str]) -> lis
         return list(api.F.otype.s(_finest_otype(api)))
     node_type = api.F.otype.v(section_node)
     index = levels.index(node_type) if node_type in levels else 0
-    if len(levels) == 1 and node_type == lowest:
+    if lowest is not None and node_type == lowest:
         return [section_node]
     if levels and index < len(levels) - 1 and lowest is not None:
         nodes = list(api.L.d(section_node, otype=lowest))
