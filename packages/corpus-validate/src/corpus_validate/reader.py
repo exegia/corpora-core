@@ -280,7 +280,7 @@ def _feature_names(api: Any) -> set[str]:
         return set()
 
 
-def _slot_tokens(api: Any, node: int, fmt: str) -> list[dict[str, Any]]:
+def _slot_tokens(api: Any, node: int, fmt: str, *, default_format: bool) -> list[dict[str, Any]]:
     slot_type = api.F.otype.slotType
     slots = (
         [node] if api.F.otype.v(node) == slot_type else list(api.L.d(node, otype=slot_type) or ())
@@ -299,6 +299,14 @@ def _slot_tokens(api: Any, node: int, fmt: str) -> list[dict[str, Any]]:
             try:
                 raw = api.Fs("after").v(slot)
                 after = "" if raw is None else str(raw)
+            except Exception:
+                pass
+        if default_format and after and "text" in names:
+            try:
+                raw = api.Fs("text").v(slot)
+                raw_text = str(raw) if raw is not None else ""
+                if raw_text and text == raw_text + after:
+                    text = raw_text
             except Exception:
                 pass
         tokens.append({"text": text, "after": after, "node": int(slot)})
@@ -343,7 +351,7 @@ def _content(
                 "node": int(node),
                 "ref": _section_ref(api, node),
                 "text": text,
-                "tokens": _slot_tokens(api, node, format_used),
+                "tokens": _slot_tokens(api, node, format_used, default_format=not fmt),
             }
         )
     next_offset = offset + limit if offset + limit < total else None
