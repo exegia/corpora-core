@@ -10,6 +10,7 @@ import hashlib
 import io
 import json
 import re
+import shutil
 import tempfile
 import zipfile
 from dataclasses import dataclass
@@ -20,8 +21,15 @@ from uuid import UUID
 
 import yaml
 
-from .reader import _load_api
-from .validator import MAX_ARCHIVE_BYTES, ArchiveTooLarge, _extract, _members, validate_archive
+from .reader import _load_api, _tf_root
+from .validator import (
+    MAX_ARCHIVE_BYTES,
+    ArchiveTooLarge,
+    _extract,
+    _members,
+    _plain,
+    validate_archive,
+)
 
 MANIFEST_FIELDS = frozenset(
     {
@@ -36,6 +44,7 @@ MANIFEST_FIELDS = frozenset(
     }
 )
 _VERSION = re.compile(r"^v?1\.(\d+)$")
+MAX_RENDERED_SLOT_CHECKS = 5_000_000
 
 
 @dataclass(frozen=True)
@@ -66,6 +75,82 @@ def _validated_zip(data: bytes) -> tuple[zipfile.ZipFile, list[zipfile.ZipInfo]]
     except Exception:
         archive.close()
         raise
+
+
+def _full_values_hash(api: Any) -> str:
+    """Hash typed values of every node and edge; validator sampling is insufficient."""
+    checksum = hashlib.sha256()
+    for name in sorted(api.Fall()):
+        for node, value in sorted(api.Fs(name).items()):
+            checksum.update(
+                json.dumps(["node", name, int(node), _plain(value)], ensure_ascii=False).encode()
+            )
+            checksum.update(b"\n")
+    for name in sorted(api.Eall()):
+        for node, linked in sorted(api.Es(name).items()):
+            destinations = (
+                sorted((int(n), _plain(value)) for n, value in linked.items())
+                if isinstance(linked, dict)
+                else sorted(int(n) for n in linked)
+            )
+            checksum.update(
+                json.dumps(["edge", name, int(node), destinations], ensure_ascii=False).encode()
+            )
+            checksum.update(b"\n")
+    return checksum.hexdigest()
+
+
+def _full_render_hash(api: Any) -> str:
+    checksum = hashlib.sha256()
+    formats = sorted(api.T.formats)
+    if int(api.F.otype.maxSlot) * len(formats) > MAX_RENDERED_SLOT_CHECKS:
+        raise ArchiveTooLarge("Corpus rendering comparison exceeds workload limit")
+    config = [formats, list(api.T.sectionTypes), list(api.T.sectionFeats), api.T.defaultFormat]
+    checksum.update(json.dumps(config, ensure_ascii=False).encode())
+    for node in range(1, int(api.F.otype.maxNode) + 1):
+        if api.F.otype.v(node) in api.T.sectionTypes:
+            checksum.update(
+                json.dumps(
+                    ["section", node, _plain(api.T.sectionFromNode(node))], ensure_ascii=False
+                ).encode()
+            )
+            checksum.update(b"\n")
+    for name in formats:
+        for node in range(1, int(api.F.otype.maxSlot) + 1):
+            checksum.update(
+                json.dumps([name, node, api.T.text(node, fmt=name)], ensure_ascii=False).encode()
+            )
+            checksum.update(b"\n")
+    return checksum.hexdigest()
+
+
+def _check_full_cache(data: bytes) -> None:
+    """Reject a shipped cache that differs anywhere from a cold TF source load."""
+    from tf.fabric import Fabric
+
+    archive, infos = _validated_zip(data)
+    with archive, tempfile.TemporaryDirectory(prefix="corpus-cache-check-") as temporary:
+        root = Path(temporary) / "source"
+        root.mkdir()
+        _extract(archive, infos, root)
+        tf_root = _tf_root(root)
+        mapped = _load_api(root)
+        if tf_root is None or mapped is None:
+            raise ValueError("Corpus sources or mapped cache are unavailable")
+        for name in (*mapped.Fall(), *mapped.Eall(), "otext"):
+            if not (tf_root / (name + ".tf")).is_file():
+                raise ValueError("Corpus editing requires complete Text-Fabric sources")
+        cold_root = Path(temporary) / "cold"
+        shutil.copytree(tf_root, cold_root, ignore=shutil.ignore_patterns(".cfr", ".cfm", ".tf"))
+        cold = Fabric(locations=str(cold_root), silent="deep").loadAll(silent="deep")
+        if (
+            not cold
+            or set(cold.Fall()) != set(mapped.Fall())
+            or set(cold.Eall()) != set(mapped.Eall())
+            or _full_values_hash(cold) != _full_values_hash(mapped)
+            or _full_render_hash(cold) != _full_render_hash(mapped)
+        ):
+            raise ValueError("Shipped cache does not match complete Text-Fabric sources")
 
 
 def _mapping(data: bytes, label: str) -> dict[str, Any]:
@@ -202,6 +287,7 @@ def prepare_edit(
     verdict = validate_archive(data, "input.corpus")
     if not verdict.get("valid"):
         raise ValueError("Corpus archive is invalid")
+    _check_full_cache(data)
     source, infos = _validated_zip(data)
     with source, tempfile.TemporaryDirectory(prefix="corpus-edit-") as temporary:
         root = Path(temporary)
@@ -368,6 +454,8 @@ def prepare_restore(
         raise ValueError("Current corpus archive is invalid")
     if not validate_archive(selected_data, "selected.corpus").get("valid"):
         raise ValueError("Selected corpus archive is invalid")
+    _check_full_cache(current_data)
+    _check_full_cache(selected_data)
     current, current_infos = _validated_zip(current_data)
     try:
         selected, selected_infos = _validated_zip(selected_data)

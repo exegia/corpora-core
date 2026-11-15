@@ -360,3 +360,96 @@ def test_restore_rejects_stale_current_toc(corpus):
             selected_revision=opts["current_revision"],
             new_revision=str(uuid4()),
         )
+
+
+def test_rejects_unsampled_stale_cache_on_edit_and_restore(tmp_path):
+    from tf.fabric import Fabric
+
+    tf_root = tmp_path / "many"
+    tf_root.mkdir()
+    assert Fabric(locations=str(tf_root), silent="deep").save(
+        nodeFeatures={
+            "otype": {**{node: "word" for node in range(1, 26)}, 26: "book"},
+            "word": {node: f"w{node}" for node in range(1, 26)},
+            "book": {26: "Mini"},
+        },
+        edgeFeatures={"oslots": {26: set(range(1, 26))}},
+        metaData={
+            "otype": {"valueType": "str"},
+            "word": {"valueType": "str"},
+            "book": {"valueType": "str"},
+            "oslots": {"valueType": "str"},
+            "otext": {
+                "fmt:text-orig-full": "{word}",
+                "sectionTypes": "book",
+                "sectionFeatures": "book",
+            },
+        },
+    )
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    clean = archive_bytes(tf_root, ".corpus")
+    clean = replace_member(clean, "manifest.yml", b"name: Mini\nversion: '1.0'\n")
+    clean = replace_member(
+        clean, "history.yml", b"versions:\n  - id: v1.0\n    label: v1.0\n    current: true\n"
+    )
+    with zipfile.ZipFile(io.BytesIO(clean)) as source:
+        words = source.read("corpora/word.tf")
+    assert b"\nw2\n" in words
+    stale = replace_member(clean, "corpora/word.tf", words.replace(b"\nw2\n", b"\nCHANGED\n", 1))
+    # The general validator samples node 1, 3, ... and misses changed node 2.
+    assert validate_archive(stale, "stale.corpus")["valid"]
+    assert read_archive(stale, "node", node=2)["features"]["word"] == "w2"
+    with pytest.raises(ValueError, match="cache does not match"):
+        prepare_edit(stale, operation="node", node=2, updates={"note": "review"}, **options(stale))
+    opts = options(clean)
+    current = prepare_edit(clean, operation="manifest", updates={"name": "Current"}, **opts)
+    with pytest.raises(ValueError, match="cache does not match"):
+        prepare_restore(
+            current.archive,
+            stale,
+            name="mini.corpus",
+            expected_digest=current.digest,
+            selected_digest=digest(stale),
+            expected_version="1.1",
+            selected_version="1.0",
+            owner=opts["owner"],
+            current_revision=opts["new_revision"],
+            selected_revision=opts["current_revision"],
+            new_revision=str(uuid4()),
+        )
+
+
+def test_rejects_stale_rendering_configuration_even_if_selected_text_matches(tf_root):
+    from tf.fabric import Fabric
+
+    assert Fabric(locations=str(tf_root), silent="deep").save(
+        nodeFeatures={"alternate": {1: "Alpha ", 2: "different"}},
+        metaData={"alternate": {"valueType": "str"}},
+    )
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    data = archive_bytes(tf_root, ".corpus")
+    data = replace_member(data, "manifest.yml", b"name: Mini\nversion: '1.0'\n")
+    data = replace_member(
+        data, "history.yml", b"versions:\n  - id: v1.0\n    label: v1.0\n    current: true\n"
+    )
+    with zipfile.ZipFile(io.BytesIO(data)) as source:
+        otext = source.read("corpora/otext.tf")
+    assert b"{word}" in otext
+    stale = replace_member(data, "corpora/otext.tf", otext.replace(b"{word}", b"{alternate}"))
+    assert validate_archive(stale, "stale.corpus")["valid"]
+    with pytest.raises(ValueError, match="cache does not match"):
+        prepare_edit(stale, operation="node", node=1, updates={"note": "review"}, **options(stale))
+
+
+def test_render_comparison_has_a_work_bound():
+    from types import SimpleNamespace
+
+    from corpus_validate import ArchiveTooLarge
+    from corpus_validate.version_edit import _full_render_hash
+
+    api = SimpleNamespace(
+        T=SimpleNamespace(formats={"one": None, "two": None}),
+        F=SimpleNamespace(otype=SimpleNamespace(maxSlot=2_500_001)),
+    )
+    with pytest.raises(ArchiveTooLarge, match="workload limit"):
+        _full_render_hash(api)

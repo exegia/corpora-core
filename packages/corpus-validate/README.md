@@ -52,7 +52,9 @@ corpus and load it through both real runtimes, including the `.cfr` mmap cache.
 
 `corpus_validate.version_edit.prepare_edit` prepares a manifest patch or node
 annotation from already-authorized `.corpus` bytes. It checks the expected
-version and full-byte digest, preserves unrelated ZIP members, updates the
+version and full-byte digest, compares every loaded feature, edge, and rendered
+slot between the shipped cache and a cold Text-Fabric load, preserves unrelated
+ZIP members, updates the
 manifest, versioned TOC (when present), and history, and revalidates the
 result. Archives without history gain a clearly marked packaged-snapshot
 baseline with no invented author or timestamp. Existing malformed history or
@@ -68,3 +70,7 @@ owner **and document**, obtain the bytes and digest from that registry (never
 from an archive's legacy `snapshot_key`), and atomically compare and swap the
 current head while recording the new revision. `name` must be a flat `.corpus`
 filename. The inputs remain immutable and no storage mutation occurs here.
+
+The full render comparison is limited to 5 million slot/format pairs; larger
+inputs fail closed with `ArchiveTooLarge`. Hosted callers should also enforce
+a process timeout for native corpus loading.
