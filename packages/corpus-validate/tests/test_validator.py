@@ -166,10 +166,10 @@ def test_shortcode_escapes_html_attributes() -> None:
     from corpus_validate import refdisplay, tfref
 
     payload = refdisplay.shortcode_payload(
-        tfref.parse('mini/Book%22%3E:1'), 'mini/Book">:1', url_template='/r?ref={ref}&x="'
+        tfref.parse("mini/Book%22%3E:1"), 'mini/Book">:1', url_template='/r?ref={ref}&x="'
     )
-    assert '&amp;x=&quot;' in payload["html"]
-    assert 'Book&quot;&gt;' in payload["html"]
+    assert "&amp;x=&quot;" in payload["html"]
+    assert "Book&quot;&gt;" in payload["html"]
 
 
 def test_versions_preserve_history_and_fall_back_to_manifest() -> None:
