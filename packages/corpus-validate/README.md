@@ -41,5 +41,11 @@ Validation checks loadability and sampled cache consistency. It does not prove
 source fidelity or semantic correctness. The existing API Text-Fabric checker
 is a separate static WARP preflight.
 
+`corpus_validate.ai_archive.validate_archive_scope` checks a version-bound
+selection from one caller-authorized archive snapshot. It rejects stale text
+hashes and returns node-located findings. Its scoped selection and validation
+rules are adapted from MIT-licensed `exegia/corpora-py` revision
+`663eec793b384bca22afbb065678573e21ed5b97`.
+
 Run `uv sync --locked && uv run pytest` in this directory. Tests create a small
 corpus and load it through both real runtimes, including the `.cfr` mmap cache.
