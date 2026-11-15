@@ -13,7 +13,11 @@ from cfabric import Fabric as ContextFabric
 from tf.fabric import Fabric
 
 from corpus_validate import ArchiveReadNotFound, UnsupportedFormat, read_archive, validate_archive
+from corpus_validate.ai_archive import StaleScope, validate_archive_scope
+from corpus_validate.ai_types import NodeScope, ScopeLevel
 from corpus_validate.profiles import CUSX_PROFILE, CUSX_STREAM, _cusx_xml, _resolved_target
+from corpus_validate.reference import reference_archive
+from corpus_validate.tfref import ParseError, SectionNotFound, VersionMismatch
 
 
 def archive_bytes(root: Path, suffix: str) -> bytes:
@@ -134,6 +138,103 @@ def test_read_archive_views_open_the_shipped_cache(tf_root: Path) -> None:
     assert node["otype"] == "word"
     assert node["features"]["word"].strip() == "Alpha"
     assert node["annotation"] is None
+
+
+def test_scope_validation_uses_real_archive_and_rejects_stale_version(tf_root: Path) -> None:
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    source = io.BytesIO(archive_bytes(tf_root, ".corpus"))
+    output = io.BytesIO()
+    with zipfile.ZipFile(source) as old, zipfile.ZipFile(output, "w") as archive:
+        for item in old.infolist():
+            if item.filename != "manifest.yml":
+                archive.writestr(item.filename, old.read(item))
+        archive.writestr("manifest.yml", "name: mini\nversion: '1.0'\n")
+    scope = NodeScope(corpus="mini", level=ScopeLevel.word, node_id=1, label="word", version="1.0")
+    result = validate_archive_scope(output.getvalue(), scope)
+    assert result.corpus == "mini" and result.version == "1.0" and result.checked_nodes == 1
+    stale = NodeScope(corpus="mini", level=ScopeLevel.word, node_id=1, label="word", version="old")
+    with pytest.raises(StaleScope):
+        validate_archive_scope(output.getvalue(), stale)
+    changed = NodeScope(
+        corpus="mini",
+        level=ScopeLevel.word,
+        node_id=1,
+        label="word",
+        version="1.0",
+        content_hash="sha256:" + "0" * 64,
+    )
+    with pytest.raises(StaleScope, match="Scoped text"):
+        validate_archive_scope(output.getvalue(), changed)
+    unknown = NodeScope(corpus="mini", level=ScopeLevel.word, node_id=999, label="x", version="1.0")
+    with pytest.raises(ValueError, match="Unknown node"):
+        validate_archive_scope(output.getvalue(), unknown)
+
+
+def test_reference_roundtrip_against_real_context_fabric(tf_root: Path) -> None:
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    raw = io.BytesIO(archive_bytes(tf_root, ".corpus"))
+    output = io.BytesIO()
+    with zipfile.ZipFile(raw) as source, zipfile.ZipFile(output, "w") as archive:
+        for item in source.infolist():
+            if item.filename != "manifest.yml":
+                archive.writestr(item.filename, source.read(item))
+        archive.writestr("manifest.yml", "name: Mini\nversion: '2.3'\n")
+    data = output.getvalue()
+    created = reference_archive(data, "mini", node=1, end_node=2)
+    assert created["ref"] == "mini@2.3/Mini:1:1!word1-2"
+    assert created["nodes"] == [1, 2]
+    assert reference_archive(data, "mini", ref=created["urn"])["nodes"] == [1, 2]
+    assert reference_archive(data, "mini", ref=created["token"])["ref"] == created["ref"]
+    assert (
+        reference_archive(data, "mini", ref=created["ref"], shortcode=True)["ref"] == created["ref"]
+    )
+    with pytest.raises(VersionMismatch):
+        reference_archive(data, "mini", ref="mini@old/Mini:1:1!word1")
+    with pytest.raises(SectionNotFound):
+        reference_archive(data, "mini", ref="mini@2.3/Missing:1:1")
+    with pytest.raises(ParseError, match="does not match"):
+        reference_archive(data, "mini", ref="other@2.3/Mini:1:1!word1")
+    with pytest.raises(ParseError, match="does not match"):
+        reference_archive(data, "mini", ref=created["token"].replace("comini_", "coother_"))
+
+
+def test_shortcode_escapes_html_attributes() -> None:
+    from corpus_validate import refdisplay, tfref
+
+    payload = refdisplay.shortcode_payload(
+        tfref.parse("mini/Book%22%3E:1"), 'mini/Book">:1', url_template='/r?ref={ref}&x="'
+    )
+    assert "&amp;x=&quot;" in payload["html"]
+    assert "Book&quot;&gt;" in payload["html"]
+
+
+def test_versions_preserve_history_and_fall_back_to_manifest() -> None:
+    def bundle(history: str | bytes | None) -> bytes:
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, "w") as archive:
+            archive.writestr("manifest.yml", "name: Example\nversion: '1.2'\n")
+            if history is not None:
+                archive.writestr("history.yml", history)
+        return stream.getvalue()
+
+    history = "versions:\n  - id: v1.0\n    current: false\n    snapshot_key: original\n"
+    assert read_archive(bundle(history), "versions") == {
+        "versions": [{"id": "v1.0", "current": False, "snapshot_key": "original"}]
+    }
+    for absent in (None, "versions: []", "[invalid", b"\xff"):
+        assert read_archive(bundle(absent), "versions") == {
+            "versions": [
+                {
+                    "id": "packaged",
+                    "sha": None,
+                    "label": "1.2",
+                    "title": "Converted",
+                    "at": "",
+                    "current": True,
+                    "notes": ["Example"],
+                }
+            ]
+        }
 
 
 def test_single_level_sections_are_passages_and_tokens_use_requested_format(
