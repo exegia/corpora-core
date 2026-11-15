@@ -293,6 +293,37 @@ def test_single_level_paginated_passages_cover_the_document(tmp_path: Path) -> N
         ] == [1, 2, 3, 4]
 
 
+def test_default_tokens_keep_spacing_in_after_only(tmp_path: Path) -> None:
+    root = tmp_path / "spaced-tf"
+    root.mkdir()
+    assert Fabric(locations=str(root), silent="deep").save(
+        nodeFeatures={
+            "otype": {1: "word", 2: "word", 3: "document"},
+            "text": {1: "one", 2: "two"},
+            "after": {1: " ", 2: "!"},
+            "document": {3: "Doc"},
+        },
+        edgeFeatures={"oslots": {3: {1, 2}}},
+        metaData={
+            "otype": {"valueType": "str"},
+            "oslots": {"valueType": "str"},
+            "text": {"valueType": "str"},
+            "after": {"valueType": "str"},
+            "document": {"valueType": "str"},
+            "otext": {
+                "fmt:text-orig-full": "{text}{after}",
+                "sectionTypes": "document",
+                "sectionFeatures": "document",
+            },
+        },
+    )
+    archive = archive_bytes(root, ".zip")
+    default = read_archive(archive, "content")["passages"][0]["tokens"]
+    explicit = read_archive(archive, "content", fmt="text-orig-full")["passages"][0]["tokens"]
+    assert [(token["text"], token["after"]) for token in default] == [("one", " "), ("two", "!")]
+    assert [token["text"] for token in explicit] == ["one ", "two!"]
+
+
 def test_lowest_section_content_covers_all_its_slots(spanning_fixture: Path) -> None:
     data = archive_bytes(spanning_fixture, ".corpus")
     all_passages = read_archive(data, "content")
