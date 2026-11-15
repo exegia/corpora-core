@@ -30,8 +30,6 @@ def validate_archive_scope(data: bytes, scope: NodeScope) -> ValidateResponse:
         raise ArchiveTooLarge(f"Archive exceeds {MAX_ARCHIVE_BYTES} bytes")
     if scope.level != ScopeLevel.corpus and scope.node_id is None:
         raise ValueError("Non-corpus scope requires a node")
-    if scope.unit_range and scope.unit_range.end < scope.unit_range.start:
-        raise ValueError("Range end must be greater than or equal to start")
     with (
         zipfile.ZipFile(io.BytesIO(data)) as archive,
         tempfile.TemporaryDirectory(prefix="corpus-scope-") as temporary,
