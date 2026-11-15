@@ -30,6 +30,13 @@ extracts into a private temporary directory and keeps no cross-request cache;
 the caller is responsible for authenticating the owner and selecting archive
 bytes.
 
+`corpus_validate.reference.reference_archive` creates and resolves versioned
+Text-Fabric references, ranges, and compact tokens against the supplied archive.
+It uses the archive's manifest version and Context-Fabric loader; callers select
+and authorize the archive before calling it. The grammar and compact-token
+implementation are adapted from MIT-licensed `exegia/corpora-py` revision
+`663eec793b384bca22afbb065678573e21ed5b97`, including its reference fixtures.
+
 Validation checks loadability and sampled cache consistency. It does not prove
 source fidelity or semantic correctness. The existing API Text-Fabric checker
 is a separate static WARP preflight.
