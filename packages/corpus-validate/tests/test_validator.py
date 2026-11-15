@@ -251,6 +251,15 @@ def test_single_level_sections_are_passages_and_tokens_use_requested_format(
     assert [token["text"] for token in source["passages"][0]["tokens"]] == ["A", "β", "!"]
 
 
+def test_lowest_section_content_covers_all_its_slots(spanning_fixture: Path) -> None:
+    data = archive_bytes(spanning_fixture, ".corpus")
+    all_passages = read_archive(data, "content")
+    paragraph = next(p for p in all_passages["passages"] if p["node"] == 23)
+    selected = read_archive(data, "content", ref=paragraph["ref"])
+    assert [p["node"] for p in selected["passages"]] == [23]
+    assert [t["node"] for t in selected["passages"][0]["tokens"]] == [1, 2, 3, 4]
+
+
 def test_read_archive_rejects_missing_nodes_and_section_refs(tf_root: Path) -> None:
     assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
     archive = archive_bytes(tf_root, ".corpus")
