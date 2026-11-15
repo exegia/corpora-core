@@ -49,3 +49,22 @@ rules are adapted from MIT-licensed `exegia/corpora-py` revision
 
 Run `uv sync --locked && uv run pytest` in this directory. Tests create a small
 corpus and load it through both real runtimes, including the `.cfr` mmap cache.
+
+`corpus_validate.version_edit.prepare_edit` prepares a manifest patch or node
+annotation from already-authorized `.corpus` bytes. It checks the expected
+version and full-byte digest, preserves unrelated ZIP members, updates the
+manifest, versioned TOC (when present), and history, and revalidates the
+result. Archives without history gain a clearly marked packaged-snapshot
+baseline with no invented author or timestamp. Existing malformed history or
+annotations are rejected. Node annotations remain sidecar data; converted
+Text-Fabric types and source text are not rewritten.
+
+`prepare_restore` prepares a new revision from a previously selected snapshot;
+it carries forward the current timeline and records the selected version and
+revision. Both operations return `PreparedEdit` with archive bytes, digest,
+version, and result metadata. They do not authenticate users, choose storage
+paths, or publish. The caller must bind each snapshot revision to the verified
+owner **and document**, obtain the bytes and digest from that registry (never
+from an archive's legacy `snapshot_key`), and atomically compare and swap the
+current head while recording the new revision. `name` must be a flat `.corpus`
+filename. The inputs remain immutable and no storage mutation occurs here.
