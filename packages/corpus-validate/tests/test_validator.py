@@ -9,10 +9,10 @@ import zipfile
 from pathlib import Path
 
 import pytest
-from cfabric.core import Fabric as ContextFabric
+from cfabric import Fabric as ContextFabric
 from tf.fabric import Fabric
 
-from corpus_validate import UnsupportedFormat, validate_archive
+from corpus_validate import ArchiveReadNotFound, UnsupportedFormat, read_archive, validate_archive
 from corpus_validate.profiles import CUSX_PROFILE, CUSX_STREAM, _cusx_xml, _resolved_target
 
 
@@ -58,6 +58,35 @@ def tf_root(tmp_path: Path) -> Path:
     return root
 
 
+@pytest.fixture
+def single_level_epub_root(tmp_path: Path) -> Path:
+    root = tmp_path / "epub-tf"
+    root.mkdir()
+    assert Fabric(locations=str(root), silent="deep").save(
+        nodeFeatures={
+            "otype": {1: "char", 2: "char", 3: "char", 4: "document", 5: "element", 6: "note"},
+            "text": {1: "A", 2: "β", 3: "!"},
+            "reading": {1: "A", 2: "β", 3: ""},
+            "document": {4: "Doc"},
+        },
+        edgeFeatures={"oslots": {4: {1, 2, 3}, 5: {1, 2, 3}, 6: {3}}},
+        metaData={
+            "otype": {"valueType": "str"},
+            "oslots": {"valueType": "str"},
+            "text": {"valueType": "str"},
+            "reading": {"valueType": "str"},
+            "document": {"valueType": "str"},
+            "otext": {
+                "fmt:text-orig-full": "{reading}",
+                "fmt:text-source-full": "{text}",
+                "sectionTypes": "document",
+                "sectionFeatures": "document",
+            },
+        },
+    )
+    return root
+
+
 def test_real_text_fabric_and_context_fabric_round_trip(tf_root: Path) -> None:
     result = validate_archive(archive_bytes(tf_root, ".zip"), "mini.zip")
 
@@ -75,7 +104,7 @@ def test_real_text_fabric_and_context_fabric_round_trip(tf_root: Path) -> None:
 def test_shipped_cache_matches_fresh_compilation(tf_root: Path) -> None:
     api = ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
     assert api
-    assert (tf_root / ".cfm").is_dir()
+    assert (tf_root / ".cfr").is_dir()
 
     result = validate_archive(archive_bytes(tf_root, ".corpus"), "mini.corpus")
 
@@ -84,9 +113,56 @@ def test_shipped_cache_matches_fresh_compilation(tf_root: Path) -> None:
     assert result["checks"]["shipped_cfm_match"]
 
 
+def test_read_archive_views_open_the_shipped_cache(tf_root: Path) -> None:
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    archive = archive_bytes(tf_root, ".corpus")
+
+    manifest = read_archive(archive, "manifest")
+    index = read_archive(archive, "index")
+    sections = read_archive(archive, "sections", limit=1)
+    ref = index["sections"]["items"][0]["children"][0]["ref"]
+    content = read_archive(archive, "content", ref=ref, limit=1)
+    node = read_archive(archive, "node", node=1)
+
+    assert manifest["name"] == "mini"
+    assert index["sections"]["levels"] == ["book", "chapter", "verse"]
+    assert sections["items"][0]["ref"] == "Mini"
+    assert content["total"] == 1
+    assert content["passages"][0]["node"] == 5
+    assert [token["node"] for token in content["passages"][0]["tokens"]] == [1, 2]
+    assert node["node"] == 1
+    assert node["otype"] == "word"
+    assert node["features"]["word"].strip() == "Alpha"
+    assert node["annotation"] is None
+
+
+def test_single_level_sections_are_passages_and_tokens_use_requested_format(
+    single_level_epub_root: Path,
+) -> None:
+    archive = archive_bytes(single_level_epub_root, ".zip")
+
+    default = read_archive(archive, "content")
+    source = read_archive(archive, "content", fmt="text-source-full", ref="Doc")
+
+    assert [passage["node"] for passage in default["passages"]] == [4]
+    assert [token["text"] for token in default["passages"][0]["tokens"]] == ["A", "β", ""]
+    assert [passage["node"] for passage in source["passages"]] == [4]
+    assert [token["text"] for token in source["passages"][0]["tokens"]] == ["A", "β", "!"]
+
+
+def test_read_archive_rejects_missing_nodes_and_section_refs(tf_root: Path) -> None:
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    archive = archive_bytes(tf_root, ".corpus")
+
+    with pytest.raises(ArchiveReadNotFound, match="Node 99"):
+        read_archive(archive, "node", node=99)
+    with pytest.raises(ArchiveReadNotFound, match="not found"):
+        read_archive(archive, "content", ref="missing")
+
+
 def test_corrupt_shipped_cache_is_not_silently_recompiled(tf_root: Path) -> None:
     assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
-    cache_files = [path for path in (tf_root / ".cfm").rglob("*") if path.is_file()]
+    cache_files = [path for path in (tf_root / ".cfr").rglob("*") if path.is_file()]
     assert cache_files
     cache_files[0].write_bytes(b"corrupt cache")
 
