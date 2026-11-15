@@ -136,6 +136,35 @@ def test_read_archive_views_open_the_shipped_cache(tf_root: Path) -> None:
     assert node["annotation"] is None
 
 
+def test_versions_preserve_history_and_fall_back_to_manifest() -> None:
+    def bundle(history: str | bytes | None) -> bytes:
+        stream = io.BytesIO()
+        with zipfile.ZipFile(stream, "w") as archive:
+            archive.writestr("manifest.yml", "name: Example\nversion: '1.2'\n")
+            if history is not None:
+                archive.writestr("history.yml", history)
+        return stream.getvalue()
+
+    history = "versions:\n  - id: v1.0\n    current: false\n    snapshot_key: original\n"
+    assert read_archive(bundle(history), "versions") == {
+        "versions": [{"id": "v1.0", "current": False, "snapshot_key": "original"}]
+    }
+    for absent in (None, "versions: []", "[invalid", b"\xff"):
+        assert read_archive(bundle(absent), "versions") == {
+            "versions": [
+                {
+                    "id": "packaged",
+                    "sha": None,
+                    "label": "1.2",
+                    "title": "Converted",
+                    "at": "",
+                    "current": True,
+                    "notes": ["Example"],
+                }
+            ]
+        }
+
+
 def test_single_level_sections_are_passages_and_tokens_use_requested_format(
     single_level_epub_root: Path,
 ) -> None:
