@@ -241,11 +241,13 @@ def _finest_otype(api: Any) -> str:
 def _passage_nodes(api: Any, section_node: int | None, levels: list[str]) -> list[int]:
     lowest = levels[-1] if levels else None
     if section_node is None:
-        if len(levels) > 1 and lowest is not None:
+        if lowest is not None:
             return list(api.F.otype.s(lowest))
         return list(api.F.otype.s(_finest_otype(api)))
     node_type = api.F.otype.v(section_node)
     index = levels.index(node_type) if node_type in levels else 0
+    if len(levels) == 1 and node_type == lowest:
+        return [section_node]
     if levels and index < len(levels) - 1 and lowest is not None:
         nodes = list(api.L.d(section_node, otype=lowest))
         if nodes:
@@ -261,7 +263,7 @@ def _feature_names(api: Any) -> set[str]:
         return set()
 
 
-def _slot_tokens(api: Any, node: int) -> list[dict[str, Any]]:
+def _slot_tokens(api: Any, node: int, fmt: str) -> list[dict[str, Any]]:
     slot_type = api.F.otype.slotType
     slots = (
         [node] if api.F.otype.v(node) == slot_type else list(api.L.d(node, otype=slot_type) or ())
@@ -270,17 +272,11 @@ def _slot_tokens(api: Any, node: int) -> list[dict[str, Any]]:
     tokens = []
     for slot in slots:
         text = ""
-        if "text" in names:
-            try:
-                raw = api.Fs("text").v(slot)
-                text = str(raw) if raw is not None else ""
-            except Exception:
-                pass
-        if not text:
-            try:
-                text = api.T.text(slot) or ""
-            except Exception:
-                pass
+        try:
+            raw = api.T.text(slot, fmt=fmt) if fmt else api.T.text(slot)
+            text = str(raw) if raw is not None else ""
+        except Exception:
+            pass
         after = ""
         if "after" in names:
             try:
@@ -330,7 +326,7 @@ def _content(
                 "node": int(node),
                 "ref": _section_ref(api, node),
                 "text": text,
-                "tokens": _slot_tokens(api, node),
+                "tokens": _slot_tokens(api, node, format_used),
             }
         )
     next_offset = offset + limit if offset + limit < total else None

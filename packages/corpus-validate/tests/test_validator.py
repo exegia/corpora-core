@@ -58,6 +58,35 @@ def tf_root(tmp_path: Path) -> Path:
     return root
 
 
+@pytest.fixture
+def single_level_epub_root(tmp_path: Path) -> Path:
+    root = tmp_path / "epub-tf"
+    root.mkdir()
+    assert Fabric(locations=str(root), silent="deep").save(
+        nodeFeatures={
+            "otype": {1: "char", 2: "char", 3: "char", 4: "document", 5: "element", 6: "note"},
+            "text": {1: "A", 2: "β", 3: "!"},
+            "reading": {1: "A", 2: "β", 3: ""},
+            "document": {4: "Doc"},
+        },
+        edgeFeatures={"oslots": {4: {1, 2, 3}, 5: {1, 2, 3}, 6: {3}}},
+        metaData={
+            "otype": {"valueType": "str"},
+            "oslots": {"valueType": "str"},
+            "text": {"valueType": "str"},
+            "reading": {"valueType": "str"},
+            "document": {"valueType": "str"},
+            "otext": {
+                "fmt:text-orig-full": "{reading}",
+                "fmt:text-source-full": "{text}",
+                "sectionTypes": "document",
+                "sectionFeatures": "document",
+            },
+        },
+    )
+    return root
+
+
 def test_real_text_fabric_and_context_fabric_round_trip(tf_root: Path) -> None:
     result = validate_archive(archive_bytes(tf_root, ".zip"), "mini.zip")
 
@@ -105,6 +134,20 @@ def test_read_archive_views_open_the_shipped_cache(tf_root: Path) -> None:
     assert node["otype"] == "word"
     assert node["features"]["word"].strip() == "Alpha"
     assert node["annotation"] is None
+
+
+def test_single_level_sections_are_passages_and_tokens_use_requested_format(
+    single_level_epub_root: Path,
+) -> None:
+    archive = archive_bytes(single_level_epub_root, ".zip")
+
+    default = read_archive(archive, "content")
+    source = read_archive(archive, "content", fmt="text-source-full", ref="Doc")
+
+    assert [passage["node"] for passage in default["passages"]] == [4]
+    assert [token["text"] for token in default["passages"][0]["tokens"]] == ["A", "β", ""]
+    assert [passage["node"] for passage in source["passages"]] == [4]
+    assert [token["text"] for token in source["passages"][0]["tokens"]] == ["A", "β", "!"]
 
 
 def test_read_archive_rejects_missing_nodes_and_section_refs(tf_root: Path) -> None:
