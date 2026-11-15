@@ -251,6 +251,48 @@ def test_single_level_sections_are_passages_and_tokens_use_requested_format(
     assert [token["text"] for token in source["passages"][0]["tokens"]] == ["A", "β", "!"]
 
 
+def test_single_level_paginated_passages_cover_the_document(tmp_path: Path) -> None:
+    root = tmp_path / "single-level"
+    root.mkdir()
+    assert Fabric(locations=str(root), silent="deep").save(
+        nodeFeatures={
+            "otype": {
+                1: "word",
+                2: "word",
+                3: "word",
+                4: "word",
+                5: "document",
+                6: "paragraph",
+                7: "paragraph",
+            },
+            "word": {1: "one ", 2: "two ", 3: "three ", 4: "four"},
+            "document": {5: "Doc"},
+        },
+        edgeFeatures={"oslots": {5: {1, 2, 3, 4}, 6: {1, 2}, 7: {3, 4}}},
+        metaData={
+            "otype": {"valueType": "str"},
+            "oslots": {"valueType": "str"},
+            "word": {"valueType": "str"},
+            "document": {"valueType": "str"},
+            "otext": {
+                "fmt:text-orig-full": "{word}",
+                "sectionTypes": "document",
+                "sectionFeatures": "document",
+            },
+        },
+    )
+    archive = archive_bytes(root, ".zip")
+    for ref in (None, "Doc"):
+        first = read_archive(archive, "content", ref=ref, offset=0, limit=1)
+        second = read_archive(archive, "content", ref=ref, offset=1, limit=1)
+        assert first["total"] == second["total"] == 2
+        assert first["next_offset"] == 1 and second["next_offset"] is None
+        assert [first["passages"][0]["node"], second["passages"][0]["node"]] == [6, 7]
+        assert [
+            token["node"] for page in (first, second) for token in page["passages"][0]["tokens"]
+        ] == [1, 2, 3, 4]
+
+
 def test_lowest_section_content_covers_all_its_slots(spanning_fixture: Path) -> None:
     data = archive_bytes(spanning_fixture, ".corpus")
     all_passages = read_archive(data, "content")
