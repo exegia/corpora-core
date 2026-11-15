@@ -93,7 +93,7 @@ class IndexOutOfRange(RefError, IndexError):  # noqa: N818 - public name, kept
 # (nothing else uses them); the URN form encodes them as %20 too.
 RESERVED = "%:/!@"
 
-_SELECTOR_RE = re.compile(r"^(?P<otype>[A-Za-z_][A-Za-z0-9_]*)(?P<i>\d+)(?:-(?P<j>\d+))?$")
+_SELECTOR_RE = re.compile(r"^(?P<otype>[A-Za-z_][A-Za-z0-9_]*?)(?P<i>\d+)(?:-(?P<j>\d+))?$")
 _CORPUS_RE = re.compile(r"^(?P<corpus>[A-Za-z0-9_.\-]+)(?:@(?P<version>[A-Za-z0-9_.\-]+))?$")
 
 

@@ -41,6 +41,12 @@ def test_parse_range_and_version_optional():
     assert r.version is None and r.is_range and (r.start, r.end) == (3, 5)
 
 
+def test_parse_multi_digit_selector():
+    ref = tfref.parse("mini/Mini!word10-12")
+    assert (ref.target_type, ref.start, ref.end) == ("word", 10, 12)
+    assert tfref.parse(ref.short()) == ref
+
+
 @pytest.mark.parametrize("bad", ["", "x/A:1!word0", "x/A:1!word5-2", "x/A::1", "x/A:1!clause"])
 def test_parse_rejects(bad):
     with pytest.raises(tfref.ParseError):
@@ -77,6 +83,8 @@ def test_serialize_round_trips_and_emits_version(corpus):
     assert tfref.serialize(16, corpus, corpus_id="m") == f"m@0.1/{BOOK_ENC}:1:2!clause1"
     assert tfref.serialize(24, corpus, corpus_id="m") == f"m@0.1/{BOOK_ENC}:1:2"
     assert tfref.serialize([1, 4], corpus, corpus_id="m") == f"m@0.1/{BOOK_ENC}:1:1!word1-4"
+    assert tfref.resolve(tfref.serialize(10, corpus, corpus_id="m"), corpus) == 10
+    assert tfref.resolve(f"m@0.1/{BOOK_ENC}!word10", corpus) == 10
     for ref in [
         f"m@0.1/{BOOK_ENC}:1:1!word2",
         f"m@0.1/{BOOK_ENC}:1:2!phrase2",

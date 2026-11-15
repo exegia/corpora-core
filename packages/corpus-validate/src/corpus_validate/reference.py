@@ -65,9 +65,14 @@ def reference_archive(
         original = ref
         if ref is not None:
             if refcompact.is_compact(ref):
+                if refcompact.slug_of(ref) != refcompact.corpus_slug(corpus_id):
+                    raise tfref.ParseError("Reference corpus does not match the selected archive")
                 _, target = refcompact.from_compact(ref, adapter)
             else:
-                target = tfref.resolve(tfref.parse(ref), adapter, lang=lang)
+                parsed_input = tfref.parse(ref)
+                if parsed_input.corpus and parsed_input.corpus != corpus_id:
+                    raise tfref.ParseError("Reference corpus does not match the selected archive")
+                target = tfref.resolve(parsed_input, adapter, lang=lang)
         elif node is not None:
             target = [node, end_node] if end_node is not None and end_node != node else node
         else:

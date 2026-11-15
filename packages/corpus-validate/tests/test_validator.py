@@ -15,7 +15,7 @@ from tf.fabric import Fabric
 from corpus_validate import ArchiveReadNotFound, UnsupportedFormat, read_archive, validate_archive
 from corpus_validate.profiles import CUSX_PROFILE, CUSX_STREAM, _cusx_xml, _resolved_target
 from corpus_validate.reference import reference_archive
-from corpus_validate.tfref import SectionNotFound, VersionMismatch
+from corpus_validate.tfref import ParseError, SectionNotFound, VersionMismatch
 
 
 def archive_bytes(root: Path, suffix: str) -> bytes:
@@ -160,6 +160,10 @@ def test_reference_roundtrip_against_real_context_fabric(tf_root: Path) -> None:
         reference_archive(data, "mini", ref="mini@old/Mini:1:1!word1")
     with pytest.raises(SectionNotFound):
         reference_archive(data, "mini", ref="mini@2.3/Missing:1:1")
+    with pytest.raises(ParseError, match="does not match"):
+        reference_archive(data, "mini", ref="other@2.3/Mini:1:1!word1")
+    with pytest.raises(ParseError, match="does not match"):
+        reference_archive(data, "mini", ref=created["token"].replace("comini_", "coother_"))
 
 
 def test_shortcode_escapes_html_attributes() -> None:
