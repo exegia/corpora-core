@@ -137,7 +137,7 @@ def test_read_archive_views_open_the_shipped_cache(tf_root: Path) -> None:
 
 
 def test_versions_preserve_history_and_fall_back_to_manifest() -> None:
-    def bundle(history: str | None) -> bytes:
+    def bundle(history: str | bytes | None) -> bytes:
         stream = io.BytesIO()
         with zipfile.ZipFile(stream, "w") as archive:
             archive.writestr("manifest.yml", "name: Example\nversion: '1.2'\n")
@@ -149,7 +149,7 @@ def test_versions_preserve_history_and_fall_back_to_manifest() -> None:
     assert read_archive(bundle(history), "versions") == {
         "versions": [{"id": "v1.0", "current": False, "snapshot_key": "original"}]
     }
-    for absent in (None, "versions: []", "[invalid"):
+    for absent in (None, "versions: []", "[invalid", b"\xff"):
         assert read_archive(bundle(absent), "versions") == {
             "versions": [
                 {

@@ -439,7 +439,7 @@ def _read(view: View, root: Path, **kwargs: Any) -> dict[str, Any]:
         if history.is_file():
             try:
                 data = yaml.safe_load(history.read_text()) or {}
-            except yaml.YAMLError:
+            except (UnicodeDecodeError, yaml.YAMLError):
                 data = {}
             versions = data.get("versions") if isinstance(data, dict) else None
             if isinstance(versions, list) and versions:
