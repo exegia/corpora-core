@@ -21,7 +21,10 @@ verdict with `valid: false`; unsupported formats and size violations produce a
 JSON error with process exit status 2.
 
 `corpus_validate.read_archive(data, view, **params)` reads `manifest`, `index`,
-`sections`, `content`, or one `node` from an archive. Text-Fabric views open a
+`sections`, `content`, one `node`, or `versions` from an archive. The versions
+view preserves `history.yml` entries when present, otherwise it returns the
+legacy packaged-manifest entry. It does not inspect an embedded Git repository.
+Text-Fabric views open a
 single shipped Context-Fabric `.cfr` cache directly when present. Each call
 extracts into a private temporary directory and keeps no cross-request cache;
 the caller is responsible for authenticating the owner and selecting archive
