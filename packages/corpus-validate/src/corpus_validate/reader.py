@@ -19,7 +19,7 @@ from .validator import (
     _preflight_node_limit,
 )
 
-View = Literal["manifest", "index", "sections", "content", "node"]
+View = Literal["manifest", "index", "sections", "content", "node", "versions"]
 
 
 class ArchiveReadNotFound(ValueError):
@@ -434,6 +434,34 @@ def _node(api: Any, root: Path, node: int) -> dict[str, Any]:
 
 
 def _read(view: View, root: Path, **kwargs: Any) -> dict[str, Any]:
+    if view == "versions":
+        history = root / "history.yml"
+        if history.is_file():
+            try:
+                data = yaml.safe_load(history.read_text()) or {}
+            except (UnicodeDecodeError, yaml.YAMLError):
+                data = {}
+            versions = data.get("versions") if isinstance(data, dict) else None
+            if isinstance(versions, list) and versions:
+                return {"versions": versions}
+        manifest_path = root / "manifest.yml"
+        manifest = yaml.safe_load(manifest_path.read_text()) if manifest_path.is_file() else {}
+        if not isinstance(manifest, dict):
+            manifest = {}
+        name = manifest.get("name")
+        return {
+            "versions": [
+                {
+                    "id": "packaged",
+                    "sha": None,
+                    "label": str(manifest.get("version") or "v1.0"),
+                    "title": "Converted",
+                    "at": str(manifest.get("written_date") or ""),
+                    "current": True,
+                    "notes": [str(name)] if name else [],
+                }
+            ]
+        }
     if view == "manifest":
         path = root / "manifest.yml"
         if not path.is_file():
@@ -470,7 +498,7 @@ def _read(view: View, root: Path, **kwargs: Any) -> dict[str, Any]:
 
 
 def read_archive(data: bytes, view: View, **kwargs: Any) -> dict[str, Any]:
-    """Read one manifest/index/sections/content/node view from a corpus ZIP.
+    """Read one manifest/index/sections/content/node/versions view from a corpus ZIP.
 
     Each call extracts into a private temporary directory and opens a shipped
     Context-Fabric cache directly when present. No cross-request cache is kept,
@@ -480,7 +508,7 @@ def read_archive(data: bytes, view: View, **kwargs: Any) -> dict[str, Any]:
         raise TypeError("archive data must be bytes")
     if len(data) > MAX_ARCHIVE_BYTES:
         raise ArchiveTooLarge(f"Archive exceeds {MAX_ARCHIVE_BYTES} bytes")
-    if view not in {"manifest", "index", "sections", "content", "node"}:
+    if view not in {"manifest", "index", "sections", "content", "node", "versions"}:
         raise ValueError(f"Unsupported corpus view: {view}")
     with (
         zipfile.ZipFile(io.BytesIO(data)) as archive,
