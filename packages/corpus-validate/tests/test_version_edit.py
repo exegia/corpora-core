@@ -258,6 +258,41 @@ def test_invalid_sidecars_toc_and_unsafe_names_fail_closed(corpus):
         prepare_edit(unsafe, operation="manifest", updates={"name": "new"}, **options(unsafe))
 
 
+@pytest.mark.parametrize("sidecar", [b"{bad json", b'{"nodes": []}', b'{"nodes": {"1": []}}'])
+def test_edit_and_restore_reject_malformed_annotations(corpus, sidecar):
+    bad = replace_member(corpus, "annotations.json", sidecar)
+    with pytest.raises(ValueError, match="annotations are invalid"):
+        prepare_edit(bad, operation="manifest", updates={"name": "new"}, **options(bad))
+
+    opts = options(corpus)
+    current = prepare_edit(corpus, operation="manifest", updates={"name": "new"}, **opts)
+    restore = {
+        "name": "mini.corpus",
+        "expected_digest": current.digest,
+        "selected_digest": digest(bad),
+        "expected_version": "1.1",
+        "selected_version": "1.0",
+        "owner": opts["owner"],
+        "current_revision": opts["new_revision"],
+        "selected_revision": opts["current_revision"],
+        "new_revision": str(uuid4()),
+    }
+    with pytest.raises(ValueError, match="annotations are invalid"):
+        prepare_restore(current.archive, bad, **restore)
+
+    bad_current = replace_member(current.archive, "annotations.json", sidecar)
+    with pytest.raises(ValueError, match="annotations are invalid"):
+        prepare_restore(
+            bad_current,
+            corpus,
+            **{
+                **restore,
+                "expected_digest": digest(bad_current),
+                "selected_digest": digest(corpus),
+            },
+        )
+
+
 def test_restore_rejects_distinct_stable_corpus_id(corpus):
     original = replace_member(corpus, "manifest.yml", b"name: Mini\nuid: first\nversion: '1.0'\n")
     opts = options(original)

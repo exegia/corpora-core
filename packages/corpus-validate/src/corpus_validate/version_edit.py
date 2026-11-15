@@ -59,6 +59,22 @@ def _digest(data: bytes) -> str:
     return "sha256:" + hashlib.sha256(data).hexdigest()
 
 
+def _annotations(data: bytes | None) -> dict[str, Any]:
+    if data is None:
+        return {"nodes": {}}
+    try:
+        value = json.loads(data)
+    except (ValueError, UnicodeDecodeError) as error:
+        raise ValueError("Node annotations are invalid") from error
+    if (
+        not isinstance(value, dict)
+        or not isinstance(value.get("nodes"), dict)
+        or any(not isinstance(entry, dict) for entry in value["nodes"].values())
+    ):
+        raise ValueError("Node annotations are invalid")
+    return value
+
+
 def _uuid(value: str) -> str:
     try:
         return str(UUID(value))
@@ -292,6 +308,8 @@ def prepare_edit(
     with source, tempfile.TemporaryDirectory(prefix="corpus-edit-") as temporary:
         root = Path(temporary)
         _extract(source, infos, root)
+        sidecar = root / "annotations.json"
+        annotations = _annotations(sidecar.read_bytes() if sidecar.exists() else None)
         manifest_path, history_path = root / "manifest.yml", root / "history.yml"
         if not manifest_path.is_file():
             raise ValueError("Corpus manifest is required")
@@ -334,15 +352,6 @@ def prepare_edit(
             actual = api.F.otype.v(node) if api else None
             if actual is None:
                 raise ValueError("Node is not present in the corpus")
-            sidecar = root / "annotations.json"
-            try:
-                annotations = (
-                    json.loads(sidecar.read_bytes()) if sidecar.exists() else {"nodes": {}}
-                )
-            except (OSError, ValueError) as error:
-                raise ValueError("Node annotations are invalid") from error
-            if not isinstance(annotations, dict) or not isinstance(annotations.get("nodes"), dict):
-                raise ValueError("Node annotations are invalid")
             existing = annotations["nodes"].get(str(node), {})
             if not isinstance(existing, dict) or existing.get(
                 "converted_otype", str(actual)
@@ -465,6 +474,12 @@ def prepare_restore(
     with current, selected:
         current_names = {entry.filename for entry in current_infos}
         selected_names = {entry.filename for entry in selected_infos}
+        _annotations(
+            current.read("annotations.json") if "annotations.json" in current_names else None
+        )
+        _annotations(
+            selected.read("annotations.json") if "annotations.json" in selected_names else None
+        )
         if (
             not {"manifest.yml", "history.yml"} <= current_names
             or "manifest.yml" not in selected_names
