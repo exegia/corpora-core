@@ -13,6 +13,8 @@ from cfabric import Fabric as ContextFabric
 from tf.fabric import Fabric
 
 from corpus_validate import ArchiveReadNotFound, UnsupportedFormat, read_archive, validate_archive
+from corpus_validate.ai_archive import StaleScope, validate_archive_scope
+from corpus_validate.ai_types import NodeScope, ScopeLevel
 from corpus_validate.profiles import CUSX_PROFILE, CUSX_STREAM, _cusx_xml, _resolved_target
 
 
@@ -134,6 +136,36 @@ def test_read_archive_views_open_the_shipped_cache(tf_root: Path) -> None:
     assert node["otype"] == "word"
     assert node["features"]["word"].strip() == "Alpha"
     assert node["annotation"] is None
+
+
+def test_scope_validation_uses_real_archive_and_rejects_stale_version(tf_root: Path) -> None:
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    source = io.BytesIO(archive_bytes(tf_root, ".corpus"))
+    output = io.BytesIO()
+    with zipfile.ZipFile(source) as old, zipfile.ZipFile(output, "w") as archive:
+        for item in old.infolist():
+            if item.filename != "manifest.yml":
+                archive.writestr(item.filename, old.read(item))
+        archive.writestr("manifest.yml", "name: mini\nversion: '1.0'\n")
+    scope = NodeScope(corpus="mini", level=ScopeLevel.word, node_id=1, label="word", version="1.0")
+    result = validate_archive_scope(output.getvalue(), scope)
+    assert result.corpus == "mini" and result.version == "1.0" and result.checked_nodes == 1
+    stale = NodeScope(corpus="mini", level=ScopeLevel.word, node_id=1, label="word", version="old")
+    with pytest.raises(StaleScope):
+        validate_archive_scope(output.getvalue(), stale)
+    changed = NodeScope(
+        corpus="mini",
+        level=ScopeLevel.word,
+        node_id=1,
+        label="word",
+        version="1.0",
+        content_hash="sha256:" + "0" * 64,
+    )
+    with pytest.raises(StaleScope, match="Scoped text"):
+        validate_archive_scope(output.getvalue(), changed)
+    unknown = NodeScope(corpus="mini", level=ScopeLevel.word, node_id=999, label="x", version="1.0")
+    with pytest.raises(ValueError, match="Unknown node"):
+        validate_archive_scope(output.getvalue(), unknown)
 
 
 def test_versions_preserve_history_and_fall_back_to_manifest() -> None:
