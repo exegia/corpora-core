@@ -14,6 +14,8 @@ from tf.fabric import Fabric
 
 from corpus_validate import ArchiveReadNotFound, UnsupportedFormat, read_archive, validate_archive
 from corpus_validate.profiles import CUSX_PROFILE, CUSX_STREAM, _cusx_xml, _resolved_target
+from corpus_validate.reference import reference_archive
+from corpus_validate.tfref import SectionNotFound, VersionMismatch
 
 
 def archive_bytes(root: Path, suffix: str) -> bytes:
@@ -134,6 +136,40 @@ def test_read_archive_views_open_the_shipped_cache(tf_root: Path) -> None:
     assert node["otype"] == "word"
     assert node["features"]["word"].strip() == "Alpha"
     assert node["annotation"] is None
+
+
+def test_reference_roundtrip_against_real_context_fabric(tf_root: Path) -> None:
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    raw = io.BytesIO(archive_bytes(tf_root, ".corpus"))
+    output = io.BytesIO()
+    with zipfile.ZipFile(raw) as source, zipfile.ZipFile(output, "w") as archive:
+        for item in source.infolist():
+            if item.filename != "manifest.yml":
+                archive.writestr(item.filename, source.read(item))
+        archive.writestr("manifest.yml", "name: Mini\nversion: '2.3'\n")
+    data = output.getvalue()
+    created = reference_archive(data, "mini", node=1, end_node=2)
+    assert created["ref"] == "mini@2.3/Mini:1:1!word1-2"
+    assert created["nodes"] == [1, 2]
+    assert reference_archive(data, "mini", ref=created["urn"])["nodes"] == [1, 2]
+    assert reference_archive(data, "mini", ref=created["token"])["ref"] == created["ref"]
+    assert (
+        reference_archive(data, "mini", ref=created["ref"], shortcode=True)["ref"] == created["ref"]
+    )
+    with pytest.raises(VersionMismatch):
+        reference_archive(data, "mini", ref="mini@old/Mini:1:1!word1")
+    with pytest.raises(SectionNotFound):
+        reference_archive(data, "mini", ref="mini@2.3/Missing:1:1")
+
+
+def test_shortcode_escapes_html_attributes() -> None:
+    from corpus_validate import refdisplay, tfref
+
+    payload = refdisplay.shortcode_payload(
+        tfref.parse('mini/Book%22%3E:1'), 'mini/Book">:1', url_template='/r?ref={ref}&x="'
+    )
+    assert '&amp;x=&quot;' in payload["html"]
+    assert 'Book&quot;&gt;' in payload["html"]
 
 
 def test_versions_preserve_history_and_fall_back_to_manifest() -> None:
