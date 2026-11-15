@@ -12,7 +12,7 @@ import pytest
 from cfabric import Fabric as ContextFabric
 from tf.fabric import Fabric
 
-from corpus_validate import UnsupportedFormat, validate_archive
+from corpus_validate import ArchiveReadNotFound, UnsupportedFormat, read_archive, validate_archive
 from corpus_validate.profiles import CUSX_PROFILE, CUSX_STREAM, _cusx_xml, _resolved_target
 
 
@@ -82,6 +82,39 @@ def test_shipped_cache_matches_fresh_compilation(tf_root: Path) -> None:
     assert result["valid"], result["reasons"]
     assert result["checks"]["shipped_cfm_load"]
     assert result["checks"]["shipped_cfm_match"]
+
+
+def test_read_archive_views_open_the_shipped_cache(tf_root: Path) -> None:
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    archive = archive_bytes(tf_root, ".corpus")
+
+    manifest = read_archive(archive, "manifest")
+    index = read_archive(archive, "index")
+    sections = read_archive(archive, "sections", limit=1)
+    ref = index["sections"]["items"][0]["children"][0]["ref"]
+    content = read_archive(archive, "content", ref=ref, limit=1)
+    node = read_archive(archive, "node", node=1)
+
+    assert manifest["name"] == "mini"
+    assert index["sections"]["levels"] == ["book", "chapter", "verse"]
+    assert sections["items"][0]["ref"] == "Mini"
+    assert content["total"] == 1
+    assert content["passages"][0]["node"] == 5
+    assert [token["node"] for token in content["passages"][0]["tokens"]] == [1, 2]
+    assert node["node"] == 1
+    assert node["otype"] == "word"
+    assert node["features"]["word"].strip() == "Alpha"
+    assert node["annotation"] is None
+
+
+def test_read_archive_rejects_missing_nodes_and_section_refs(tf_root: Path) -> None:
+    assert ContextFabric(locations=str(tf_root), silent="deep").loadAll(silent="deep")
+    archive = archive_bytes(tf_root, ".corpus")
+
+    with pytest.raises(ArchiveReadNotFound, match="Node 99"):
+        read_archive(archive, "node", node=99)
+    with pytest.raises(ArchiveReadNotFound, match="not found"):
+        read_archive(archive, "content", ref="missing")
 
 
 def test_corrupt_shipped_cache_is_not_silently_recompiled(tf_root: Path) -> None:
