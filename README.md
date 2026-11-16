@@ -157,6 +157,8 @@ parameter tables.
 ## Development and tests
 
 Work on a `<type>/<slug>` branch and open a Conventional Commit PR into `dev`.
+Multiple feature branches are permitted only for related work in a dependent PR
+stack; otherwise merge the current feature into `dev` before starting another.
 The release path is `dev → next → release/vX.Y.Z → main`; see the
 [workflow guide](.github/WORKFLOW.md) and
 [branch policy](.github/BRANCH-AND-RELEASE-POLICY.md). Do not edit generated
@@ -168,7 +170,7 @@ make fmt          # format root Rust and Swift sources
 make ci           # root lint, types, tests, and build
 make agents-check # agent instructions and skills
 make agents-test  # offline Text-Fabric agent contract/config tests
-make types        # regenerate shared Rust, TypeScript, Swift and SQL models
+make types        # regenerate shared Rust, TypeScript, Swift, SQL and Python models
 make types-check  # verify generated files without modifying them
 ```
 
@@ -201,7 +203,9 @@ The [TEI package workflow](.github/workflows/tei-converter.yml),
 [EPUB/resolver workflow](.github/workflows/epub-resolver.yml) and
 [corpus validation workflow](.github/workflows/corpus-validation.yml) run their nested
 checks on relevant PRs, including shared schema/generator, generated output and
-Text-Fabric agent/skill changes. See each package README for its complete locked
+Text-Fabric agent/skill changes. `npm ci`/`npm install` in `quality-ai` compile
+TypeScript through `prepare`; tests rebuild it. If lifecycle scripts are disabled,
+run the build explicitly. See each package README for its complete locked
 check command and real-loader verification.
 
 ## Contributing and license
