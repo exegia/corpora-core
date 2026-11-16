@@ -241,7 +241,7 @@ def _finest_otype(api: Any) -> str:
 def _passage_nodes(api: Any, section_node: int | None, levels: list[str]) -> list[int]:
     lowest = levels[-1] if levels else None
     if len(levels) == 1:
-        # Match legacy pagination only when finer nodes cannot omit source slots.
+        # Use finer passages only when they partition the source slots exactly.
         finest = _finest_otype(api)
         candidates = list(
             api.F.otype.s(finest) if section_node is None else api.L.d(section_node, otype=finest)
@@ -254,7 +254,10 @@ def _passage_nodes(api: Any, section_node: int | None, levels: list[str]) -> lis
         if candidates and remaining:
             for node in candidates:
                 slots = (node,) if finest == api.F.otype.slotType else api.E.oslots.s(node)
+                if not remaining.issuperset(slots):
+                    break
                 remaining.difference_update(slots)
+            else:
                 if not remaining:
                     return candidates
     if section_node is None:

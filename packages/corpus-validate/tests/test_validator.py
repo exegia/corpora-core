@@ -293,6 +293,40 @@ def test_single_level_paginated_passages_cover_the_document(tmp_path: Path) -> N
         ] == [1, 2, 3, 4]
 
 
+@pytest.mark.parametrize("element_slots", [({1, 2, 3}, {2}), ({1, 2}, {2, 3})])
+def test_single_level_overlapping_elements_do_not_repeat_slots(
+    tmp_path: Path, element_slots: tuple[set[int], set[int]]
+) -> None:
+    root = tmp_path / "overlapping-elements"
+    root.mkdir()
+    assert Fabric(locations=str(root), silent="deep").save(
+        nodeFeatures={
+            "otype": {1: "word", 2: "word", 3: "word", 4: "document", 5: "element", 6: "element"},
+            "word": {1: "A", 2: "B", 3: "C"},
+            "document": {4: "Doc"},
+        },
+        edgeFeatures={"oslots": {4: {1, 2, 3}, 5: element_slots[0], 6: element_slots[1]}},
+        metaData={
+            "otype": {"valueType": "str"},
+            "oslots": {"valueType": "str"},
+            "word": {"valueType": "str"},
+            "document": {"valueType": "str"},
+            "otext": {
+                "fmt:text-orig-full": "{word}",
+                "sectionTypes": "document",
+                "sectionFeatures": "document",
+            },
+        },
+    )
+    archive = archive_bytes(root, ".zip")
+    for ref in (None, "Doc"):
+        result = read_archive(archive, "content", ref=ref, limit=1)
+        assert result["total"] == 1
+        assert result["next_offset"] is None
+        assert result["passages"][0]["text"] == "ABC"
+        assert [token["node"] for token in result["passages"][0]["tokens"]] == [1, 2, 3]
+
+
 def test_default_tokens_keep_spacing_in_after_only(tmp_path: Path) -> None:
     root = tmp_path / "spaced-tf"
     root.mkdir()
