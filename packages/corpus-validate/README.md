@@ -30,6 +30,13 @@ extracts into a private temporary directory and keeps no cross-request cache;
 the caller is responsible for authenticating the owner and selecting archive
 bytes.
 
+Content pagination uses finer passages only when their slots cover the requested
+selection exactly once and in source order. Gaps, overlaps or interleaved passages
+fall back to the complete selected section. For a whole-corpus read, the reader
+tries coarser declared section levels; if none partitions every source slot, it
+returns the original slot nodes as passages. Node IDs and source text are preserved,
+and no synthetic corpus root is invented. Pagination totals reflect that selection.
+
 `corpus_validate.reference.reference_archive` creates and resolves versioned
 Text-Fabric references, ranges, and compact tokens against the supplied archive.
 It uses the archive's manifest version and Context-Fabric loader; callers select
