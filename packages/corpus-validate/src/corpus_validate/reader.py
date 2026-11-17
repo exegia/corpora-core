@@ -238,42 +238,46 @@ def _finest_otype(api: Any) -> str:
     return non_slot[-1] if non_slot else slot
 
 
+def _node_slots(api: Any, node: int) -> Any:
+    return (node,) if api.F.otype.v(node) == api.F.otype.slotType else api.E.oslots.s(node)
+
+
+def _partitions_slots(api: Any, nodes: list[int], slots: Any) -> bool:
+    """Passages must cover the selection once, in source order, without gaps."""
+    expected = iter(slots)
+    for node in nodes:
+        for slot in _node_slots(api, node):
+            if next(expected, None) != slot:
+                return False
+    return next(expected, None) is None
+
+
 def _passage_nodes(api: Any, section_node: int | None, levels: list[str]) -> list[int]:
-    lowest = levels[-1] if levels else None
-    if len(levels) == 1:
-        # Use finer passages only when they partition the source slots exactly.
-        finest = _finest_otype(api)
-        candidates = list(
-            api.F.otype.s(finest) if section_node is None else api.L.d(section_node, otype=finest)
-        )
-        remaining = set(
-            range(1, api.F.otype.maxSlot + 1)
-            if section_node is None
-            else api.E.oslots.s(section_node)
-        )
-        if candidates and remaining:
-            for node in candidates:
-                slots = (node,) if finest == api.F.otype.slotType else api.E.oslots.s(node)
-                if not remaining.issuperset(slots):
-                    break
-                remaining.difference_update(slots)
-            else:
-                if not remaining:
-                    return candidates
-    if section_node is None:
-        if lowest is not None:
-            return list(api.F.otype.s(lowest))
-        return list(api.F.otype.s(_finest_otype(api)))
-    node_type = api.F.otype.v(section_node)
-    index = levels.index(node_type) if node_type in levels else 0
-    if lowest is not None and node_type == lowest:
+    # A selected leaf section is its own complete passage, including slots not
+    # covered by finer annotation/element nodes.
+    if section_node is not None and len(levels) > 1 and api.F.otype.v(section_node) == levels[-1]:
         return [section_node]
-    if levels and index < len(levels) - 1 and lowest is not None:
-        nodes = list(api.L.d(section_node, otype=lowest))
-        if nodes:
-            return nodes
-    nodes = list(api.L.d(section_node, otype=_finest_otype(api)))
-    return nodes if nodes else [section_node]
+    preferred = levels[-1] if len(levels) > 1 else _finest_otype(api)
+    slots = (
+        range(1, api.F.otype.maxSlot + 1)
+        if section_node is None
+        else _node_slots(api, section_node)
+    )
+    candidates = list(
+        api.F.otype.s(preferred) if section_node is None else api.L.d(section_node, otype=preferred)
+    )
+    if _partitions_slots(api, candidates, slots):
+        return candidates
+    if section_node is not None:
+        return [section_node]
+    # There is no synthetic corpus-root node. Prefer a complete coarser section
+    # partition; if none exists, real slot nodes preserve all text and identities.
+    for level in reversed(levels):
+        if level != preferred:
+            candidates = list(api.F.otype.s(level))
+            if _partitions_slots(api, candidates, slots):
+                return candidates
+    return list(slots)
 
 
 def _feature_names(api: Any) -> set[str]:
