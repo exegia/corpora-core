@@ -14,7 +14,7 @@ from .validator import MAX_NODES, _plain
 
 def replace_node_text(
     root: Path, tf_root: Path, api: Any, node: int, feature: str, text: str
-) -> tuple[set[str], int]:
+) -> tuple[set[str], int, tuple[int, ...]]:
     """Retokenize a contiguous span, remap the graph and return changed feature names.
 
     Ambiguous cross-boundary edges and annotations are rejected rather than moved
@@ -123,4 +123,4 @@ def replace_node_text(
         nodeFeatures=node_features, edgeFeatures=edge_features, metaData=metadata, silent="deep"
     ):
         raise ValueError("Could not save the edited Text-Fabric graph")
-    return set(node_features) | set(edge_features), remap(node)
+    return set(node_features) | set(edge_features), remap(node), tuple(sorted(replacement))

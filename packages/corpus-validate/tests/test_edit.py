@@ -285,3 +285,10 @@ def test_edit_rejects_cache_with_stale_text_format(linked_corpus):
     assert validate_archive(archive, "input.corpus")["valid"]
     with pytest.raises(ValueError, match="Source and Context-Fabric cache do not match"):
         edit_archive(archive, node=7, features={"label": "changed"})
+
+
+def test_replacing_one_word_with_multiple_words(linked_corpus):
+    changed = edit_archive(linked_corpus, node=1, text_feature="word", text="New text ")
+    assert read_archive(changed, "node", node=1)["text"] == "New "
+    assert read_archive(changed, "node", node=2)["text"] == "text "
+    assert read_archive(changed, "node", node=7)["text"] == "New text B C D E"

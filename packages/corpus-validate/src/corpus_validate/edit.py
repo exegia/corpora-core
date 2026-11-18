@@ -134,7 +134,8 @@ def edit_archive(
                 raise ValueError("Source and Context-Fabric cache do not match")
             if text is not None:
                 assert text_feature is not None
-                changed_names, new_node = replace_node_text(
+                is_slot = api.F.otype.v(node) == api.F.otype.slotType
+                changed_names, new_node, new_slots = replace_node_text(
                     root, tf_root, api, node, text_feature, text
                 )
             else:
@@ -204,7 +205,12 @@ def edit_archive(
             if mapped is None:
                 raise ValueError("Edited Context-Fabric cache cannot load")
             if text is not None:
-                if mapped.T.text(new_node) != text:
+                rendered = (
+                    "".join(mapped.T.text(slot) for slot in new_slots)
+                    if is_slot
+                    else mapped.T.text(new_node)
+                )
+                if rendered != text:
                     raise ValueError("Edited Context-Fabric text does not match the request")
             elif features is not None and any(
                 mapped.Fs(name).v(node) != value for name, value in features.items()
