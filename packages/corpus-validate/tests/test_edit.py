@@ -55,7 +55,13 @@ def test_manifest_edit_preserves_corpus_content(corpus):
 
 @pytest.mark.parametrize(
     "node,features",
-    [(99, {"word": "x"}), (1, {"otype": "x"}), (1, {"word": 12}), (1, {"../bad": "x"})],
+    [
+        (99, {"word": "x"}),
+        (1, {"otype": "x"}),
+        (1, {"word": 12}),
+        (1, {"../bad": "x"}),
+        (1, {"Word": "x"}),
+    ],
 )
 def test_invalid_node_edits_fail(corpus, node, features):
     with pytest.raises(ValueError):

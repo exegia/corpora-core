@@ -118,6 +118,13 @@ def edit_archive(
                 for name in features
             ):
                 raise ValueError("Node feature is invalid or structural")
+            existing_files = {path.name.casefold(): path.name for path in tf_root.iterdir()}
+            if any(
+                (existing := existing_files.get((name + ".tf").casefold())) is not None
+                and existing != name + ".tf"
+                for name in features
+            ):
+                raise ValueError("Node feature collides with an existing file")
             replacements: dict[str, dict[int, Any]] = {}
             metadata = {}
             for name, value in features.items():
