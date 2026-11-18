@@ -292,3 +292,53 @@ def test_replacing_one_word_with_multiple_words(linked_corpus):
     assert read_archive(changed, "node", node=1)["text"] == "New "
     assert read_archive(changed, "node", node=2)["text"] == "text "
     assert read_archive(changed, "node", node=7)["text"] == "New text B C D E"
+
+
+def test_text_edit_updates_converter_node_map_and_checksums(linked_corpus):
+    import hashlib
+    import json
+
+    stream = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(linked_corpus)) as source, zipfile.ZipFile(stream, "w") as out:
+        hashes = {}
+        for info in source.infolist():
+            content = source.read(info)
+            out.writestr(info, content)
+            if not info.is_dir():
+                hashes[info.filename] = hashlib.sha256(content).hexdigest()
+        manifest = json.dumps(
+            {
+                "graph": {
+                    "max_slot": 5,
+                    "max_node": 8,
+                    "node_ids": {"book": 6, "first": 7, "last": 8},
+                }
+            }
+        ).encode()
+        out.writestr("manifest.json", manifest)
+        hashes["manifest.json"] = hashlib.sha256(manifest).hexdigest()
+        out.writestr("checksums.json", json.dumps(hashes))
+    changed = edit_archive(stream.getvalue(), node=7, text_feature="word", text="New longer text ")
+    with zipfile.ZipFile(io.BytesIO(changed)) as result:
+        graph = json.loads(result.read("manifest.json"))["graph"]
+        assert graph == {
+            "max_slot": 6,
+            "max_node": 9,
+            "node_ids": {"book": 7, "first": 8, "last": 9},
+        }
+        hashes = json.loads(result.read("checksums.json"))
+        assert all(
+            hashlib.sha256(result.read(name)).hexdigest() == digest
+            for name, digest in hashes.items()
+        )
+        assert "corpora/word.tf" in hashes and "manifest.json" in hashes
+
+
+def test_edit_rejects_tampered_converter_checksums(linked_corpus):
+    stream = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(linked_corpus)) as source, zipfile.ZipFile(stream, "w") as out:
+        for info in source.infolist():
+            out.writestr(info, source.read(info))
+        out.writestr("checksums.json", '{"corpora/word.tf":"' + "0" * 64 + '"}')
+    with pytest.raises(ValueError, match="checksums do not match"):
+        edit_archive(stream.getvalue(), node=1, features={"word": "changed"})

@@ -39,7 +39,8 @@ text-feature names per corpus, so use the feature names returned by the node vie
 Text replacement requires the default text format to use only that feature. When
 the number of words changes, node IDs may change; retokenization rejects nested
 partial spans, nonempty annotations, and word attributes or links that cannot be
-remapped without guessing. Existing string and integer node
+remapped without guessing. Converter manifest node maps and checksum files are
+updated for changed archive members. Existing string and integer node
 features can be changed or removed with `None`; new string and integer features
 can be added. Structural features and edges are not editable. Node edits compare
 all source features and edges to the shipped cache, discard generated TF caches,

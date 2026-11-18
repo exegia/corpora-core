@@ -14,7 +14,7 @@ from .validator import MAX_NODES, _plain
 
 def replace_node_text(
     root: Path, tf_root: Path, api: Any, node: int, feature: str, text: str
-) -> tuple[set[str], int, tuple[int, ...]]:
+) -> tuple[set[str], int, tuple[int, ...], dict[str, bytes]]:
     """Retokenize a contiguous span, remap the graph and return changed feature names.
 
     Ambiguous cross-boundary edges and annotations are rejected rather than moved
@@ -64,6 +64,39 @@ def replace_node_text(
             raise ValueError("A removed word has retained data or links")
         return n + delta if n > last else n
 
+    extra: dict[str, bytes] = {}
+    if delta:
+        # Converter manifests can carry node IDs alongside the TF graph.
+        manifest_paths = {root / "manifest.json", tf_root.parent / "manifest.json"}
+        for manifest in manifest_paths:
+            if not manifest.is_file():
+                continue
+            document = json.loads(manifest.read_bytes())
+            if not isinstance(document, dict):
+                raise ValueError("Converter manifest is invalid")
+            graph = document.get("graph")
+            if graph is None:
+                continue
+            if (
+                not isinstance(graph, dict)
+                or type(graph.get("max_slot")) is not int
+                or type(graph.get("max_node")) is not int
+                or graph.get("max_slot") != max_slot
+                or graph.get("max_node") != max_node
+                or not isinstance(graph.get("node_ids"), dict)
+            ):
+                raise ValueError("Converter manifest graph does not match Text-Fabric")
+            identifiers = graph["node_ids"]
+            if any(
+                not isinstance(key, str) or type(value) is not int or not 1 <= value <= max_node
+                for key, value in identifiers.items()
+            ):
+                raise ValueError("Converter manifest node IDs are invalid")
+            graph["node_ids"] = {key: remap(value) for key, value in identifiers.items()}
+            graph["max_slot"], graph["max_node"] = max_slot + delta, max_node + delta
+            extra[manifest.relative_to(root).as_posix()] = (
+                json.dumps(document, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+            ).encode("utf-8")
     node_features: dict[str, dict[int, Any]] = {}
     edge_features: dict[str, dict[int, Any]] = {}
     metadata: dict[str, dict[str, str]] = {}
@@ -123,4 +156,4 @@ def replace_node_text(
         nodeFeatures=node_features, edgeFeatures=edge_features, metaData=metadata, silent="deep"
     ):
         raise ValueError("Could not save the edited Text-Fabric graph")
-    return set(node_features) | set(edge_features), remap(node), tuple(sorted(replacement))
+    return set(node_features) | set(edge_features), remap(node), tuple(sorted(replacement)), extra

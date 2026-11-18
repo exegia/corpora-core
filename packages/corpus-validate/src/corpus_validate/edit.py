@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import json
 import re
 import shutil
 import tempfile
 import zipfile
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
@@ -53,6 +54,49 @@ def _same_source_and_cache(source: Any, mapped: Any) -> bool:
             if {int(k): _plain(v) for k, v in left} != {int(k): _plain(v) for k, v in right}:
                 return False
     return True
+
+
+def _refresh_checksums(
+    source: zipfile.ZipFile,
+    infos: list[zipfile.ZipInfo],
+    changed: dict[str, bytes],
+    omitted_prefix: str | None,
+) -> None:
+    """Refresh converter checksum manifests while verifying their original entries."""
+    originals = {info.filename: info for info in infos if not info.is_dir()}
+    candidates = [name for name in originals if PurePosixPath(name).name == "checksums.json"]
+    candidates.sort(key=lambda name: name.count("/"), reverse=True)
+    for filename in candidates:
+        parent = PurePosixPath(filename).parent
+        prefix = "" if str(parent) == "." else str(parent) + "/"
+        if not any(name.startswith(prefix) and name != filename for name in changed):
+            continue
+        recorded = json.loads(source.read(filename))
+        if not isinstance(recorded, dict):
+            raise ValueError("Converter checksums are invalid")
+        updated = {}
+        for key, digest in recorded.items():
+            if not isinstance(key, str) or not isinstance(digest, str):
+                raise ValueError("Converter checksums are invalid")
+            path = PurePosixPath(key)
+            name = prefix + key
+            if (
+                path.is_absolute()
+                or ".." in path.parts
+                or str(path) != key
+                or name == filename
+                or name not in originals
+                or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                or hashlib.sha256(source.read(name)).hexdigest() != digest
+            ):
+                raise ValueError("Converter checksums do not match the original archive")
+            if omitted_prefix and name.startswith(omitted_prefix):
+                continue
+            updated[key] = hashlib.sha256(changed.get(name, source.read(name))).hexdigest()
+        for name, data in changed.items():
+            if name.startswith(prefix) and name != filename:
+                updated[name[len(prefix) :]] = hashlib.sha256(data).hexdigest()
+        changed[filename] = (json.dumps(updated, indent=2, sort_keys=True) + "\n").encode()
 
 
 def edit_archive(
@@ -135,9 +179,10 @@ def edit_archive(
             if text is not None:
                 assert text_feature is not None
                 is_slot = api.F.otype.v(node) == api.F.otype.slotType
-                changed_names, new_node, new_slots = replace_node_text(
+                changed_names, new_node, new_slots, metadata_changes = replace_node_text(
                     root, tf_root, api, node, text_feature, text
                 )
+                changed.update(metadata_changes)
             else:
                 assert features is not None
                 names = set(api.Fall()) - {"otype"}
@@ -216,6 +261,7 @@ def edit_archive(
                 mapped.Fs(name).v(node) != value for name, value in features.items()
             ):
                 raise ValueError("Edited Context-Fabric cache does not match the changes")
+        _refresh_checksums(source, infos, changed, omitted_prefix)
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as target:
             for info in infos:
