@@ -16,6 +16,7 @@ from cfabric import Fabric as ContextFabric
 from tf.fabric import Fabric
 
 from .reader import _load_api, _tf_root
+from .text_edit import replace_node_text
 from .validator import (
     MAX_ARCHIVE_BYTES,
     ArchiveTooLarge,
@@ -31,6 +32,17 @@ def _same_source_and_cache(source: Any, mapped: Any) -> bool:
     for attribute in ("formats", "defaultFormat", "sectionTypes", "sectionFeats"):
         if _plain(getattr(source.T, attribute)) != _plain(getattr(mapped.T, attribute)):
             return False
+    formats = sorted(source.T.formats)
+    if int(source.F.otype.maxSlot) * len(formats) > 5_000_000:
+        raise ArchiveTooLarge("Complete text comparison exceeds the workload limit")
+    for format_name in formats:
+        for slot in range(1, int(source.F.otype.maxSlot) + 1):
+            if source.T.text(slot, fmt=format_name) != mapped.T.text(slot, fmt=format_name):
+                return False
+    for section_type in source.T.sectionTypes:
+        for node in source.F.otype.s(section_type):
+            if _plain(source.T.sectionFromNode(node)) != _plain(mapped.T.sectionFromNode(node)):
+                return False
     for listing, accessor in (("Fall", "Fs"), ("Eall", "Es")):
         names = set(getattr(source, listing)())
         if names != set(getattr(mapped, listing)()):
@@ -49,6 +61,8 @@ def edit_archive(
     manifest: dict[str, Any] | None = None,
     node: int | None = None,
     features: dict[str, str | int | None] | None = None,
+    text: str | None = None,
+    text_feature: str | None = None,
 ) -> bytes:
     """Return a validated archive with manifest or node features changed.
 
@@ -56,11 +70,21 @@ def edit_archive(
     corpus (for example ``word`` or ``text``). Structural features are immutable.
     A caller must publish the returned bytes as a new version after authorization.
     """
-    if (manifest is None) == (features is None):
-        raise ValueError("Specify exactly one manifest or node edit")
+    if sum(value is not None for value in (manifest, features, text)) != 1:
+        raise ValueError("Specify exactly one manifest, node-feature or text edit")
+    if (text is None) != (text_feature is None):
+        raise ValueError("Text replacement requires a selected text feature")
     try:
         request_size = len(
-            json.dumps(manifest if manifest is not None else features, allow_nan=False).encode()
+            json.dumps(
+                {
+                    "manifest": manifest,
+                    "features": features,
+                    "text": text,
+                    "text_feature": text_feature,
+                },
+                allow_nan=False,
+            ).encode()
         )
     except (TypeError, ValueError) as error:
         raise ValueError("Edit must contain JSON values") from error
@@ -96,8 +120,7 @@ def edit_archive(
                 tf_root is None
                 or type(node) is not int
                 or node < 1
-                or not isinstance(features, dict)
-                or not features
+                or (text is None and (not isinstance(features, dict) or not features))
             ):
                 raise ValueError("Node edit requires an existing node and feature changes")
             mapped_before = _load_api(root)
@@ -109,46 +132,57 @@ def edit_archive(
                 raise ValueError("Node is not present")
             if mapped_before is None or not _same_source_and_cache(api, mapped_before):
                 raise ValueError("Source and Context-Fabric cache do not match")
-            names = set(api.Fall()) - {"otype"}
-            reserved = set(api.Eall()) | {"otype", "otext"}
-            if any(
-                not isinstance(name, str)
-                or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,127}", name)
-                or name in reserved
-                for name in features
-            ):
-                raise ValueError("Node feature is invalid or structural")
-            existing_files = {path.name.casefold(): path.name for path in tf_root.iterdir()}
-            if any(
-                (existing := existing_files.get((name + ".tf").casefold())) is not None
-                and existing != name + ".tf"
-                for name in features
-            ):
-                raise ValueError("Node feature collides with an existing file")
-            replacements: dict[str, dict[int, Any]] = {}
-            metadata = {}
-            for name, value in features.items():
-                feature = api.Fs(name) if name in names else None
-                if feature is None and value is None:
-                    raise ValueError("Cannot remove an unknown node feature")
-                kind = (
-                    feature.meta.get("valueType")
-                    if feature
-                    else ("int" if type(value) is int else "str")
+            if text is not None:
+                assert text_feature is not None
+                changed_names, new_node = replace_node_text(
+                    root, tf_root, api, node, text_feature, text
                 )
-                if value is not None and type(value) is not (int if kind == "int" else str):
-                    raise ValueError("Node feature value has the wrong type")
-                values = dict(feature.items()) if feature else {}
-                if value is None:
-                    values.pop(node, None)
-                else:
-                    values[node] = value
-                replacements[name] = values
-                metadata[name] = dict(feature.meta) if feature else {"valueType": kind}
-            if not Fabric(locations=str(tf_root), silent="deep").save(
-                nodeFeatures=replacements, metaData=metadata, silent="deep"
-            ):
-                raise ValueError("Could not save Text-Fabric features")
+            else:
+                assert features is not None
+                names = set(api.Fall()) - {"otype"}
+                reserved = set(api.Eall()) | {"otype", "otext"}
+                if any(
+                    not isinstance(name, str)
+                    or not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,127}", name)
+                    or name in reserved
+                    for name in features
+                ):
+                    raise ValueError("Node feature is invalid or structural")
+                existing_files = {path.name.casefold(): path.name for path in tf_root.iterdir()}
+                if any(
+                    (existing := existing_files.get((name + ".tf").casefold())) is not None
+                    and existing != name + ".tf"
+                    for name in features
+                ):
+                    raise ValueError("Node feature collides with an existing file")
+                replacements: dict[str, dict[int, Any]] = {}
+                metadata = {}
+                for name, value in features.items():
+                    feature = api.Fs(name) if name in names else None
+                    if feature is None and value is None:
+                        raise ValueError("Cannot remove an unknown node feature")
+                    kind = (
+                        feature.meta.get("valueType")
+                        if feature
+                        else ("int" if type(value) is int else "str")
+                    )
+                    if value is not None and type(value) is not (int if kind == "int" else str):
+                        raise ValueError("Node feature value has the wrong type")
+                    values = dict(feature.items()) if feature else {}
+                    if value is None:
+                        values.pop(node, None)
+                    else:
+                        values[node] = value
+                    replacements[name] = values
+                    metadata[name] = dict(feature.meta) if feature else {"valueType": kind}
+                if not Fabric(locations=str(tf_root), silent="deep").save(
+                    nodeFeatures=replacements, metaData=metadata, silent="deep"
+                ):
+                    raise ValueError("Could not save Text-Fabric features")
+                changed_names = set(features)
+                new_node = node
+            # Generated TF caches can predate the newly written source features.
+            shutil.rmtree(tf_root / ".tf", ignore_errors=True)
             cache_paths = list((tf_root / ".cfr").rglob("*.cfr"))
             if len(cache_paths) != 1:
                 raise ValueError("Exactly one Context-Fabric cache is required")
@@ -162,12 +196,17 @@ def edit_archive(
             fabric.compile(str(cache), silent="deep")
             if not cache.is_file():
                 raise ValueError("Edited Context-Fabric cache was not created")
-            for name in features:
+            for name in changed_names:
                 path = tf_root / (name + ".tf")
                 changed[path.relative_to(root).as_posix()] = path.read_bytes()
             changed[cache.relative_to(root).as_posix()] = cache.read_bytes()
             mapped = _load_api(root)
-            if mapped is None or any(
+            if mapped is None:
+                raise ValueError("Edited Context-Fabric cache cannot load")
+            if text is not None:
+                if mapped.T.text(new_node) != text:
+                    raise ValueError("Edited Context-Fabric text does not match the request")
+            elif features is not None and any(
                 mapped.Fs(name).v(node) != value for name, value in features.items()
             ):
                 raise ValueError("Edited Context-Fabric cache does not match the changes")

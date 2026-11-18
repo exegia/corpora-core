@@ -107,3 +107,181 @@ def test_unsampled_stale_cache_is_rejected_before_edit(tmp_path):
     assert validate_archive(archive, "input.corpus")["valid"]
     with pytest.raises(ValueError, match="Source and Context-Fabric cache do not match"):
         edit_archive(archive, node=1, features={"word": "new"})
+
+
+@pytest.mark.parametrize(
+    ("text", "new_node", "words"),
+    [
+        ("One two three ", 6, ["One ", "two ", "three "]),
+        ("Only", 4, ["Only"]),
+        ("", 4, [""]),
+        ("  One\nTwo  ", 5, ["  One\n", "Two  "]),
+    ],
+)
+def test_structural_text_replacement_renumbers_and_rebuilds(corpus, text, new_node, words):
+    changed = edit_archive(corpus, node=5, text_feature="word", text=text)
+    verdict = validate_archive(changed, "changed.corpus")
+    assert verdict["valid"], verdict["reasons"]
+    assert read_archive(changed, "node", node=new_node)["text"] == text
+    for index, expected in enumerate(words, start=1):
+        assert read_archive(changed, "node", node=index)["text"] == expected
+    assert read_archive(changed, "node", node=len(words) + 1)["features"]["book"] == "Mini"
+
+
+def test_text_replacement_rejects_ambiguous_or_unknown_feature(corpus):
+    with pytest.raises(ValueError, match="Text feature is unavailable"):
+        edit_archive(corpus, node=5, text_feature="missing", text="new words")
+
+
+@pytest.fixture
+def linked_corpus(tmp_path):
+    from tf.fabric import Fabric
+
+    root = tmp_path / "linked"
+    root.mkdir()
+    assert Fabric(locations=str(root), silent="deep").save(
+        nodeFeatures={
+            "otype": {**{i: "word" for i in range(1, 6)}, 6: "book", 7: "passage", 8: "passage"},
+            "word": {1: "A ", 2: "B ", 3: "C ", 4: "D ", 5: "E"},
+            "label": {6: "Book", 7: "First", 8: "Second"},
+        },
+        edgeFeatures={"oslots": {6: {1, 2, 3, 4, 5}, 7: {2, 3}, 8: {4, 5}}, "xref": {8: {5}}},
+        metaData={
+            "otype": {"valueType": "str"},
+            "word": {"valueType": "str"},
+            "label": {"valueType": "str"},
+            "oslots": {"valueType": "str"},
+            "xref": {"valueType": "str"},
+            "otext": {"fmt:text-orig-full": "{word}"},
+        },
+        silent="deep",
+    )
+    fabric = ContextFabric(locations=str(root), silent="deep")
+    assert fabric.loadAll(silent="deep")
+    for cache in (root / ".cfr").rglob("*.cfr"):
+        cache.unlink()
+    cache = root / ".cfr" / "fixture.cfr"
+    cache.parent.mkdir(exist_ok=True)
+    fabric.compile(str(cache), silent="deep")
+    return archive_bytes(root, ".corpus")
+
+
+def test_text_expansion_remaps_later_nodes_and_edges(linked_corpus, tmp_path):
+    from tf.fabric import Fabric
+
+    changed = edit_archive(linked_corpus, node=7, text_feature="word", text="New longer text ")
+    assert read_archive(changed, "node", node=8)["text"] == "New longer text "
+    assert read_archive(changed, "node", node=9)["text"] == "D E"
+    assert read_archive(changed, "node", node=7)["text"] == "A New longer text D E"
+    with zipfile.ZipFile(io.BytesIO(changed)) as archive:
+        archive.extractall(tmp_path)
+    api = Fabric(locations=str(tmp_path / "corpora"), silent="deep").loadAll(silent="deep")
+    assert list(api.Es("xref").f(9)) == [6]
+
+
+def test_text_contraction_rejects_a_removed_word_with_links(linked_corpus):
+    with pytest.raises(ValueError, match="word links ambiguous"):
+        edit_archive(linked_corpus, node=8, text_feature="word", text="Short")
+
+
+def test_text_retokenization_refuses_unmapped_annotations(linked_corpus):
+    stream = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(linked_corpus)) as source, zipfile.ZipFile(stream, "w") as out:
+        for info in source.infolist():
+            out.writestr(info, source.read(info))
+        out.writestr("annotations.json", '{"nodes":{"2":{"note":"important"}}}')
+    with pytest.raises(ValueError, match="annotations"):
+        edit_archive(stream.getvalue(), node=7, text_feature="word", text="New longer text ")
+
+
+def test_text_retokenization_rejects_partial_nested_node(linked_corpus, tmp_path):
+    from tf.fabric import Fabric
+
+    with zipfile.ZipFile(io.BytesIO(linked_corpus)) as archive:
+        archive.extractall(tmp_path)
+    root = tmp_path / "corpora"
+    api = Fabric(locations=str(root), silent="deep").loadAll(silent="deep")
+    types = dict(api.F.otype.items())
+    slots = {int(n): set(values) for n, values in api.E.oslots.items()}
+    types[9], slots[9] = "inline", {2}
+    assert Fabric(locations=str(root), silent="deep").save(
+        nodeFeatures={"otype": types},
+        edgeFeatures={"oslots": slots},
+        metaData={"otype": dict(api.F.otype.meta), "oslots": dict(api.E.oslots.meta)},
+        silent="deep",
+    )
+    for cache in (root / ".cfr").rglob("*.cfr"):
+        cache.unlink()
+    fabric = ContextFabric(locations=str(root), silent="deep")
+    assert fabric.loadAll(silent="deep")
+    for cache in (root / ".cfr").rglob("*.cfr"):
+        cache.unlink()
+    cache = root / ".cfr" / "fixture.cfr"
+    fabric.compile(str(cache), silent="deep")
+    with pytest.raises(ValueError, match="partially overlaps"):
+        edit_archive(
+            archive_bytes(root, ".corpus"), node=7, text_feature="word", text="New longer text "
+        )
+
+
+def test_text_feature_name_can_differ_from_slot_type(tmp_path):
+    from tf.fabric import Fabric
+
+    root = tmp_path / "tf"
+    root.mkdir()
+    assert Fabric(locations=str(root), silent="deep").save(
+        nodeFeatures={
+            "otype": {1: "word", 2: "word", 3: "passage"},
+            "text": {1: "Old ", 2: "text"},
+        },
+        edgeFeatures={"oslots": {3: {1, 2}}},
+        metaData={
+            "otype": {"valueType": "str"},
+            "text": {"valueType": "str"},
+            "oslots": {"valueType": "str"},
+            "otext": {"fmt:text-orig-full": "{text}"},
+        },
+        silent="deep",
+    )
+    fabric = ContextFabric(locations=str(root), silent="deep")
+    assert fabric.loadAll(silent="deep")
+    for cache in (root / ".cfr").rglob("*.cfr"):
+        cache.unlink()
+    cache = root / ".cfr" / "fixture.cfr"
+    cache.parent.mkdir(exist_ok=True)
+    fabric.compile(str(cache), silent="deep")
+    changed = edit_archive(
+        archive_bytes(root, ".corpus"), node=3, text_feature="text", text="New content here"
+    )
+    assert read_archive(changed, "node", node=4)["text"] == "New content here"
+
+
+def test_character_slots_stay_character_sized(single_level_epub_root):
+    root = single_level_epub_root
+    fabric = ContextFabric(locations=str(root), silent="deep")
+    assert fabric.loadAll(silent="deep")
+    for cache in (root / ".cfr").rglob("*.cfr"):
+        cache.unlink()
+    cache = root / ".cfr" / "fixture.cfr"
+    cache.parent.mkdir(exist_ok=True)
+    fabric.compile(str(cache), silent="deep")
+    changed = edit_archive(
+        archive_bytes(root, ".corpus"), node=4, text_feature="reading", text="XYZ"
+    )
+    assert read_archive(changed, "node", node=4)["text"] == "XYZ"
+    assert [read_archive(changed, "node", node=i)["text"] for i in range(1, 4)] == ["X", "Y", "Z"]
+
+
+def test_edit_rejects_cache_with_stale_text_format(linked_corpus):
+    stream = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(linked_corpus)) as source, zipfile.ZipFile(stream, "w") as out:
+        for info in source.infolist():
+            content = source.read(info)
+            if info.filename == "corpora/otext.tf":
+                assert b"{word}" in content
+                content = content.replace(b"{word}", b"{word}!")
+            out.writestr(info, content)
+    archive = stream.getvalue()
+    assert validate_archive(archive, "input.corpus")["valid"]
+    with pytest.raises(ValueError, match="Source and Context-Fabric cache do not match"):
+        edit_archive(archive, node=7, features={"label": "changed"})
