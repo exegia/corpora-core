@@ -40,6 +40,7 @@ def reference_archive(
     node: int | None = None,
     end_node: int | None = None,
     ref: str | None = None,
+    version: str | None = None,
     lang: str | None = None,
     shortcode: bool = False,
     url_template: str | None = None,
@@ -61,7 +62,9 @@ def reference_archive(
         toc = yaml.safe_load(toc_path.read_text()) if toc_path.is_file() else {}
         manifest = manifest if isinstance(manifest, dict) else {}
         toc = toc if isinstance(toc, dict) else {}
-        adapter = tfref.load_corpus(api, version=str(manifest.get("version") or "") or None)
+        adapter = tfref.load_corpus(
+            api, version=version or str(manifest.get("version") or "") or None
+        )
         original = ref
         if ref is not None:
             if refcompact.is_compact(ref):
