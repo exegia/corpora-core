@@ -185,6 +185,12 @@ def test_reference_roundtrip_against_real_context_fabric(tf_root: Path) -> None:
     assert created["nodes"] == [1, 2]
     assert reference_archive(data, "mini", ref=created["urn"])["nodes"] == [1, 2]
     assert reference_archive(data, "mini", ref=created["token"])["ref"] == created["ref"]
+    revision = "a" * 40
+    pinned = reference_archive(data, "mini", node=1, version=revision)
+    assert f"@{revision}/" in pinned["ref"]
+    assert reference_archive(data, "mini", ref=pinned["urn"], version=revision)["node"] == 1
+    with pytest.raises(VersionMismatch):
+        reference_archive(data, "mini", ref=pinned["ref"], version="b" * 40)
     assert (
         reference_archive(data, "mini", ref=created["ref"], shortcode=True)["ref"] == created["ref"]
     )
