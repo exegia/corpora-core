@@ -12,15 +12,18 @@ use std::io::{Cursor, Read};
 use zip::ZipArchive;
 
 const MAX_MEMBERS: usize = 1024;
-const MAX_ARCHIVE_BYTES: usize = 80 * 1024 * 1024;
-const MAX_MEMBER_BYTES: u64 = 16 * 1024 * 1024;
-const MAX_EXPANDED_BYTES: u64 = 64 * 1024 * 1024;
+const MIB: u64 = 1024 * 1024;
+/// Compressed input bound; a stored (uncompressed) archive is about its expanded size.
+const MAX_ARCHIVE_BYTES: u64 = 500 * MIB;
+const MAX_MEMBER_BYTES: u64 = 128 * MIB;
+const MAX_EXPANDED_BYTES: u64 = 500 * MIB;
 const EPUB_NS: &str = "http://www.idpf.org/2007/ops";
 const XML_NS: &str = "http://www.w3.org/XML/1998/namespace";
-/// Default character-slot bound for normal EPUB validation.
+const SVG_NS: &str = "http://www.w3.org/2000/svg";
+const XLINK_NS: &str = "http://www.w3.org/1999/xlink";
+/// Default character-slot bound for normal EPUB validation. Callers may raise it
+/// explicitly; expanded-byte limits then bound the projection.
 pub const DEFAULT_MAX_SLOTS: usize = 1_000_000;
-/// Hard character-slot ceiling for explicitly requested large conversions.
-pub const HARD_MAX_SLOTS: usize = 8_000_000;
 
 /// One archive member and the hash of its exact expanded bytes.
 #[derive(Debug, Serialize)]
@@ -52,7 +55,7 @@ pub struct Element {
     pub end: usize,
 }
 
-/// Reading content from one linear spine item.
+/// Reading content from one spine item.
 #[derive(Debug, Serialize)]
 pub struct ReadingDocument {
     /// Manifest ID for this spine item.
@@ -87,7 +90,7 @@ pub struct NoteBody {
 /// A note marker retained in main text and linked to a note body.
 #[derive(Debug, Serialize)]
 pub struct NoteReference {
-    /// Manifest ID of the containing linear spine item.
+    /// Manifest ID of the containing spine item, linear or non-linear.
     pub document_id: String,
     /// Source archive member containing the marker.
     pub member: String,
@@ -165,6 +168,9 @@ pub struct EpubReport {
     pub navigation: Vec<String>,
     /// Linear spine content only, in spine order.
     pub documents: Vec<ReadingDocument>,
+    /// `linear="no"` spine items (such as covers), in spine order, outside the
+    /// linear reading stream but retained with their source identity.
+    pub nonlinear: Vec<ReadingDocument>,
     /// Note bodies, outside document text, in deterministic source order.
     pub notes: Vec<NoteBody>,
     /// Validated marker-to-note links.
@@ -263,7 +269,30 @@ fn inline_xml_with_context(bytes: &[u8], namespaces: &BTreeMap<String, String>) 
     Some(wrapped)
 }
 
-fn passive_svg(bytes: &[u8], namespaces: &BTreeMap<String, String>) -> bool {
+/// Archive-relative target of an SVG `image`. Only a local relative path qualifies;
+/// manifest membership and media type are checked when assets are resolved.
+fn local_svg_image_href<'a>(element: Node<'a, '_>) -> Option<&'a str> {
+    let href = element
+        .attribute((XLINK_NS, "href"))
+        .or_else(|| element.attribute("href"))?;
+    (!href.is_empty() && !href.contains(':') && !href.starts_with(['/', '#'])).then_some(href)
+}
+
+/// Scripted, foreign or linked SVG content. Inline XHTML SVG may wrap a local image
+/// (the common EPUB cover pattern); that image is retained as its own asset.
+fn active_svg_element(element: Node<'_, '_>, allow_local_image: bool) -> bool {
+    match element.tag_name().name() {
+        "script" | "foreignObject" => true,
+        "image" => !allow_local_image || local_svg_image_href(element).is_none(),
+        _ => false,
+    }
+}
+
+fn passive_svg(
+    bytes: &[u8],
+    namespaces: &BTreeMap<String, String>,
+    allow_local_image: bool,
+) -> bool {
     let Some(wrapped) = inline_xml_with_context(bytes, namespaces) else {
         return false;
     };
@@ -273,18 +302,16 @@ fn passive_svg(bytes: &[u8], namespaces: &BTreeMap<String, String>) -> bool {
     let Some(svg) = tree.root_element().first_element_child() else {
         return false;
     };
-    svg.tag_name().namespace() == Some("http://www.w3.org/2000/svg")
+    svg.tag_name().namespace() == Some(SVG_NS)
         && svg.descendants().filter(Node::is_element).all(|element| {
-            !matches!(
-                element.tag_name().name(),
-                "script" | "foreignObject" | "image"
-            ) && element.attributes().all(|attribute| {
-                !attribute.name().starts_with("on")
-                    && !attribute.value().contains("http:")
-                    && !attribute.value().contains("https:")
-                    && !attribute.value().contains("javascript:")
-                    && !attribute.value().contains("data:")
-            })
+            !active_svg_element(element, allow_local_image)
+                && element.attributes().all(|attribute| {
+                    !attribute.name().starts_with("on")
+                        && !attribute.value().contains("http:")
+                        && !attribute.value().contains("https:")
+                        && !attribute.value().contains("javascript:")
+                        && !attribute.value().contains("data:")
+                })
         })
 }
 
@@ -337,6 +364,17 @@ fn relative_path(base: &str, href: &str) -> Option<String> {
     safe_path(&path).then_some(path)
 }
 
+/// `<!DOCTYPE html []>`: an HTML doctype whose internal subset is strictly empty.
+/// The declaration ends at its first `>`, so any markup declaration in a subset fails here.
+fn empty_subset_html_doctype(declaration: &str) -> bool {
+    declaration
+        .strip_prefix("<!DOCTYPE html")
+        .and_then(|rest| rest.strip_suffix('>'))
+        .and_then(|rest| rest.trim().strip_prefix('['))
+        .and_then(|rest| rest.strip_suffix(']'))
+        .is_some_and(|subset| subset.trim().is_empty())
+}
+
 fn xml<'a>(
     report: &mut EpubReport,
     member: &str,
@@ -354,9 +392,9 @@ fn xml<'a>(
                 "<!DOCTYPE html>"
                     | "<!DOCTYPE html PUBLIC \"-//W3C//DTD XHTML 1.1//EN\" \"http://www.w3.org/TR/xhtml11/DTD/xhtml11.dtd\">"
             )
-        );
+        ) || declaration.is_some_and(empty_subset_html_doctype);
         if !xhtml || !known {
-            report.finding(member, source, "EPUB_XML_DTD", "Only the bounded XHTML 1.1 or HTML doctype is supported; external entities are never loaded", Some(offset), true);
+            report.finding(member, source, "EPUB_XML_DTD", "Only the bounded XHTML 1.1, HTML or empty-subset HTML doctype is supported; external entities are never loaded", Some(offset), true);
             return None;
         }
         true
@@ -536,29 +574,51 @@ fn push_assets(
             namespaces,
         });
     }
+    if tag == "svg" && inline_asset {
+        // Keep each locally linked image's bytes; the inline SVG slice stays exact.
+        for image in node
+            .descendants()
+            .filter(|n| n.tag_name().namespace() == Some(SVG_NS) && n.has_tag_name("image"))
+        {
+            if let Some(href) = local_svg_image_href(image) {
+                assets.push(linked_image(owner, key, href, text_offset, image));
+            }
+        }
+    }
     if tag == "video" {
         if let Some(poster) = node.attribute("poster") {
-            assets.push(AssetReference {
-                document_id: owner.document_id.into(),
-                scope: owner.scope.into(),
-                scope_id: owner.scope_id.into(),
-                kind: "image".into(),
-                member: owner.member.into(),
-                element_key: key.into(),
-                href: poster.into(),
-                target_member: String::new(),
-                media_type: String::new(),
-                sha256: String::new(),
-                bytes: 0,
-                alt: String::new(),
-                text_offset,
-                source_byte: node.range().start,
-                source_end: None,
-                namespaces: BTreeMap::new(),
-            });
+            assets.push(linked_image(owner, key, poster, text_offset, node));
         }
     }
     inline_asset
+}
+
+/// An image linked from inside another asset element (a video poster or SVG image).
+fn linked_image(
+    owner: &AssetOwner<'_>,
+    key: &str,
+    href: &str,
+    text_offset: usize,
+    source: Node<'_, '_>,
+) -> AssetReference {
+    AssetReference {
+        document_id: owner.document_id.into(),
+        scope: owner.scope.into(),
+        scope_id: owner.scope_id.into(),
+        kind: "image".into(),
+        member: owner.member.into(),
+        element_key: key.into(),
+        href: href.into(),
+        target_member: String::new(),
+        media_type: String::new(),
+        sha256: String::new(),
+        bytes: 0,
+        alt: String::new(),
+        text_offset,
+        source_byte: source.range().start,
+        source_end: None,
+        namespaces: BTreeMap::new(),
+    }
 }
 
 struct ReadingProjection<'a> {
@@ -677,22 +737,21 @@ fn resolve_note_href(member: &str, href: &str) -> Option<String> {
     Some(format!("{path}#{fragment}"))
 }
 
-/// Validate a local EPUB byte snapshot and project its linear XHTML content.
+/// Validate a local EPUB byte snapshot and project its XHTML spine content.
 ///
 /// No archive member is extracted to disk. Limits are checked before expansion.
-/// Only UTF-8 XML, unencrypted reflowable XHTML and linear spine content are supported.
-/// Referenced footnotes/endnotes use separate text slots; non-linear spine items block.
+/// Only UTF-8 XML and unencrypted reflowable XHTML are supported. Referenced
+/// footnotes/endnotes and non-linear spine items use separate text slots.
 pub fn validate_epub(bytes: &[u8]) -> EpubReport {
     validate_epub_with_slot_limit(bytes, DEFAULT_MAX_SLOTS)
 }
 
-/// Validate with an explicit character-slot bound, capped by `HARD_MAX_SLOTS`.
+/// Validate with an explicit character-slot bound.
 #[expect(
     clippy::too_many_lines,
     reason = "single pass keeps archive and XML lifetime-bound sources together"
 )]
 pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubReport {
-    let max_slots = max_slots.min(HARD_MAX_SLOTS);
     let mut result = EpubReport {
         archive_sha256: hash(bytes),
         members: vec![],
@@ -700,18 +759,19 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
         metadata: BTreeMap::new(),
         navigation: vec![],
         documents: vec![],
+        nonlinear: vec![],
         notes: vec![],
         note_references: vec![],
         images: vec![],
         assets: vec![],
         findings: vec![],
     };
-    if bytes.len() > MAX_ARCHIVE_BYTES {
+    if bytes.len() as u64 > MAX_ARCHIVE_BYTES {
         result.finding(
             "<archive>",
             "",
             "EPUB_LIMIT",
-            "Original archive exceeds 80 MiB",
+            &format!("Original archive exceeds {} MiB", MAX_ARCHIVE_BYTES / MIB),
             None,
             true,
         );
@@ -795,7 +855,11 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
                 &name,
                 "",
                 "EPUB_LIMIT",
-                "Expanded member exceeds 16 MiB or archive exceeds 64 MiB",
+                &format!(
+                    "Expanded member exceeds {} MiB or archive exceeds {} MiB",
+                    MAX_MEMBER_BYTES / MIB,
+                    MAX_EXPANDED_BYTES / MIB
+                ),
                 None,
                 true,
             );
@@ -1106,17 +1170,8 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
                 true,
             );
         }
-        if itemref.attribute("linear") == Some("no") {
-            result.finding(
-                opf_path,
-                opf,
-                "EPUB_NONLINEAR",
-                "Non-linear spine items require an explicit reading policy",
-                Some(itemref.range().start),
-                true,
-            );
-            continue;
-        }
+        // Non-linear items keep separate slots; they never join the linear reading stream.
+        let linear = itemref.attribute("linear") != Some("no");
         let Some((path, media, _)) = items.get(idref) else {
             result.finding(
                 opf_path,
@@ -1144,7 +1199,7 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
                 opf_path,
                 opf,
                 "EPUB_MEDIA",
-                "Linear spine content must be XHTML",
+                "Spine content must be XHTML",
                 Some(itemref.range().start),
                 true,
             );
@@ -1218,17 +1273,15 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
                     true,
                 );
             }
-            if element.tag_name().namespace() == Some("http://www.w3.org/2000/svg")
-                && (matches!(
-                    element.tag_name().name(),
-                    "script" | "foreignObject" | "image"
-                ) || element.attributes().any(|attribute| {
-                    attribute.name().starts_with("on")
-                        || attribute.value().contains("http:")
-                        || attribute.value().contains("https:")
-                        || attribute.value().contains("javascript:")
-                        || attribute.value().contains("data:")
-                }))
+            if element.tag_name().namespace() == Some(SVG_NS)
+                && (active_svg_element(element, true)
+                    || element.attributes().any(|attribute| {
+                        attribute.name().starts_with("on")
+                            || attribute.value().contains("http:")
+                            || attribute.value().contains("https:")
+                            || attribute.value().contains("javascript:")
+                            || attribute.value().contains("data:")
+                    }))
             {
                 result.finding(
                     path,
@@ -1295,12 +1348,17 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
             assets: &mut result.assets,
         };
         append_reading(body, None, &mut projection);
-        result.documents.push(ReadingDocument {
+        let document = ReadingDocument {
             id: idref.into(),
             member: path.clone(),
             text: projection.text,
             elements: projection.elements,
-        });
+        };
+        if linear {
+            result.documents.push(document);
+        } else {
+            result.nonlinear.push(document);
+        }
     }
     if result.documents.is_empty() {
         result.finding(
@@ -1398,7 +1456,8 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
         };
         match resolved {
             Some((path, media, data))
-                if media != "image/svg+xml" || passive_svg(data, &asset.namespaces) =>
+                if media != "image/svg+xml"
+                    || passive_svg(data, &asset.namespaces, asset.source_end.is_some()) =>
             {
                 asset.target_member = path;
                 asset.media_type = media;
@@ -1429,6 +1488,7 @@ pub fn validate_epub_with_slot_limit(bytes: &[u8], max_slots: usize) -> EpubRepo
     let total_slots = result
         .documents
         .iter()
+        .chain(&result.nonlinear)
         .map(|document| document.text.chars().count())
         .sum::<usize>()
         + result
