@@ -62,8 +62,12 @@ def _write_graph(
             node["text"][slot] = char
             if display:
                 node["reading"][slot] = display
-        if slot == start:
+        empty_item = slot == start
+        if empty_item and (kind == "document" or slot == 0):
             raise ConversionError(f"Empty reading spine item: {document['member']}")
+        # An image-only non-linear item (a cover) has no characters. Like an empty
+        # element it is anchored to the preceding slot; reading_length=0 is authoritative.
+        item_slots = [slot] if empty_item else list(range(start + 1, slot + 1))
         document_assets = [
             asset
             for asset in assets
@@ -74,7 +78,7 @@ def _write_graph(
             (
                 kind,
                 doc_key,
-                list(range(start + 1, slot + 1)),
+                item_slots,
                 {
                     "document": document["id"],
                     "source_member": document["member"],
@@ -84,6 +88,7 @@ def _write_graph(
                         document["toc_entries"], ensure_ascii=False, sort_keys=True
                     ),
                     "reading_length": len(document["reading_text"]),
+                    **({"empty_element": 1} if empty_item else {}),
                 },
                 None,
             )
@@ -437,6 +442,7 @@ def convert(
         )
         features = (
             "text reading document source_member xhtml_tag image_assets asset_refs toc_entries"
+            " reading_length"
         )
         if report["notes"]:
             features += " note_kind source_key noteref"
@@ -445,9 +451,13 @@ def convert(
             raise ConversionError("Real Text-Fabric loader rejected export")
         for document in report["documents"] + report["nonlinear"]:
             node = graph["node_ids"][scope_kind[document["id"]] + ":" + document["id"]]
-            if api.T.text(node) != document["reading_text"]:
+            if not document["text"]:
+                # Anchored, slot-free item: its zero length is the authoritative text.
+                if api.F.reading_length.v(node) != 0:
+                    raise ConversionError(f"Empty item round-trip failed: {document['member']}")
+            elif api.T.text(node) != document["reading_text"]:
                 raise ConversionError(f"Reading text round-trip failed: {document['member']}")
-            if api.T.text(node, fmt="text-source-full") != document["text"]:
+            elif api.T.text(node, fmt="text-source-full") != document["text"]:
                 raise ConversionError(f"Source text round-trip failed: {document['member']}")
             if json.loads(api.F.toc_entries.v(node)) != document["toc_entries"]:
                 raise ConversionError(f"TOC round-trip failed: {document['member']}")

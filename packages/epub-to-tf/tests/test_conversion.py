@@ -1,7 +1,9 @@
 """Independent reading expectations and loader acceptance for a tiny EPUB."""
 
+import base64
 import hashlib
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -484,6 +486,74 @@ def test_svg_image_must_be_a_local_manifest_image(tmp_path: Path, href: bytes, c
     assert code in [
         d["code"] for f in check(source)["findings"] for d in f["report"]["diagnostics"]
     ]
+
+
+def test_image_only_nonlinear_cover_needs_no_text(tmp_path: Path) -> None:
+    source = tmp_path / "image-only-cover.epub"
+    cover = (
+        b'<html xmlns="http://www.w3.org/1999/xhtml"><body>'
+        b'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">'
+        b'<image xlink:href="art.png"/></svg></body></html>'
+    )
+    fixture(source, opf=COVER_OPF, extra={"OEBPS/cover.xhtml": cover, "OEBPS/art.png": PNG})
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER)
+    assert manifest["nonlinear"] == ["cover"]
+    assert (output / "nonlinear/0001.txt").read_text() == ""
+    chapter = manifest["graph"]["node_ids"]["document:chapter"]
+    cover_node = manifest["graph"]["node_ids"]["nonlinear:cover"]
+    for api in (
+        Fabric(locations=str(output / "tf"), silent="deep").load(
+            "text reading_length empty_element asset_refs", silent="deep"
+        ),
+        ContextFabric(locations=str(output / "tf")).loadAll(),
+    ):
+        # Anchored to the chapter's last slot only because TF nodes need a slot.
+        assert api.F.empty_element.v(cover_node) == 1
+        assert api.F.reading_length.v(cover_node) == 0
+        assert list(api.L.d(cover_node, otype="character")) == [manifest["graph"]["max_slot"]]
+        assert api.T.text(chapter) == "Áβcafé & 東京"
+        assert "OEBPS/art.png" in {
+            a["target_member"] for a in json.loads(api.F.asset_refs.v(cover_node))
+        }
+
+
+def test_qa_view_embeds_image_linked_from_inline_svg(tmp_path: Path) -> None:
+    source = tmp_path / "svg-figure.epub"
+    chapter = CHAPTER.replace(
+        b"<section>",
+        b'<section><svg xmlns="http://www.w3.org/2000/svg" '
+        b'xmlns:xlink="http://www.w3.org/1999/xlink"><image xlink:href="art.png"/></svg>',
+    )
+    opf = OPF.replace(
+        b'<item id="nav"', b'<item id="art" href="art.png" media-type="image/png"/><item id="nav"'
+    )
+    fixture(source, opf=opf, chapter=chapter, extra={"OEBPS/art.png": PNG})
+    bundle = tmp_path / "bundle"
+    manifest = convert(source, bundle, CHECKER)
+    svg = next(a for a in manifest["assets"] if a["media_type"] == "image/svg+xml")
+    # The exported asset stays the exact source slice with its original relative link.
+    assert (bundle / svg["file"]).read_bytes() == chapter[svg["source_byte"] : svg["source_end"]]
+    site = tmp_path / "site"
+    subprocess.run(
+        [
+            sys.executable,
+            str(ROOT / "packages/epub-to-tf/tools/qa_browser.py"),
+            str(bundle),
+            str(site),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    rendered = (site / "tf-rendered/0001.html").read_text()
+    match = re.search(
+        r'<img src="data:image/svg\+xml;base64,([^"]+)" data-source-tag="svg"', rendered
+    )
+    assert match
+    view = base64.b64decode(match.group(1))
+    assert b"art.png" not in view
+    assert base64.b64encode(PNG) in view
 
 
 def test_slot_limit_above_eight_million_is_accepted(tmp_path: Path) -> None:

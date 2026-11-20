@@ -182,8 +182,13 @@ display text as an exact copy of XHTML whitespace.
   their manifest ID, source member, elements and assets, are written to
   `nonlinear/`, and are listed in the manifest's `nonlinear` field. They never
   join the linear reading stream. A book with only non-linear content blocks.
+  An image-only non-linear item has no characters; like an empty element it is
+  anchored to the preceding slot with `empty_element=1`, and its
+  `reading_length=0` is authoritative, not `T.text()` of the anchor.
 - Inline SVG may wrap an SVG `image` whose `xlink:href`/`href` is a relative
   path to a manifest-declared image; that image is retained as its own asset.
+  The exported SVG asset keeps its exact source bytes and original link; the
+  QA view embeds the retained image so the SVG renders.
   Missing manifest/spine targets, unsupported media or layout, scripts/iframes,
   responsive `srcset`, active or remote, `data:` or absolute-path SVG links, and
   encryption block export. Malformed XHTML blocks
