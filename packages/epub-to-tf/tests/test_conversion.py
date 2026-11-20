@@ -86,10 +86,11 @@ def test_unicode_structure_metadata_and_real_loaders(tmp_path: Path) -> None:
         (OPF.replace(b'idref="chapter"', b'idref="missing"'), CHAPTER, None, "EPUB_SPINE"),
         (OPF.replace(b"urn:isbn:9780000000001", b" "), CHAPTER, None, "EPUB_IDENTIFIER"),
         (
+            # Non-linear content alone is not a readable book.
             OPF.replace(b'<itemref idref="chapter"/>', b'<itemref idref="chapter" linear="no"/>'),
             CHAPTER,
             None,
-            "EPUB_NONLINEAR",
+            "EPUB_SPINE",
         ),
         (OPF, CHAPTER.replace(b"<section>", b'<section><img src="a.png"/>'), None, "EPUB_ASSET"),
         (
@@ -115,7 +116,7 @@ def test_unicode_structure_metadata_and_real_loaders(tmp_path: Path) -> None:
         ),
         (b'<!DOCTYPE package [<!ENTITY x "bad">]>' + OPF, CHAPTER, None, "EPUB_XML_DTD"),
         (OPF, CHAPTER, {"META-INF/encryption.xml": b"<encryption/>"}, "EPUB_ENCRYPTED"),
-        (OPF, CHAPTER, {"huge.bin": b"x" * (16 * 1024 * 1024 + 1)}, "EPUB_LIMIT"),
+        (OPF, CHAPTER, {"huge.bin": b"x" * (128 * 1024 * 1024 + 1)}, "EPUB_LIMIT"),
         (OPF, CHAPTER, {"../escape": b"bad"}, "EPUB_PATH"),
     ],
 )
@@ -355,6 +356,163 @@ def test_unsupported_dtd_blocks(tmp_path: Path) -> None:
     ]
     with pytest.raises(ConversionError):
         convert(source, tmp_path / "out", CHECKER)
+
+
+@pytest.mark.parametrize(
+    "doctype", [b"<!DOCTYPE html []>", b"<!DOCTYPE html [ ]>", b"<!DOCTYPE html[]>"]
+)
+def test_empty_internal_doctype_subset_converts(tmp_path: Path, doctype: bytes) -> None:
+    source = tmp_path / "empty-subset.epub"
+    fixture(source, chapter=doctype + CHAPTER)
+    manifest = convert(source, tmp_path / "out", CHECKER)
+    assert (tmp_path / "out/documents/0001.txt").read_text() == "Áβcafé & 東京"
+    assert manifest["documents"] == ["chapter"]
+
+
+@pytest.mark.parametrize(
+    "doctype",
+    [
+        b'<!DOCTYPE html [<!ENTITY a "secret">]>',
+        b"<!DOCTYPE html [%external;]>",
+        b'<!DOCTYPE html SYSTEM "http://invalid.example/x.dtd" []>',
+        b'<!DOCTYPE html SYSTEM "local.dtd">',
+    ],
+)
+def test_nonempty_or_external_doctype_subset_blocks(tmp_path: Path, doctype: bytes) -> None:
+    source = tmp_path / "unsafe-subset.epub"
+    fixture(source, chapter=doctype + CHAPTER)
+    assert "EPUB_XML_DTD" in [
+        d["code"] for f in check(source)["findings"] for d in f["report"]["diagnostics"]
+    ]
+
+
+def test_nonlinear_cover_keeps_identity_outside_linear_reading(tmp_path: Path) -> None:
+    source = tmp_path / "cover.epub"
+    cover = b'<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Cover</p></body></html>'
+    opf = OPF.replace(
+        b'<item id="nav"',
+        b'<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/><item id="nav"',
+    ).replace(
+        b'<itemref idref="chapter"/>',
+        b'<itemref idref="cover" linear="no"/><itemref idref="chapter"/>',
+    )
+    fixture(source, opf=opf, extra={"OEBPS/cover.xhtml": cover})
+    report = check(source)
+    assert [d["id"] for d in report["documents"]] == ["chapter"]
+    assert [(d["id"], d["member"], d["text"]) for d in report["nonlinear"]] == [
+        ("cover", "OEBPS/cover.xhtml", "Cover")
+    ]
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER)
+    assert manifest["documents"] == ["chapter"]
+    assert manifest["nonlinear"] == ["cover"]
+    assert (output / "documents/0001.txt").read_text() == "Áβcafé & 東京"
+    assert (output / "nonlinear/0001.txt").read_text() == "Cover"
+    assert (output / "sources/original.epub").read_bytes() == source.read_bytes()
+    chapter = manifest["graph"]["node_ids"]["document:chapter"]
+    cover_node = manifest["graph"]["node_ids"]["nonlinear:cover"]
+    for api in (
+        Fabric(locations=str(output / "tf"), silent="deep").load(
+            "text document source_member", silent="deep"
+        ),
+        ContextFabric(locations=str(output / "tf")).loadAll(),
+    ):
+        assert api.F.otype.v(cover_node) == "nonlinear"
+        assert api.F.source_member.v(cover_node) == "OEBPS/cover.xhtml"
+        assert api.T.text(cover_node) == "Cover"
+        # The linear reading stream starts at slot 1 and never contains the cover.
+        assert api.L.d(chapter, otype="character")[0] == 1
+        assert api.T.text(chapter) == "Áβcafé & 東京"
+        assert list(api.F.otype.s("document")) == [chapter]
+        assert list(api.F.otype.s("nonlinear")) == [cover_node]
+
+
+PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082"
+)
+SVG_COVER = (
+    b'<html xmlns="http://www.w3.org/1999/xhtml"><body><div>'
+    b'<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+    b'viewBox="0 0 1 1"><image width="1" height="1" xlink:href="HREF"/></svg>'
+    b"</div><p>Cover</p></body></html>"
+)
+COVER_OPF = OPF.replace(
+    b'<item id="nav"',
+    b'<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>'
+    b'<item id="art" href="art.png" media-type="image/png"/><item id="nav"',
+).replace(
+    b'<itemref idref="chapter"/>', b'<itemref idref="cover" linear="no"/><itemref idref="chapter"/>'
+)
+
+
+def test_svg_wrapped_local_cover_image_is_retained(tmp_path: Path) -> None:
+    source = tmp_path / "svg-cover.epub"
+    cover = SVG_COVER.replace(b"HREF", b"art.png")
+    fixture(source, opf=COVER_OPF, extra={"OEBPS/cover.xhtml": cover, "OEBPS/art.png": PNG})
+    output = tmp_path / "out"
+    manifest = convert(source, output, CHECKER)
+    assert manifest["nonlinear"] == ["cover"]
+    cover_assets = {a["media_type"]: a for a in manifest["assets"] if a["document_id"] == "cover"}
+    assert set(cover_assets) == {"image/svg+xml", "image/png"}
+    svg, raster = cover_assets["image/svg+xml"], cover_assets["image/png"]
+    assert (output / svg["file"]).read_bytes() == cover[svg["source_byte"] : svg["source_end"]]
+    assert raster["target_member"] == "OEBPS/art.png"
+    assert raster["source_byte"] == cover.index(b"<image")
+    assert (output / raster["file"]).read_bytes() == PNG
+    node = manifest["graph"]["node_ids"]["nonlinear:cover"]
+    tf = Fabric(locations=str(output / "tf"), silent="deep").load("asset_refs", silent="deep")
+    assert {a["target_member"] for a in json.loads(tf.F.asset_refs.v(node))} == {
+        "OEBPS/cover.xhtml",
+        "OEBPS/art.png",
+    }
+
+
+@pytest.mark.parametrize(
+    ("href", "code"),
+    [
+        (b"https://invalid.example/art.png", "EPUB_SVG"),
+        (b"data:image/png;base64,AAAA", "EPUB_SVG"),
+        (b"/OEBPS/art.png", "EPUB_SVG"),
+        (b"missing.png", "EPUB_ASSET"),
+        (b"cover.xhtml", "EPUB_ASSET"),
+    ],
+)
+def test_svg_image_must_be_a_local_manifest_image(tmp_path: Path, href: bytes, code: str) -> None:
+    source = tmp_path / "svg-bad.epub"
+    cover = SVG_COVER.replace(b"HREF", href)
+    fixture(source, opf=COVER_OPF, extra={"OEBPS/cover.xhtml": cover, "OEBPS/art.png": PNG})
+    assert code in [
+        d["code"] for f in check(source)["findings"] for d in f["report"]["diagnostics"]
+    ]
+
+
+def test_slot_limit_above_eight_million_is_accepted(tmp_path: Path) -> None:
+    source = tmp_path / "large-limit.epub"
+    fixture(source)
+    result = subprocess.run(
+        [str(CHECKER), str(source), "--max-slots", "9000000"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    manifest = convert(source, tmp_path / "out", CHECKER, max_slots=9_000_000)
+    assert manifest["max_slots"] == 9_000_000
+    with pytest.raises(ConversionError, match="positive integer"):
+        convert(source, tmp_path / "zero", CHECKER, max_slots=0)
+
+
+def test_slot_limit_still_blocks_when_exceeded(tmp_path: Path) -> None:
+    source = tmp_path / "small-limit.epub"
+    fixture(source)
+    result = subprocess.run(
+        [str(CHECKER), str(source), "--max-slots", "3"], capture_output=True, text=True, check=False
+    )
+    report = json.loads(result.stdout)
+    assert result.returncode == 1
+    assert "EPUB_LIMIT" in [
+        d["code"] for f in report["findings"] for d in f["report"]["diagnostics"]
+    ]
 
 
 def test_responsive_image_variant_blocks(tmp_path: Path) -> None:
