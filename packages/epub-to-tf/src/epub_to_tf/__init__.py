@@ -30,8 +30,16 @@ def _json(path: Path, value: Any) -> None:
     )
 
 
+def _scope_kinds(
+    documents: list[dict[str, Any]], nonlinear: list[dict[str, Any]]
+) -> dict[str, str]:
+    """Map each spine item's manifest ID to its graph node type."""
+    return {d["id"]: "document" for d in documents} | {d["id"]: "nonlinear" for d in nonlinear}
+
+
 def _write_graph(
     documents: list[dict[str, Any]],
+    nonlinear: list[dict[str, Any]],
     notes: list[dict[str, Any]],
     references: list[dict[str, Any]],
     assets: list[dict[str, Any]],
@@ -43,17 +51,23 @@ def _write_graph(
     specs: list[tuple[str, str, list[int], dict[str, Any], str | None]] = []
     lookup: dict[str, int] = {}
     slot = 0
-    for document in documents:
+    # Linear documents come first so the reading stream stays contiguous.
+    spine = [("document", d) for d in documents] + [("nonlinear", d) for d in nonlinear]
+    for kind, document in spine:
         start = slot
-        doc_key = "document:" + document["id"]
+        doc_key = kind + ":" + document["id"]
         for char, display in zip(document["text"], reading_slots[doc_key], strict=True):
             slot += 1
             node["otype"][slot] = "character"
             node["text"][slot] = char
             if display:
                 node["reading"][slot] = display
-        if slot == start:
+        empty_item = slot == start
+        if empty_item and (kind == "document" or slot == 0):
             raise ConversionError(f"Empty reading spine item: {document['member']}")
+        # An image-only non-linear item (a cover) has no characters. Like an empty
+        # element it is anchored to the preceding slot; reading_length=0 is authoritative.
+        item_slots = [slot] if empty_item else list(range(start + 1, slot + 1))
         document_assets = [
             asset
             for asset in assets
@@ -62,9 +76,9 @@ def _write_graph(
         document_images = [asset for asset in document_assets if asset["kind"] == "image"]
         specs.append(
             (
-                "document",
+                kind,
                 doc_key,
-                list(range(start + 1, slot + 1)),
+                item_slots,
                 {
                     "document": document["id"],
                     "source_member": document["member"],
@@ -74,6 +88,7 @@ def _write_graph(
                         document["toc_entries"], ensure_ascii=False, sort_keys=True
                     ),
                     "reading_length": len(document["reading_text"]),
+                    **({"empty_element": 1} if empty_item else {}),
                 },
                 None,
             )
@@ -177,7 +192,7 @@ def _write_graph(
                 )
             )
     # TF requires one contiguous node block per type.
-    for kind in ("document", "note", "element"):
+    for kind in ("document", "nonlinear", "note", "element"):
         for spec_kind, key, slots, features, _ in specs:
             if spec_kind != kind:
                 continue
@@ -190,8 +205,15 @@ def _write_graph(
     for _, key, _, _, parent in specs:
         if parent and key in lookup and parent in lookup:
             edge["parent"][lookup[key]] = {lookup[parent]}
+    scope_kind = _scope_kinds(documents, nonlinear)
     for reference in references:
-        anchor_key = "document:" + reference["document_id"] + ":" + reference["anchor_key"]
+        anchor_key = ":".join(
+            (
+                scope_kind.get(reference["document_id"], "document"),
+                reference["document_id"],
+                reference["anchor_key"],
+            )
+        )
         note_key = "note:" + reference["target_key"]
         anchor = lookup.get(anchor_key)
         target = lookup.get(note_key)
@@ -290,8 +312,8 @@ def convert(
     if output.exists() or output.is_symlink():
         raise ConversionError(f"Output already exists: {output}")
     original = source.read_bytes()
-    if max_slots is not None and not 1 <= max_slots <= 8_000_000:
-        raise ConversionError("--max-slots must be between 1 and 8000000")
+    if max_slots is not None and max_slots < 1:
+        raise ConversionError("--max-slots must be a positive integer")
     status, report = _check(source, checker, max_slots)
     if report["archive_sha256"] != hashlib.sha256(original).hexdigest():
         raise ConversionError("EPUB changed between validation and export")
@@ -326,13 +348,16 @@ def convert(
         except ValueError as error:
             raise ConversionError(str(error)) from error
     member_toc = toc_by_member(toc)
-    for document in report["documents"]:
+    scope_kind = _scope_kinds(report["documents"], report["nonlinear"])
+    for document in report["documents"] + report["nonlinear"]:
         document_assets = [
             asset
             for asset in report["assets"]
             if asset["scope"] == "document" and asset["scope_id"] == document["id"]
         ]
-        reading_slots["document:" + document["id"]] = annotate_scope(document, document_assets)
+        reading_slots[scope_kind[document["id"]] + ":" + document["id"]] = annotate_scope(
+            document, document_assets
+        )
         document["toc_entries"] = member_toc.get(document["member"], [])
         links.extend(annotate_document(document, members))
     for note in report["notes"]:
@@ -355,13 +380,14 @@ def convert(
                 stage / "sources" / "validation.json",
                 {"initial_findings": initial_findings, "final_findings": report["findings"]},
             )
-        (stage / "documents").mkdir()
-        for index, document in enumerate(report["documents"], 1):
-            _json(stage / "documents" / f"{index:04}.json", document)
-            (stage / "documents" / f"{index:04}.txt").write_text(document["text"], encoding="utf-8")
-            (stage / "documents" / f"{index:04}.reading.txt").write_text(
-                document["reading_text"], encoding="utf-8"
-            )
+        for folder in ("documents", "nonlinear"):
+            (stage / folder).mkdir()
+            for index, document in enumerate(report[folder], 1):
+                _json(stage / folder / f"{index:04}.json", document)
+                (stage / folder / f"{index:04}.txt").write_text(document["text"], encoding="utf-8")
+                (stage / folder / f"{index:04}.reading.txt").write_text(
+                    document["reading_text"], encoding="utf-8"
+                )
         (stage / "notes").mkdir()
         for index, note in enumerate(report["notes"], 1):
             _json(stage / "notes" / f"{index:04}.json", note)
@@ -407,6 +433,7 @@ def convert(
         report["images"] = [asset for asset in report["assets"] if asset["kind"] == "image"]
         graph = _write_graph(
             report["documents"],
+            report["nonlinear"],
             report["notes"],
             report["note_references"],
             report["assets"],
@@ -415,17 +442,22 @@ def convert(
         )
         features = (
             "text reading document source_member xhtml_tag image_assets asset_refs toc_entries"
+            " reading_length"
         )
         if report["notes"]:
             features += " note_kind source_key noteref"
         api = Fabric(locations=str(stage / "tf"), silent="deep").load(features, silent="deep")
         if api is False:
             raise ConversionError("Real Text-Fabric loader rejected export")
-        for document in report["documents"]:
-            node = graph["node_ids"]["document:" + document["id"]]
-            if api.T.text(node) != document["reading_text"]:
+        for document in report["documents"] + report["nonlinear"]:
+            node = graph["node_ids"][scope_kind[document["id"]] + ":" + document["id"]]
+            if not document["text"]:
+                # Anchored, slot-free item: its zero length is the authoritative text.
+                if api.F.reading_length.v(node) != 0:
+                    raise ConversionError(f"Empty item round-trip failed: {document['member']}")
+            elif api.T.text(node) != document["reading_text"]:
                 raise ConversionError(f"Reading text round-trip failed: {document['member']}")
-            if api.T.text(node, fmt="text-source-full") != document["text"]:
+            elif api.T.text(node, fmt="text-source-full") != document["text"]:
                 raise ConversionError(f"Source text round-trip failed: {document['member']}")
             if json.loads(api.F.toc_entries.v(node)) != document["toc_entries"]:
                 raise ConversionError(f"TOC round-trip failed: {document['member']}")
@@ -458,7 +490,13 @@ def convert(
                 raise ConversionError(f"Note asset round-trip failed: {note['source_key']}")
         for reference in report["note_references"]:
             anchor = graph["node_ids"][
-                "document:" + reference["document_id"] + ":" + reference["anchor_key"]
+                ":".join(
+                    (
+                        scope_kind[reference["document_id"]],
+                        reference["document_id"],
+                        reference["anchor_key"],
+                    )
+                )
             ]
             target = graph["node_ids"]["note:" + reference["target_key"]]
             if target not in api.E.noteref.f(anchor):
@@ -488,6 +526,7 @@ def convert(
                 "layout whitespace runs to one space or newline; preformatted text exact"
             ),
             "documents": [doc["id"] for doc in report["documents"]],
+            "nonlinear": [doc["id"] for doc in report["nonlinear"]],
             "notes": [note["source_key"] for note in report["notes"]],
             "note_references": report["note_references"],
             "images": report["images"],
@@ -521,7 +560,7 @@ def main() -> None:
         "--repair", action="store_true", help="Audit and repair bounded XHTML syntax"
     )
     parser.add_argument(
-        "--max-slots", type=int, help="Explicit character-slot limit (up to 8000000)"
+        "--max-slots", type=int, help="Explicit character-slot limit (any positive integer)"
     )
     args = parser.parse_args()
     try:

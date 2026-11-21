@@ -2,8 +2,9 @@
 
 # Claude-specific notes
 
-`AGENTS.md` above is the shared rulebook; this file only adds what is specific to Claude Code. Do not
-duplicate rules here - `make agents-check` fails if the import above is removed.
+`AGENTS.md` above is the shared rulebook. Keep its import; the branch rule is repeated below for visibility.
+
+**MULTIPLE FEATURE BRANCHES ARE ALLOWED ONLY WHEN THEY ARE RELATED AND FORM A STACK OF DEPENDENT PULL REQUESTS. OTHERWISE, MERGE THE CURRENT FEATURE INTO `dev` BEFORE STARTING ANOTHER FEATURE.**
 
 ## Working in this repo
 
@@ -19,7 +20,7 @@ duplicate rules here - `make agents-check` fails if the import above is removed.
 ## Finishing a task
 
 1. For shared model/conversion contract changes, edit `crates/corpora-core/schema`
-   first and run `make types` then `make types-check` for all four targets.
+   first and run `make types` then `make types-check` for all five targets.
 2. `make fmt`, then `make ci` (includes generated freshness and offline agent tests;
    add `make e2e` when behavior visible to users changed).
 3. Update `AGENTS.md`, `README.md` and `.github/copilot-instructions.md` if conventions or automation moved.
