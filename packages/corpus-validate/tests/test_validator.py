@@ -63,12 +63,13 @@ def tf_root(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def single_level_epub_root(tmp_path: Path) -> Path:
+def single_level_epub_root(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
+    slot = getattr(request, "param", "char")
     root = tmp_path / "epub-tf"
     root.mkdir()
     assert Fabric(locations=str(root), silent="deep").save(
         nodeFeatures={
-            "otype": {1: "char", 2: "char", 3: "char", 4: "document", 5: "element", 6: "note"},
+            "otype": {1: slot, 2: slot, 3: slot, 4: "document", 5: "element", 6: "note"},
             "text": {1: "A", 2: "β", 3: "!"},
             "reading": {1: "A", 2: "β", 3: ""},
             "document": {4: "Doc"},
