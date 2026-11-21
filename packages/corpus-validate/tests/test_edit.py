@@ -256,6 +256,7 @@ def test_text_feature_name_can_differ_from_slot_type(tmp_path):
     assert read_archive(changed, "node", node=4)["text"] == "New content here"
 
 
+@pytest.mark.parametrize("single_level_epub_root", ["char", "character"], indirect=True)
 def test_character_slots_stay_character_sized(single_level_epub_root):
     root = single_level_epub_root
     fabric = ContextFabric(locations=str(root), silent="deep")

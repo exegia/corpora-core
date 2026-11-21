@@ -43,9 +43,9 @@ def replace_node_text(
     original = "".join(text_feature.v(slot) or "" for slot in slots)
     if api.T.text(node) != original:
         raise ValueError("Default text cannot be represented by the selected feature")
-    words = (list(text) if api.F.otype.slotType == "char" else re.findall(r"\s*\S+\s*", text)) or [
-        text
-    ]
+    # The repository's converters name character slots "character".
+    per_character = api.F.otype.slotType in {"char", "character"}
+    words = (list(text) if per_character else re.findall(r"\s*\S+\s*", text)) or [text]
     first, last = slots[0], slots[-1]
     delta = len(words) - len(slots)
     if max_node + delta > MAX_NODES:
