@@ -20,7 +20,7 @@ uv run --project packages/epub-to-tf epub-to-tf book.epub output/bundle \
 | `output/bundle` | New directory for the exported bundle; existing output is refused. |
 | `--checker PATH` | Built `corpora-epub-check` Rust executable. |
 | `--repair` | Try only the documented, audited XHTML/duplicate-ID repairs, then revalidate. Off by default. |
-| `--max-slots N` | Explicit character-slot limit, from 1 to 8,000,000; default checker limit is 1,000,000. |
+| `--max-slots N` | Explicit character-slot limit, any positive integer; default checker limit is 1,000,000. |
 
 The same operation is available to Python callers:
 
@@ -52,7 +52,7 @@ phase and an explicit larger character bound:
 
 ```sh
 uv run --project packages/epub-to-tf epub-to-tf book.epub output/repaired-bundle \
-  --checker target/debug/corpora-epub-check --repair --max-slots 8000000
+  --checker target/debug/corpora-epub-check --repair --max-slots 20000000
 ```
 
 The Rust `corpora_convert::epub::validate_epub(&[u8])` API returns an archive hash,
@@ -177,9 +177,21 @@ display text as an exact copy of XHTML whitespace.
   retains all resources, including those not referenced by reading XHTML.
   Opaque media bytes are preserved, but this converter does not decode them or
   guarantee playback in a particular reader.
-- Non-linear spine items remain unsupported. Missing manifest/spine targets,
-  unsupported media or layout, scripts/iframes, responsive `srcset`, active or
-  externally linked SVG, and encryption block export. Malformed XHTML blocks
+- Non-linear (`linear="no"`) spine items, such as covers, become `nonlinear`
+  nodes with their own character slots after the linear documents. They keep
+  their manifest ID, source member, elements and assets, are written to
+  `nonlinear/`, and are listed in the manifest's `nonlinear` field. They never
+  join the linear reading stream. A book with only non-linear content blocks.
+  An image-only non-linear item has no characters; like an empty element it is
+  anchored to the preceding slot with `empty_element=1`, and its
+  `reading_length=0` is authoritative, not `T.text()` of the anchor.
+- Inline SVG may wrap an SVG `image` whose `xlink:href`/`href` is a relative
+  path to a manifest-declared image; that image is retained as its own asset.
+  The exported SVG asset keeps its exact source bytes and original link; the
+  QA view embeds the retained image so the SVG renders.
+  Missing manifest/spine targets, unsupported media or layout, scripts/iframes,
+  responsive `srcset`, active or remote, `data:` or absolute-path SVG links, and
+  encryption block export. Malformed XHTML blocks
   by default. With `--repair`, the API may create a strict XHTML candidate
   using a network-disabled HTML recovery parser. It compares decoded body
   text, explicit start tags and attributes against an independent lexical
@@ -192,12 +204,14 @@ display text as an exact copy of XHTML whitespace.
   later duplicate IDs receive deterministic suffixes only if no XHTML or NCX
   reference targets that ambiguous fragment. Each edit is in the ledger.
   An inbound reference requires manual source correction.
-- Maximum 80 MiB original archive, 1024 members, 16 MiB expanded per member, 64 MiB expanded total, and
-  one million character slots by default; `--max-slots` can explicitly raise
-  this to at most eight million. Unsafe archive paths, duplicate members and
-  ZIP extraction to disk are forbidden. Plain HTML and the exact XHTML 1.1
-  external doctype are accepted in XHTML members. Internal DTD subsets and other
-  doctypes are rejected; the XML parser does not fetch network resources or
+- Maximum 500 MiB original archive, 1024 members, 128 MiB expanded per member,
+  500 MiB expanded total, and one million character slots by default;
+  `--max-slots` can explicitly raise the slot bound without a fixed ceiling.
+  Unsafe archive paths, duplicate members and ZIP extraction to disk are
+  forbidden. Plain HTML, the exact XHTML 1.1 external doctype and an HTML
+  doctype with a strictly empty internal subset (`<!DOCTYPE html []>`) are
+  accepted in XHTML members. Nonempty internal subsets, external subsets and
+  other doctypes are rejected; the XML parser does not fetch network resources or
   external entities. Named entities absent from the XML source therefore fail.
 
 Diagnostic locations refer to expanded UTF-8 member bytes and Unicode scalars,

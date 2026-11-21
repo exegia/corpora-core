@@ -30,6 +30,23 @@ extracts into a private temporary directory and keeps no cross-request cache;
 the caller is responsible for authenticating the owner and selecting archive
 bytes.
 
+`corpus_validate.edit_archive(data, manifest={...})` prepares a manifest edit;
+`edit_archive(data, node=1, features={"word": "new text", "lemma": "example"})`
+prepares a node edit. `edit_archive(data, node=12, text_feature="word", text="New text")`
+replaces a contiguous node span and retokenizes word slots, or splits character
+slots into Unicode characters. Text-Fabric chooses
+text-feature names per corpus, so use the feature names returned by the node view.
+Text replacement requires the default text format to use only that feature. When
+the number of words changes, node IDs may change; retokenization rejects nested
+partial spans, nonempty annotations, and word attributes or links that cannot be
+remapped without guessing. Converter manifest node maps and checksum files are
+updated for changed archive members. Existing string and integer node
+features can be changed or removed with `None`; new string and integer features
+can be added. Structural features and edges are not editable. Node edits compare
+all source features and edges to the shipped cache, discard generated TF caches,
+rebuild the `.cfr` cache and validate the resulting archive. The function only
+prepares bytes: the caller must authorize access and save a new immutable version.
+
 Content pagination uses finer passages only when their slots cover the requested
 selection exactly once and in source order. Gaps, overlaps or interleaved passages
 fall back to the complete selected section. For a whole-corpus read, the reader

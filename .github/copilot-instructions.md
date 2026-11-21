@@ -24,6 +24,7 @@ Targets detect the stack from `pyproject.toml`, `package.json`, `Cargo.toml` or 
 
 - **Branches:** `<type>/<slug>` with type `feat|fix|chore|docs|ci|refactor|test|perf|build|style|revert|ai`,
   opened as PRs into `dev` (the default branch). Promotion: `dev` -> `next` -> `release/vX.Y.Z` -> `main`.
+  Multiple feature branches require related work in a dependent PR stack; otherwise merge the current feature into `dev` before starting another.
 - **PR titles:** Conventional Commits, `feat(scope)!: summary`. They set the SemVer bump (`!` major,
   `feat` minor, else patch). Do not edit versions, tags or `CHANGELOG.md` by hand.
 - **Crate dependencies:** workspace crates depend on each other through versioned `path` entries in the
@@ -40,8 +41,8 @@ Targets detect the stack from `pyproject.toml`, `package.json`, `Cargo.toml` or 
 ## Shared models and agent checks
 
 Shared conversion/model contracts start in `crates/corpora-core/schema`. Run
-`make types` then `make types-check` to regenerate/check Rust, TypeScript, Swift
-and SQL together; never hand-edit outputs or create parallel shared models.
+`make types` then `make types-check` to regenerate/check Rust, TypeScript, Swift,
+SQL and Python together; never hand-edit outputs or create parallel shared models.
 `make ci` includes read-only `types-check` and offline `agents-test`; these skip
 when their component is absent. Conversion workflows and package publishing check
 generated freshness too. Commit schema, outputs, tests and agent guidance together.
@@ -129,10 +130,11 @@ Rust bridge, installs pinned `en_US` and `fr_FR` dictionaries, and runs the real
 dictionary integration tests, including English metadata under a French corpus policy.
 See the core and converter READMEs for the policy, setup, and diagnostic contracts.
 
-Hosted quality review is optional via `packages/quality-ai` (Vercel AI SDK, Node 22+).
+Hosted quality review is optional via `packages/quality-ai` (TypeScript, Vercel AI SDK, Node 22+).
 Run `npm ci --prefix packages/quality-ai`, `npm run check --prefix packages/quality-ai`
 and `npm test --prefix packages/quality-ai`; CI runs these without hosted credentials.
-Build with `npm run build --prefix packages/quality-ai` if install scripts are disabled.
+`npm ci`/`npm install` compile TypeScript through `prepare`; tests rebuild it too.
+Run `npm run build --prefix packages/quality-ai` after source changes or when lifecycle scripts are disabled.
 Use `--ai-bridge packages/quality-ai/dist/bridge.js` with `AI_GATEWAY_API_KEY` in the
 process environment. Never put credentials in reports or browser assets. See
 `packages/quality-ai/README.md` for model selection, request budgets and limitations.

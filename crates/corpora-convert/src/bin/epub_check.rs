@@ -13,12 +13,9 @@ fn main() {
         (Some(flag), Some(value), None) if flag == "--max-slots" => value
             .to_str()
             .and_then(|text| text.parse::<usize>().ok())
-            .filter(|value| (1..=corpora_convert::epub::HARD_MAX_SLOTS).contains(value))
+            .filter(|value| *value >= 1)
             .unwrap_or_else(|| {
-                eprintln!(
-                    "--max-slots must be between 1 and {}",
-                    corpora_convert::epub::HARD_MAX_SLOTS
-                );
+                eprintln!("--max-slots must be a positive integer");
                 process::exit(2);
             }),
         _ => {

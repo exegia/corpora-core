@@ -63,12 +63,13 @@ def tf_root(tmp_path: Path) -> Path:
 
 
 @pytest.fixture
-def single_level_epub_root(tmp_path: Path) -> Path:
+def single_level_epub_root(tmp_path: Path, request: pytest.FixtureRequest) -> Path:
+    slot = getattr(request, "param", "char")
     root = tmp_path / "epub-tf"
     root.mkdir()
     assert Fabric(locations=str(root), silent="deep").save(
         nodeFeatures={
-            "otype": {1: "char", 2: "char", 3: "char", 4: "document", 5: "element", 6: "note"},
+            "otype": {1: slot, 2: slot, 3: slot, 4: "document", 5: "element", 6: "note"},
             "text": {1: "A", 2: "β", 3: "!"},
             "reading": {1: "A", 2: "β", 3: ""},
             "document": {4: "Doc"},
@@ -185,6 +186,12 @@ def test_reference_roundtrip_against_real_context_fabric(tf_root: Path) -> None:
     assert created["nodes"] == [1, 2]
     assert reference_archive(data, "mini", ref=created["urn"])["nodes"] == [1, 2]
     assert reference_archive(data, "mini", ref=created["token"])["ref"] == created["ref"]
+    revision = "a" * 40
+    pinned = reference_archive(data, "mini", node=1, version=revision)
+    assert f"@{revision}/" in pinned["ref"]
+    assert reference_archive(data, "mini", ref=pinned["urn"], version=revision)["node"] == 1
+    with pytest.raises(VersionMismatch):
+        reference_archive(data, "mini", ref=pinned["ref"], version="b" * 40)
     assert (
         reference_archive(data, "mini", ref=created["ref"], shortcode=True)["ref"] == created["ref"]
     )

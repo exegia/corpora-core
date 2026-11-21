@@ -230,9 +230,9 @@ def repair_archive(original: bytes, report: dict[str, Any]) -> tuple[bytes, list
         }
         ncx = {name: source.read(name) for name in sorted(names) if name.lower().endswith(".ncx")}
         references = _references({**chapters, **ncx})
-        editable = {document["member"] for document in report["documents"]} | {
-            member for member, codes in problems.items() if "EPUB_XML" in codes
-        }
+        editable = {
+            document["member"] for document in report["documents"] + report.get("nonlinear", [])
+        } | {member for member, codes in problems.items() if "EPUB_XML" in codes}
         for member in sorted(editable):
             try:
                 root = _strict(chapters[member])

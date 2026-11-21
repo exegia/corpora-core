@@ -54,14 +54,15 @@ uv run --locked --project packages/epub-to-tf pytest -q packages/epub-to-tf/test
 uv run --project packages/epub-to-tf python packages/epub-to-tf/tools/qa_browser.py BUNDLE SITE
 ```
 
-The Rust checker validates a local unencrypted reflowable EPUB and linear spine;
+The Rust checker validates a local unencrypted reflowable EPUB and its spine;
 blocking findings prevent export. `--repair` is opt-in, limited to audited XHTML
 recovery and unreferenced duplicate-ID repair, with original/repaired archives,
 initial/final diagnostics and a repair ledger. It never clears ambiguous inbound
-references or structural findings through spelling/AI. Defaults: 80 MiB archive,
-1,024 members, 16 MiB/member, 64 MiB expanded total and 1,000,000 slots;
-`--max-slots` can explicitly raise slots to at most 8,000,000. Encryption, non-linear
-spine, unsupported layout/media, scripts/iframes and unsafe paths remain blockers.
+references or structural findings through spelling/AI. Defaults: 500 MiB archive,
+1,024 members, 128 MiB/member, 500 MiB expanded total and 1,000,000 slots;
+`--max-slots` explicitly raises slots with no fixed ceiling. Each non-linear spine
+item (a cover) becomes a separate `nonlinear` node outside the linear reading stream.
+Encryption, unsupported layout/media, scripts/iframes and unsafe paths remain blockers.
 
 Check both projections: `T.text(node)` is the display reading; explicit
 `T.text(node, fmt="text-source-full")` is the exact source projection. Preserve
