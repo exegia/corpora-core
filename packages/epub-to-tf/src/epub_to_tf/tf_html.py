@@ -4,6 +4,7 @@ This is a semantic QA view, not an EPUB stylesheet or a byte-for-byte XHTML
 round trip. The original archive remains the authority for both.
 """
 
+import base64
 import html
 import json
 import shutil
@@ -48,6 +49,8 @@ ATTRS = frozenset(
     }
 )
 MATH_NS = "http://www.w3.org/1998/Math/MathML"
+SVG_NS = "http://www.w3.org/2000/svg"
+XLINK_NS = "http://www.w3.org/1999/xlink"
 
 
 def _asset_path(asset: dict[str, Any]) -> str:
@@ -97,6 +100,38 @@ def _math_markup(bundle: Path, asset: dict[str, Any]) -> str:
         return f"<{tag}{''.join(attrs)}>{''.join(body)}</{tag}>"
 
     return element(root, True)
+
+
+def _svg_with_embedded_images(
+    bundle: Path, svg: dict[str, Any], linked: list[dict[str, Any]]
+) -> str:
+    """Render an inline SVG whose local image links point at retained assets.
+
+    An SVG shown through ``<img>`` cannot load sibling files, and the exact source
+    slice keeps its original relative ``href``. The view therefore embeds each
+    retained image as a data URI; the exported SVG asset itself is unchanged.
+    """
+    source = (bundle / svg["file"]).read_bytes()
+    if b"<!DOCTYPE" in source.upper() or b"<!ENTITY" in source.upper():
+        raise ValueError("Inline SVG contains a DTD or entity declaration")
+    declarations = "".join(
+        f' xmlns{":" + prefix if prefix else ""}="{html.escape(uri, quote=True)}"'
+        for prefix, uri in sorted(svg.get("namespaces", {}).items())
+    )
+    wrapper = ET.fromstring(f"<_tf_inline{declarations}>".encode() + source + b"</_tf_inline>")
+    if len(wrapper) != 1:
+        raise ValueError("Inline SVG has no unique root element")
+    embedded = {
+        asset["href"]: f"data:{asset['media_type']};base64,"
+        + base64.b64encode((bundle / asset["file"]).read_bytes()).decode()
+        for asset in linked
+    }
+    for image in wrapper[0].iter(f"{{{SVG_NS}}}image"):
+        for key in (f"{{{XLINK_NS}}}href", "href"):
+            if image.get(key) in embedded:
+                image.set(key, embedded[image.get(key, "")])
+    rendered = ET.tostring(wrapper[0], encoding="utf-8")
+    return "data:image/svg+xml;base64," + base64.b64encode(rendered).decode()
 
 
 def _attributes(tag: str, source: dict[str, str], assets: list[dict[str, Any]]) -> str:
@@ -152,8 +187,19 @@ def _render_scope(
                 None,
             )
             if svg:
+                linked = [
+                    asset
+                    for asset in element_assets
+                    if asset is not svg and asset["kind"] == "image" and asset["source_end"] is None
+                ]
                 path = html.escape(_asset_path(svg), quote=True)
-                return f'<img src="{path}" data-source-tag="svg" alt="Inline SVG">'
+                if not linked:
+                    return f'<img src="{path}" data-source-tag="svg" alt="Inline SVG">'
+                src = html.escape(_svg_with_embedded_images(bundle, svg, linked), quote=True)
+                return (
+                    f'<img src="{src}" data-source-tag="svg" data-tf-asset="{path}" '
+                    'alt="Inline SVG">'
+                )
         if tag not in TAGS:
             original_tag = tag
             tag = "span"
